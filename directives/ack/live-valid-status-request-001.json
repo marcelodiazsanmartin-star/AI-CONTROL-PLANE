@@ -1,0 +1,13 @@
+{
+  "directive_id": "live-valid-status-request-001",
+  "received_at": "2026-08-18T21:23:00.994742+00:00",
+  "source_commit_sha": "b90ca18909a2481055c9c7fd8b66c494e02bf9f1",
+  "validation_status": "AUTHENTIC",
+  "decision": "ACCEPTED",
+  "decision_reason": "AUTHENTIC: Directive source authenticated and validated successfully",
+  "human_required": false,
+  "queued": true,
+  "executed": false,
+  "control_plane_commit_sha": "bc638c1dc34ceb9a97de70268277588db47d4834",
+  "observer_version": "1.0.0"
+}
