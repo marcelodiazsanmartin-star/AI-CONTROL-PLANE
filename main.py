@@ -39,7 +39,7 @@ def run_once(engine: ControlPlaneEngine):
 
 
 def run_continuous(engine: ControlPlaneEngine):
-    poll_interval = settings.CONTROL_PLANE_POLL_SECONDS
+    poll_interval = settings.LOCAL_POLL_SECONDS
     print("==================================================")
     print(f"AI-CONTROL-PLANE PERSISTENT OBSERVER STARTED (poll={poll_interval}s)")
     print("==================================================")
