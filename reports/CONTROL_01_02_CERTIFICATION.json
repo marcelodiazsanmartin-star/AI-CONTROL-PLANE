@@ -1,18 +1,18 @@
 {
-  "timestamp": "2026-08-18T20:24:06.264237+00:00",
-  "code_under_test_sha": "3ee897b22ffa3d4f1387f712da51a3ed0fa323db",
-  "certification_source_sha": "3ee897b22ffa3d4f1387f712da51a3ed0fa323db",
+  "timestamp": "2026-08-18T20:26:38.574914+00:00",
+  "code_under_test_sha": "de493e3de12b1ca65799a7d20509726757e1ffb4",
+  "certification_source_sha": "de493e3de12b1ca65799a7d20509726757e1ffb4",
   "evidence_commit_sha": "PENDING_COMMIT",
   "tests_collected": 28,
   "tests_passed": 28,
   "tests_failed": 0,
   "remote_branch_verification_test": true,
   "remote_branch_e2e_oracle": true,
-  "remote_branch_e2e_micro": false,
+  "remote_branch_e2e_micro": true,
   "oracle_remote_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
   "oracle_remote_verification": "VERIFIED",
   "micro_remote_head": "0162f27c2c69b3e0da5a2a0a9b5122537983cd1a",
-  "micro_remote_verification": "CONFLICT",
+  "micro_remote_verification": "VERIFIED",
   "dead_expected_process_test": true,
   "read_only_git_test": true,
   "commit_storm_prevention_test": true,
@@ -25,5 +25,5 @@
   "micro_modified": false,
   "oracle_process_interrupted": false,
   "micro_process_interrupted": false,
-  "overall_result": "FAIL"
+  "overall_result": "PASS"
 }
