@@ -2,7 +2,7 @@
   "project": "ORACLE-AI",
   "stage": null,
   "branch": "mvp04-shadow-10-usdc",
-  "remote_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
+  "remote_head": null,
   "local_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
   "process_expected": false,
   "process_running": false,
@@ -29,14 +29,14 @@
   "human_decision_required": false,
   "next_action": null,
   "evidence_freshness": {
-    "sprints/AGENT_STATUS.json": 339331.57773,
-    "sprints/ACTIVE_SPRINT.md": 533589.46572,
-    "environment_validation_report.md": 957119.226108
+    "sprints/AGENT_STATUS.json": 339370.663996,
+    "sprints/ACTIVE_SPRINT.md": 533628.552254,
+    "environment_validation_report.md": 957158.312793
   },
   "status": "STALE",
-  "reason": "Heartbeat age (353790.0s) exceeds project threshold (3600.0s)",
-  "observed_at": "2026-08-18T20:19:30.045653+00:00",
-  "heartbeat_age_seconds": 353790.045653,
+  "reason": "Heartbeat age (353829.1s) exceeds project threshold (3600.0s)",
+  "observed_at": "2026-08-18T20:20:09.132438+00:00",
+  "heartbeat_age_seconds": 353829.132438,
   "last_known_good": "2026-08-14T18:03:00Z",
   "retry_count": 0,
   "human_required": false,
@@ -56,28 +56,30 @@
     "5_STATIC_DECLARED_STATUS"
   ],
   "status_source": "2_RUNTIME_HEARTBEAT",
-  "status_age_seconds": 353790.045653,
-  "observer_errors": [],
+  "status_age_seconds": 353829.132438,
+  "observer_errors": [
+    "Remote branch refs/heads/mvp04-shadow-10-usdc not found or origin unreachable (non-fatal)"
+  ],
   "external_project_activity_detected": false,
   "verified_stage": {
     "local_observed_value": null,
     "remote_verified_value": null,
-    "verification_status": "VERIFIED"
+    "verification_status": "LOCAL_ONLY"
   },
   "verified_branch": {
     "local_observed_value": "mvp04-shadow-10-usdc",
-    "remote_verified_value": "mvp04-shadow-10-usdc",
-    "verification_status": "VERIFIED"
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
   },
   "verified_head": {
     "local_observed_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
-    "remote_verified_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
-    "verification_status": "VERIFIED"
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
   },
   "verified_status": {
     "local_observed_value": "STALE",
-    "remote_verified_value": "STALE",
-    "verification_status": "VERIFIED"
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
   },
   "verified_process_expected": {
     "local_observed_value": false,
