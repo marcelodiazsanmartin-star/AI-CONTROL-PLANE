@@ -30,18 +30,23 @@ def test_remote_branch_verification_exact_ref(tmp_path, monkeypatch):
 
     executed_git_commands = []
 
-    def mock_run_git(self, repo_path, args):
+    def mock_run_git(self, repo_path, args, timeout=None):
         executed_git_commands.append(" ".join(args))
         if "rev-parse" in args and "--abbrev-ref" in args:
-            return "feature/custom-branch"
+            return {"returncode": 0, "stdout": "feature/custom-branch\n", "stderr": "", "timeout": False}
         if "rev-parse" in args and "HEAD" in args:
-            return "aaaa1111222233334444"
+            return {"returncode": 0, "stdout": "aaaa1111222233334444\n", "stderr": "", "timeout": False}
         if "status" in args:
-            return ""
+            return {"returncode": 0, "stdout": "", "stderr": "", "timeout": False}
         if "ls-remote" in args and "refs/heads/feature/custom-branch" in args:
             # Returns exact matching line for refs/heads/feature/custom-branch
-            return "bbbb1111222233334444\trefs/heads/feature/custom-branch"
-        return None
+            return {
+                "returncode": 0,
+                "stdout": "bbbb1111222233334444\trefs/heads/feature/custom-branch\n",
+                "stderr": "",
+                "timeout": False
+            }
+        return {"returncode": 1, "stdout": "", "stderr": "Unknown command", "timeout": False}
 
     monkeypatch.setattr(GitObserver, "_run_git", mock_run_git)
 
@@ -53,6 +58,7 @@ def test_remote_branch_verification_exact_ref(tmp_path, monkeypatch):
     assert info["local_head"] == "aaaa1111222233334444"
     assert info["remote_head"] == "bbbb1111222233334444"
     assert info["remote_branch_exists"] is True
+    assert info["remote_query_stderr_category"] == "VERIFIED"
 
     # Assert exact command was executed (refs/heads/feature/custom-branch, NOT generic HEAD)
     assert any("ls-remote --heads origin refs/heads/feature/custom-branch" in cmd for cmd in executed_git_commands)
