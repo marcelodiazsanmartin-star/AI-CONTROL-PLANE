@@ -25,7 +25,7 @@
       "gc",
       "maintenance"
     ],
-    "observed_at": "2026-08-18T19:54:50.550181+00:00",
+    "observed_at": "2026-08-18T19:55:06.501419+00:00",
     "total_projects_monitored": 2,
     "overall_health": "DEGRADED_STALE"
   },
@@ -60,14 +60,14 @@
       "human_decision_required": false,
       "next_action": null,
       "evidence_freshness": {
-        "sprints/AGENT_STATUS.json": 337848.066276,
-        "sprints/ACTIVE_SPRINT.md": 532105.954587,
-        "environment_validation_report.md": 955635.715192
+        "sprints/AGENT_STATUS.json": 337865.145908,
+        "sprints/ACTIVE_SPRINT.md": 532123.033883,
+        "environment_validation_report.md": 955652.794129
       },
       "status": "STALE",
-      "reason": "Heartbeat age (352306.5s) exceeds project threshold (3600.0s)",
-      "observed_at": "2026-08-18T19:54:46.534915+00:00",
-      "heartbeat_age_seconds": 352306.534915,
+      "reason": "Heartbeat age (352323.6s) exceeds project threshold (3600.0s)",
+      "observed_at": "2026-08-18T19:55:03.613636+00:00",
+      "heartbeat_age_seconds": 352323.613636,
       "last_known_good": "2026-08-14T18:03:00Z",
       "retry_count": 0,
       "human_required": false,
@@ -87,7 +87,7 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "2_RUNTIME_HEARTBEAT",
-      "status_age_seconds": 352306.534915,
+      "status_age_seconds": 352323.613636,
       "observer_errors": [
         "GitHub remote unreachable or ls-remote timed out (non-fatal)"
       ],
@@ -127,7 +127,7 @@
       "project": "MICRO-MARKET-ORACLE",
       "stage": "MICRO-00.8",
       "branch": "micro00-8-antigravity-watcher",
-      "remote_head": null,
+      "remote_head": "ad95d379173a7625a8d70411c45236b01fdee62d",
       "local_head": "e55580aaa8a529d694af5bbf595386992cb3c1c4",
       "process_expected": true,
       "process_running": true,
@@ -144,14 +144,14 @@
       "human_decision_required": false,
       "next_action": "CHATGPT_AUDIT_MICRO_00_8",
       "evidence_freshness": {
-        "control/CURRENT_STAGE.json": 25628.795546,
-        "control/PROJECT_STATE.json": 4324.481536,
-        "control/WATCHER_STATE.json": 4690.898085
+        "control/CURRENT_STAGE.json": 25644.748415,
+        "control/PROJECT_STATE.json": 4340.434123,
+        "control/WATCHER_STATE.json": 4706.850341
       },
       "status": "RUNNING",
       "reason": "Active expected process running (watcher)",
-      "observed_at": "2026-08-18T19:54:50.548014+00:00",
-      "heartbeat_age_seconds": 4324.482902,
+      "observed_at": "2026-08-18T19:55:06.500055+00:00",
+      "heartbeat_age_seconds": 4340.434943,
       "last_known_good": "2026-08-18T18:42:46.065112+00:00",
       "retry_count": 0,
       "human_required": false,
@@ -175,10 +175,8 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "1_LOCAL_PROCESS_OBSERVATION",
-      "status_age_seconds": 4324.482902,
-      "observer_errors": [
-        "GitHub remote unreachable or ls-remote timed out (non-fatal)"
-      ],
+      "status_age_seconds": 4340.434943,
+      "observer_errors": [],
       "external_project_activity_detected": true,
       "verified_stage": {
         "local_observed_value": "MICRO-00.8",
@@ -192,8 +190,8 @@
       },
       "verified_head": {
         "local_observed_value": "e55580aaa8a529d694af5bbf595386992cb3c1c4",
-        "remote_verified_value": null,
-        "verification_status": "LOCAL_ONLY"
+        "remote_verified_value": "ad95d379173a7625a8d70411c45236b01fdee62d",
+        "verification_status": "CONFLICT"
       },
       "verified_status": {
         "local_observed_value": "RUNNING",
