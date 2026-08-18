@@ -60,7 +60,6 @@ def generate_certification() -> dict:
             tree = ET.parse(xml_report)
             root = tree.getroot()
 
-            # Handle testsuites / testsuite elements
             for ts in root.iter("testsuite"):
                 tests_collected += int(ts.attrib.get("tests", 0))
                 tests_failed += int(ts.attrib.get("failures", 0)) + int(ts.attrib.get("errors", 0))
@@ -78,6 +77,7 @@ def generate_certification() -> dict:
     dead_expected_process_test = "test_integration_dead_expected_process" in passed_test_names
     read_only_git_test = "test_read_only_git_environment_passed" in passed_test_names
     commit_storm_prevention_test = "test_commit_storm_prevention" in passed_test_names
+    single_instance_guarantee_test = "test_single_instance_lock_acquisition" in passed_test_names
 
     overall_result = "PASS" if (tests_failed == 0 and tests_passed > 0) else "FAIL"
     sha = get_git_head_sha()
@@ -92,6 +92,7 @@ def generate_certification() -> dict:
         "dead_expected_process_test": dead_expected_process_test,
         "read_only_git_test": read_only_git_test,
         "commit_storm_prevention_test": commit_storm_prevention_test,
+        "single_instance_guarantee_test": single_instance_guarantee_test,
         "oracle_modified": False,
         "micro_modified": False,
         "oracle_process_interrupted": False,

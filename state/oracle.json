@@ -29,14 +29,14 @@
   "human_decision_required": false,
   "next_action": null,
   "evidence_freshness": {
-    "sprints/AGENT_STATUS.json": 338764.061519,
-    "sprints/ACTIVE_SPRINT.md": 533021.949772,
-    "environment_validation_report.md": 956551.711141
+    "sprints/AGENT_STATUS.json": 338802.729375,
+    "sprints/ACTIVE_SPRINT.md": 533060.618133,
+    "environment_validation_report.md": 956590.379457
   },
   "status": "STALE",
-  "reason": "Heartbeat age (353222.5s) exceeds project threshold (3600.0s)",
-  "observed_at": "2026-08-18T20:10:02.531308+00:00",
-  "heartbeat_age_seconds": 353222.531308,
+  "reason": "Heartbeat age (353261.2s) exceeds project threshold (3600.0s)",
+  "observed_at": "2026-08-18T20:10:41.199193+00:00",
+  "heartbeat_age_seconds": 353261.199193,
   "last_known_good": "2026-08-14T18:03:00Z",
   "retry_count": 0,
   "human_required": false,
@@ -56,7 +56,7 @@
     "5_STATIC_DECLARED_STATUS"
   ],
   "status_source": "2_RUNTIME_HEARTBEAT",
-  "status_age_seconds": 353222.531308,
+  "status_age_seconds": 353261.199193,
   "observer_errors": [
     "Remote branch refs/heads/mvp04-shadow-10-usdc not found or origin unreachable (non-fatal)"
   ],

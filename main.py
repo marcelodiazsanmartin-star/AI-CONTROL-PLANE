@@ -1,9 +1,10 @@
 """
 AI-CONTROL-PLANE Main Entrypoint
 
+Enforces SINGLE INSTANCE GUARANTEE.
 Supports:
 - py -3 main.py --once     (Single read-only observation sweep)
-- py -3 main.py            (Persistent observer loop polling every CONTROL_PLANE_POLL_SECONDS)
+- py -3 main.py            (Persistent observer loop polling every LOCAL_POLL_SECONDS)
 """
 
 import sys
@@ -17,6 +18,7 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from config import settings
+from src.lock_manager import SingleInstanceLock
 from src.engine import ControlPlaneEngine
 
 
@@ -58,12 +60,26 @@ def main():
     parser.add_argument("--once", action="store_true", help="Run a single observation sweep and exit")
     args = parser.parse_args()
 
-    engine = ControlPlaneEngine()
+    # Enforce SINGLE INSTANCE GUARANTEE
+    lock_file = settings.CONTROL_PLANE_ROOT / "state" / "control_plane.lock"
+    lock = SingleInstanceLock(lock_file)
+    acquired, active_pid, msg = lock.acquire()
 
-    if args.once:
-        run_once(engine)
-    else:
-        run_continuous(engine)
+    if not acquired:
+        print("==================================================")
+        print("LAUNCH REJECTED — SINGLE INSTANCE GUARANTEE VIOLATION")
+        print(msg)
+        print("==================================================")
+        sys.exit(1)
+
+    try:
+        engine = ControlPlaneEngine()
+        if args.once:
+            run_once(engine)
+        else:
+            run_continuous(engine)
+    finally:
+        lock.release()
 
 
 if __name__ == "__main__":
