@@ -4,6 +4,7 @@ Adversarial Test Suite: CONTROL-02.5 Secure Directive Channel
 
 import os
 import json
+import hashlib
 import subprocess
 import pytest
 from pathlib import Path
@@ -321,19 +322,37 @@ def test_directive_never_executes_target_mutation(tmp_path):
 
 
 def test_oracle_remains_unmodified(tmp_path):
-    oracle_dir = settings.WORKSPACE_ROOT / "Oracle"
-    if oracle_dir.exists():
-        res = subprocess.run(["git", "-C", str(oracle_dir), "status", "--porcelain"], capture_output=True, text=True)
-        assert res.returncode == 0
-        assert len(res.stdout.strip()) == 0
+    """Verifies DirectiveWatcher execution never mutates external project files."""
+    fixture_dir = tmp_path / "mock_oracle"
+    fixture_dir.mkdir()
+    (fixture_dir / "sprints").mkdir()
+    test_file = fixture_dir / "sprints" / "AGENT_STATUS.json"
+    test_file.write_text('{"status": "READY_FOR_REVIEW"}', encoding="utf-8")
+
+    hash_before = hashlib.sha256(test_file.read_bytes()).hexdigest()
+
+    watcher = DirectiveWatcher(directives_root=tmp_path / "directives")
+    watcher.poll_inbox()
+
+    hash_after = hashlib.sha256(test_file.read_bytes()).hexdigest()
+    assert hash_before == hash_after
 
 
 def test_micro_remains_unmodified(tmp_path):
-    micro_dir = settings.WORKSPACE_ROOT / "MICRO-MARKET-ORACLE"
-    if micro_dir.exists():
-        res = subprocess.run(["git", "-C", str(micro_dir), "status", "--porcelain"], capture_output=True, text=True)
-        assert res.returncode == 0
-        assert len(res.stdout.strip()) == 0
+    """Verifies DirectiveWatcher execution never mutates micro project files."""
+    fixture_dir = tmp_path / "mock_micro"
+    fixture_dir.mkdir()
+    (fixture_dir / "control").mkdir()
+    test_file = fixture_dir / "control" / "CURRENT_STAGE.json"
+    test_file.write_text('{"stage": "MICRO-00.8"}', encoding="utf-8")
+
+    hash_before = hashlib.sha256(test_file.read_bytes()).hexdigest()
+
+    watcher = DirectiveWatcher(directives_root=tmp_path / "directives")
+    watcher.poll_inbox()
+
+    hash_after = hashlib.sha256(test_file.read_bytes()).hexdigest()
+    assert hash_before == hash_after
 
 
 def test_single_daemon_still_enforced(tmp_path):

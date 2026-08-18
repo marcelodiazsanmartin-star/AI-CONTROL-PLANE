@@ -2,7 +2,7 @@
   "project": "MICRO-MARKET-ORACLE",
   "stage": "MICRO-00.8",
   "branch": "micro00-8-antigravity-watcher",
-  "remote_head": null,
+  "remote_head": "0162f27c2c69b3e0da5a2a0a9b5122537983cd1a",
   "local_head": "e55580aaa8a529d694af5bbf595386992cb3c1c4",
   "process_expected": true,
   "process_running": true,
@@ -20,14 +20,14 @@
   "human_decision_required": false,
   "next_action": "CHATGPT_AUDIT_MICRO_00_8",
   "evidence_freshness": {
-    "control/CURRENT_STAGE.json": 31265.676228,
-    "control/PROJECT_STATE.json": 9961.362863,
-    "control/WATCHER_STATE.json": 10327.779762
+    "control/CURRENT_STAGE.json": 31295.077273,
+    "control/PROJECT_STATE.json": 9990.763109,
+    "control/WATCHER_STATE.json": 10357.179467
   },
   "status": "RUNNING",
   "reason": "Active expected process running (watcher)",
-  "observed_at": "2026-08-18T21:28:47.429876+00:00",
-  "heartbeat_age_seconds": 9961.364764,
+  "observed_at": "2026-08-18T21:29:16.829248+00:00",
+  "heartbeat_age_seconds": 9990.764136,
   "last_known_good": "2026-08-18T18:42:46.065112+00:00",
   "retry_count": 0,
   "human_required": false,
@@ -51,10 +51,8 @@
     "5_STATIC_DECLARED_STATUS"
   ],
   "status_source": "1_LOCAL_PROCESS_OBSERVATION",
-  "status_age_seconds": 9961.364764,
-  "observer_errors": [
-    "Remote query for refs/heads/micro00-8-antigravity-watcher timed out (10.0s)"
-  ],
+  "status_age_seconds": 9990.764136,
+  "observer_errors": [],
   "external_project_activity_detected": true,
   "verified_stage": {
     "local_observed_value": "MICRO-00.8",
@@ -63,13 +61,13 @@
   },
   "verified_branch": {
     "local_observed_value": "micro00-8-antigravity-watcher",
-    "remote_verified_value": null,
-    "verification_status": "TIMEOUT"
+    "remote_verified_value": "micro00-8-antigravity-watcher",
+    "verification_status": "VERIFIED"
   },
   "verified_head": {
     "local_observed_value": "e55580aaa8a529d694af5bbf595386992cb3c1c4",
-    "remote_verified_value": null,
-    "verification_status": "TIMEOUT"
+    "remote_verified_value": "0162f27c2c69b3e0da5a2a0a9b5122537983cd1a",
+    "verification_status": "CONFLICT"
   },
   "verified_status": {
     "local_observed_value": "RUNNING",
@@ -88,7 +86,7 @@
   },
   "remote_query_command": "git -C c:\\Users\\VD\\Desktop\\Antigravity\\MICRO-MARKET-ORACLE ls-remote --heads origin refs/heads/micro00-8-antigravity-watcher",
   "remote_query_ref": "refs/heads/micro00-8-antigravity-watcher",
-  "remote_query_returncode": -1,
-  "remote_query_timeout": true,
-  "remote_query_stderr_category": "TIMEOUT"
+  "remote_query_returncode": 0,
+  "remote_query_timeout": false,
+  "remote_query_stderr_category": "VERIFIED"
 }
