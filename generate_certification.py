@@ -102,8 +102,9 @@ def generate_certification(code_under_test_sha: str) -> dict:
         try:
             o_data = json.loads(oracle_state_file.read_text(encoding="utf-8"))
             vhead = o_data.get("verified_head", {})
+            vbranch = o_data.get("verified_branch", {})
             oracle_remote_head = vhead.get("remote_verified_value")
-            oracle_remote_ver_status = vhead.get("verification_status", "UNKNOWN")
+            oracle_remote_ver_status = vbranch.get("verification_status", "UNKNOWN")
             if oracle_remote_head and oracle_remote_ver_status == "VERIFIED":
                 remote_branch_e2e_oracle = True
         except Exception:
@@ -113,8 +114,9 @@ def generate_certification(code_under_test_sha: str) -> dict:
         try:
             m_data = json.loads(micro_state_file.read_text(encoding="utf-8"))
             vhead = m_data.get("verified_head", {})
+            vbranch = m_data.get("verified_branch", {})
             micro_remote_head = vhead.get("remote_verified_value")
-            micro_remote_ver_status = vhead.get("verification_status", "UNKNOWN")
+            micro_remote_ver_status = vbranch.get("verification_status", "UNKNOWN")
             if micro_remote_head and micro_remote_ver_status == "VERIFIED":
                 remote_branch_e2e_micro = True
         except Exception:
