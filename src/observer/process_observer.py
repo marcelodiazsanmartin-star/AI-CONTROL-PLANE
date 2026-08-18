@@ -3,6 +3,7 @@ Process Observer Module (Read-Only)
 
 Inspects system processes to detect if expected project scripts/watchers are running.
 Does not start, stop, kill, or modify any process.
+Provides empirical OS process table counting for AI-CONTROL-PLANE persistent daemons.
 """
 
 import json
@@ -74,3 +75,29 @@ class ProcessObserver:
                     return True, expected, pid
 
         return False, None, None
+
+    def get_active_control_plane_processes(self) -> Tuple[int, List[int]]:
+        """
+        Requirement 2: Empirically inspects OS process table for active persistent AI-CONTROL-PLANE main.py processes.
+        Excludes:
+        - temporary pytest child processes
+        - --once certification sweeps
+        - unrelated Python processes
+        - ORACLE processes
+        - MICRO processes
+        Returns (count: int, pids: List[int])
+        """
+        procs = self.get_running_processes()
+        active_pids = []
+
+        for proc in procs:
+            cmdline = proc.get("CommandLine") or ""
+            pid = proc.get("ProcessId")
+            cmd_lower = cmdline.lower()
+
+            if "main.py" in cmd_lower and "ai-control-plane" in cmd_lower:
+                if "--once" not in cmd_lower and "pytest" not in cmd_lower:
+                    if pid and pid not in active_pids:
+                        active_pids.append(int(pid))
+
+        return len(active_pids), active_pids
