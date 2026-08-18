@@ -2,7 +2,7 @@
   "project": "ORACLE-AI",
   "stage": null,
   "branch": "mvp04-shadow-10-usdc",
-  "remote_head": "049dfda19be236e5eba718344223c0a0ab77923d",
+  "remote_head": null,
   "local_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
   "process_expected": false,
   "process_running": false,
@@ -28,14 +28,14 @@
   "human_decision_required": false,
   "next_action": null,
   "evidence_freshness": {
-    "sprints/AGENT_STATUS.json": 337815.001984,
-    "sprints/ACTIVE_SPRINT.md": 532072.8902,
-    "environment_validation_report.md": 955602.650749
+    "sprints/AGENT_STATUS.json": 337831.61572,
+    "sprints/ACTIVE_SPRINT.md": 532089.503689,
+    "environment_validation_report.md": 955619.263966
   },
   "status": "STALE",
-  "reason": "Heartbeat age (352273.5s) exceeds project threshold (3600.0s)",
-  "observed_at": "2026-08-18T19:54:13.470385+00:00",
-  "heartbeat_age_seconds": 352273.470385,
+  "reason": "Heartbeat age (352290.1s) exceeds project threshold (3600.0s)",
+  "observed_at": "2026-08-18T19:54:30.083459+00:00",
+  "heartbeat_age_seconds": 352290.083459,
   "last_known_good": "2026-08-14T18:03:00Z",
   "retry_count": 0,
   "human_required": false,
@@ -55,8 +55,10 @@
     "5_STATIC_DECLARED_STATUS"
   ],
   "status_source": "2_RUNTIME_HEARTBEAT",
-  "status_age_seconds": 352273.470385,
-  "observer_errors": [],
+  "status_age_seconds": 352290.083459,
+  "observer_errors": [
+    "GitHub remote unreachable or ls-remote timed out (non-fatal)"
+  ],
   "external_project_activity_detected": false,
   "verified_stage": {
     "local_observed_value": null,
@@ -70,8 +72,8 @@
   },
   "verified_head": {
     "local_observed_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
-    "remote_verified_value": "049dfda19be236e5eba718344223c0a0ab77923d",
-    "verification_status": "CONFLICT"
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
   },
   "verified_status": {
     "local_observed_value": "STALE",
