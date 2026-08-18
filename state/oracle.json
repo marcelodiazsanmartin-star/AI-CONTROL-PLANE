@@ -2,11 +2,10 @@
   "project": "ORACLE-AI",
   "stage": null,
   "branch": "mvp04-shadow-10-usdc",
-  "remote_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
+  "remote_head": null,
   "local_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
   "process_expected": false,
   "process_running": false,
-  "unexpected_process": false,
   "last_heartbeat": "2026-08-14T18:03:00Z",
   "last_successful_cycle": null,
   "last_error": null,
@@ -29,14 +28,14 @@
   "human_decision_required": false,
   "next_action": null,
   "evidence_freshness": {
-    "sprints/AGENT_STATUS.json": 338399.028941,
-    "sprints/ACTIVE_SPRINT.md": 532656.917459,
-    "environment_validation_report.md": 956186.678698
+    "sprints/AGENT_STATUS.json": 338414.353375,
+    "sprints/ACTIVE_SPRINT.md": 532672.243487,
+    "environment_validation_report.md": 956202.004137
   },
   "status": "STALE",
-  "reason": "Heartbeat age (352857.5s) exceeds project threshold (3600.0s)",
-  "observed_at": "2026-08-18T20:03:57.498502+00:00",
-  "heartbeat_age_seconds": 352857.498502,
+  "reason": "Heartbeat age (352872.8s) exceeds project threshold (3600.0s)",
+  "observed_at": "2026-08-18T20:04:12.823790+00:00",
+  "heartbeat_age_seconds": 352872.82379,
   "last_known_good": "2026-08-14T18:03:00Z",
   "retry_count": 0,
   "human_required": false,
@@ -56,13 +55,15 @@
     "5_STATIC_DECLARED_STATUS"
   ],
   "status_source": "2_RUNTIME_HEARTBEAT",
-  "status_age_seconds": 352857.498502,
-  "observer_errors": [],
+  "status_age_seconds": 352872.82379,
+  "observer_errors": [
+    "GitHub remote unreachable or ls-remote timed out (non-fatal)"
+  ],
   "external_project_activity_detected": false,
   "verified_stage": {
     "local_observed_value": null,
     "remote_verified_value": null,
-    "verification_status": "VERIFIED"
+    "verification_status": "LOCAL_ONLY"
   },
   "verified_branch": {
     "local_observed_value": "mvp04-shadow-10-usdc",
@@ -71,13 +72,13 @@
   },
   "verified_head": {
     "local_observed_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
-    "remote_verified_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
-    "verification_status": "VERIFIED"
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
   },
   "verified_status": {
     "local_observed_value": "STALE",
-    "remote_verified_value": "STALE",
-    "verification_status": "VERIFIED"
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
   },
   "verified_process_expected": {
     "local_observed_value": false,
