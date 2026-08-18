@@ -1,16 +1,17 @@
 {
-  "timestamp": "2026-08-18T19:56:02.146554+00:00",
-  "code_under_test_sha": "ae952e9f622de32a267810acddb52af2c0032548",
-  "tests_collected": 24,
+  "timestamp": "2026-08-18T20:06:03.847920+00:00",
+  "code_under_test_sha": "a6b8981995fdf15f29aa4bc0a2f2e2c317a8279b",
+  "tests_collected": 25,
   "tests_passed": 24,
-  "tests_failed": 0,
+  "tests_failed": 1,
   "remote_branch_verification_test": true,
   "dead_expected_process_test": true,
   "read_only_git_test": true,
   "commit_storm_prevention_test": true,
+  "single_instance_guarantee_test": false,
   "oracle_modified": false,
   "micro_modified": false,
   "oracle_process_interrupted": false,
   "micro_process_interrupted": false,
-  "overall_result": "PASS"
+  "overall_result": "FAIL"
 }
