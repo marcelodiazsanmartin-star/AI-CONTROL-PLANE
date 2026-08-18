@@ -25,7 +25,7 @@
       "gc",
       "maintenance"
     ],
-    "observed_at": "2026-08-18T19:58:18.952147+00:00",
+    "observed_at": "2026-08-18T19:58:12.759540+00:00",
     "total_projects_monitored": 2,
     "overall_health": "DEGRADED_STALE"
   },
@@ -38,6 +38,7 @@
       "local_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
       "process_expected": false,
       "process_running": false,
+      "unexpected_process": false,
       "last_heartbeat": "2026-08-14T18:03:00Z",
       "last_successful_cycle": null,
       "last_error": null,
@@ -60,14 +61,14 @@
       "human_decision_required": false,
       "next_action": null,
       "evidence_freshness": {
-        "sprints/AGENT_STATUS.json": 338056.693826,
-        "sprints/ACTIVE_SPRINT.md": 532314.581881,
-        "environment_validation_report.md": 955844.342266
+        "sprints/AGENT_STATUS.json": 338058.412472,
+        "sprints/ACTIVE_SPRINT.md": 532316.302456,
+        "environment_validation_report.md": 955846.063355
       },
       "status": "STALE",
-      "reason": "Heartbeat age (352515.2s) exceeds project threshold (3600.0s)",
-      "observed_at": "2026-08-18T19:58:15.161859+00:00",
-      "heartbeat_age_seconds": 352515.161859,
+      "reason": "Heartbeat age (352516.9s) exceeds project threshold (3600.0s)",
+      "observed_at": "2026-08-18T19:58:16.883114+00:00",
+      "heartbeat_age_seconds": 352516.883114,
       "last_known_good": "2026-08-14T18:03:00Z",
       "retry_count": 0,
       "human_required": false,
@@ -87,9 +88,9 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "2_RUNTIME_HEARTBEAT",
-      "status_age_seconds": 352515.161859,
+      "status_age_seconds": 352516.883114,
       "observer_errors": [
-        "GitHub remote unreachable or ls-remote timed out (non-fatal)"
+        "Remote branch refs/heads/mvp04-shadow-10-usdc not found or origin unreachable (non-fatal)"
       ],
       "external_project_activity_detected": false,
       "verified_stage": {
@@ -99,8 +100,8 @@
       },
       "verified_branch": {
         "local_observed_value": "mvp04-shadow-10-usdc",
-        "remote_verified_value": "mvp04-shadow-10-usdc",
-        "verification_status": "VERIFIED"
+        "remote_verified_value": null,
+        "verification_status": "LOCAL_ONLY"
       },
       "verified_head": {
         "local_observed_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
@@ -131,6 +132,7 @@
       "local_head": "e55580aaa8a529d694af5bbf595386992cb3c1c4",
       "process_expected": true,
       "process_running": true,
+      "unexpected_process": false,
       "last_heartbeat": "2026-08-18T18:42:46.065112+00:00",
       "last_successful_cycle": null,
       "last_error": null,
@@ -144,14 +146,14 @@
       "human_decision_required": false,
       "next_action": "CHATGPT_AUDIT_MICRO_00_8",
       "evidence_freshness": {
-        "control/CURRENT_STAGE.json": 25837.194485,
-        "control/PROJECT_STATE.json": 4532.880525,
-        "control/WATCHER_STATE.json": 4899.296957
+        "control/CURRENT_STAGE.json": 25839.104593,
+        "control/PROJECT_STATE.json": 4534.790522,
+        "control/WATCHER_STATE.json": 4901.206965
       },
       "status": "RUNNING",
       "reason": "Active expected process running (watcher)",
-      "observed_at": "2026-08-18T19:58:18.946756+00:00",
-      "heartbeat_age_seconds": 4532.881644,
+      "observed_at": "2026-08-18T19:58:20.856831+00:00",
+      "heartbeat_age_seconds": 4534.791719,
       "last_known_good": "2026-08-18T18:42:46.065112+00:00",
       "retry_count": 0,
       "human_required": false,
@@ -164,8 +166,8 @@
       "state_conflict": true,
       "conflicting_sources": [
         "control/CURRENT_STAGE.json",
-        "control/PROJECT_STATE.json",
-        "control/WATCHER_STATE.json"
+        "control/WATCHER_STATE.json",
+        "control/PROJECT_STATE.json"
       ],
       "evidence_precedence_used": [
         "1_LOCAL_PROCESS_OBSERVATION",
@@ -175,9 +177,9 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "1_LOCAL_PROCESS_OBSERVATION",
-      "status_age_seconds": 4532.881644,
+      "status_age_seconds": 4534.791719,
       "observer_errors": [
-        "GitHub remote unreachable or ls-remote timed out (non-fatal)"
+        "Remote branch refs/heads/micro00-8-antigravity-watcher not found or origin unreachable (non-fatal)"
       ],
       "external_project_activity_detected": true,
       "verified_stage": {
@@ -187,8 +189,8 @@
       },
       "verified_branch": {
         "local_observed_value": "micro00-8-antigravity-watcher",
-        "remote_verified_value": "micro00-8-antigravity-watcher",
-        "verification_status": "VERIFIED"
+        "remote_verified_value": null,
+        "verification_status": "LOCAL_ONLY"
       },
       "verified_head": {
         "local_observed_value": "e55580aaa8a529d694af5bbf595386992cb3c1c4",
