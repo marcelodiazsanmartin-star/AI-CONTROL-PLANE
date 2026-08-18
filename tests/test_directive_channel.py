@@ -4,6 +4,7 @@ Adversarial Test Suite: CONTROL-02.5 Secure Directive Channel
 
 import os
 import json
+import subprocess
 import pytest
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -286,7 +287,6 @@ def test_real_money_directive_rejected_or_waiting_human(tmp_path):
 
     acks = watcher.poll_inbox()
     assert len(acks) == 1
-    # ENABLE_REAL_MONEY is in PROHIBITED_MUTATING_ACTIONS -> REJECTED or WAITING_HUMAN (both executed=False)
     assert acks[0].decision in ("REJECTED", "WAITING_HUMAN")
     assert acks[0].executed is False
 
@@ -323,7 +323,6 @@ def test_directive_never_executes_target_mutation(tmp_path):
 def test_oracle_remains_unmodified(tmp_path):
     oracle_dir = settings.WORKSPACE_ROOT / "Oracle"
     if oracle_dir.exists():
-        # Check mtime or clean git status
         res = subprocess.run(["git", "-C", str(oracle_dir), "status", "--porcelain"], capture_output=True, text=True)
         assert res.returncode == 0
         assert len(res.stdout.strip()) == 0
@@ -351,7 +350,6 @@ def test_single_daemon_still_enforced(tmp_path):
 
 def test_directive_watcher_does_not_spawn_second_daemon(tmp_path):
     engine = ControlPlaneEngine(output_dir=tmp_path / "state", audit_file=tmp_path / "audit" / "events.jsonl")
-    # DirectiveWatcher is an attribute of existing engine, not a separate OS process
     assert hasattr(engine, "directive_watcher")
     assert isinstance(engine.directive_watcher, DirectiveWatcher)
 
