@@ -1,8 +1,9 @@
 {
-  "timestamp": "2026-08-18T20:26:38.574914+00:00",
-  "code_under_test_sha": "de493e3de12b1ca65799a7d20509726757e1ffb4",
-  "certification_source_sha": "de493e3de12b1ca65799a7d20509726757e1ffb4",
-  "evidence_commit_sha": "f945aaa36f73117498c4f9828cbdfebc18a5fd3f",
+  "timestamp": "2026-08-18T20:38:52.823741+00:00",
+  "code_under_test_sha": "b90ca18909a2481055c9c7fd8b66c494e02bf9f1",
+  "certification_source_sha": "b90ca18909a2481055c9c7fd8b66c494e02bf9f1",
+  "evidence_commit_sha": null,
+  "evidence_commit_status": "PENDING_COMMIT",
   "tests_collected": 28,
   "tests_passed": 28,
   "tests_failed": 0,
@@ -21,6 +22,9 @@
   "stale_lock_recovery_test": true,
   "monitored_processes_never_terminated_test": true,
   "control_plane_instance_count": 1,
+  "active_control_plane_pids": [
+    12264
+  ],
   "oracle_modified": false,
   "micro_modified": false,
   "oracle_process_interrupted": false,
