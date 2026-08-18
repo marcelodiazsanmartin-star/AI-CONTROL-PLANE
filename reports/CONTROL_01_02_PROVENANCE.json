@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-08-18T20:41:22.265791+00:00",
+  "code_under_test_sha": "b90ca18909a2481055c9c7fd8b66c494e02bf9f1",
+  "certification_source_sha": "b90ca18909a2481055c9c7fd8b66c494e02bf9f1",
+  "certification_artifact_commit_sha": "66d11b91bc621ed0f5af70be96ffdf6d1561fdf9",
+  "provenance_commit_parent_sha": "66d11b91bc621ed0f5af70be96ffdf6d1561fdf9",
+  "ancestry_verified": false
+}
