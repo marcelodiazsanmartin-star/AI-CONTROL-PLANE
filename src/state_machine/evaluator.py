@@ -2,8 +2,7 @@
 Canonical State Machine Evaluator, Contradiction Detector, and Verification Triple Generator
 
 Evaluates normalized project state using 5-tier Evidence Precedence.
-Computes local_observed_value, remote_verified_value, and verification_status triples.
-Implements context-aware process_expected handling and fail-closed rules.
+Enforces strict remote branch verification and independent process_expected semantics.
 """
 
 from datetime import datetime, timezone
@@ -37,6 +36,7 @@ class StateEvaluator:
         git_info = observed_data.get("git_info", {})
         proc_expected = observed_data.get("process_expected", False)
         proc_running = observed_data.get("process_running", False)
+        unexpected_proc = observed_data.get("unexpected_process", False)
         evidence_map: Dict[str, EvidenceItem] = observed_data.get("evidence_map", {})
         observer_errors: List[str] = observed_data.get("observer_errors", [])
         external_activity: bool = observed_data.get("external_project_activity_detected", False)
@@ -57,6 +57,7 @@ class StateEvaluator:
         branch = git_info.get("branch")
         remote_head = git_info.get("remote_head")
         local_head = git_info.get("local_head")
+        remote_branch_exists = git_info.get("remote_branch_exists", False)
         last_heartbeat = None
         heartbeat_age_seconds = None
         last_successful_cycle = None
@@ -169,17 +170,30 @@ class StateEvaluator:
             if "process_table" not in conflicting_sources:
                 conflicting_sources.append("process_table")
 
+        if unexpected_proc:
+            state_conflict = True
+            if "unexpected_process" not in conflicting_sources:
+                conflicting_sources.append("unexpected_process")
+
         # Determine Canonical State using Evidence Precedence
         canonical_state = CanonicalState.UNKNOWN
         reason = ""
         confidence = 1.0
         status_source = "SYSTEM_EVALUATOR"
 
-        if proc_running and proc_expected:
+        # Requirement #2: Independent PROCESS_EXPECTATION vs PROCESS_OBSERVATION logic
+        if proc_expected and proc_running:
             canonical_state = CanonicalState.RUNNING
             status_source = "1_LOCAL_PROCESS_OBSERVATION"
             reason = f"Active expected process running ({observed_data.get('matched_process_name')})"
             confidence = 1.0
+
+        elif proc_expected and not proc_running:
+            # expected TRUE + running FALSE -> STALE / BLOCKED
+            canonical_state = CanonicalState.STALE
+            status_source = "1_LOCAL_PROCESS_OBSERVATION"
+            reason = "Process expected to be running but OS process table shows inactive"
+            confidence = 0.85
 
         elif human_req or human_decision_req:
             canonical_state = CanonicalState.HUMAN_REQUIRED
@@ -193,12 +207,6 @@ class StateEvaluator:
             reason = "No evidence files found or repository unavailable"
             confidence = 0.0
 
-        elif proc_expected and not proc_running:
-            canonical_state = CanonicalState.STALE
-            status_source = "1_LOCAL_PROCESS_OBSERVATION"
-            reason = "Process expected to be running but process table shows inactive"
-            confidence = 0.85
-
         elif heartbeat_age_seconds is not None and heartbeat_age_seconds > self.stale_threshold:
             canonical_state = CanonicalState.STALE
             status_source = "2_RUNTIME_HEARTBEAT"
@@ -206,6 +214,7 @@ class StateEvaluator:
             confidence = 0.75
 
         else:
+            # expected FALSE + running FALSE (or running TRUE -> unexpected)
             winning_src = None
             winning_status = None
             project_level_decls = [
@@ -239,11 +248,13 @@ class StateEvaluator:
                 reason = "Project is in a valid idle state with verified static evidence"
                 confidence = 0.85
 
-        # Compute Remote Verification Triples
-        # 1. HEAD commit verification
+            if unexpected_proc:
+                reason += f" [INCONSISTENCY: Unexpected active process running ({observed_data.get('matched_process_name')}) when process_expected=False]"
+
+        # Requirement #1: Remote Verification Triples (Exact Remote Branch Verification)
         head_ver_status = VerificationStatus.UNKNOWN
         if local_head and remote_head:
-            if local_head == remote_head:
+            if local_head == remote_head and remote_branch_exists:
                 head_ver_status = VerificationStatus.VERIFIED
             else:
                 head_ver_status = VerificationStatus.CONFLICT
@@ -252,29 +263,29 @@ class StateEvaluator:
 
         verified_head = VerifiedField(
             local_observed_value=local_head,
-            remote_verified_value=remote_head,
+            remote_verified_value=remote_head if remote_branch_exists else None,
             verification_status=head_ver_status
         )
 
-        # 2. Branch verification
-        branch_ver_status = VerificationStatus.VERIFIED if (branch and git_info.get("git_available")) else VerificationStatus.LOCAL_ONLY
+        # Branch verification: VERIFIED only if exact remote branch refs/heads/<branch> exists!
+        branch_ver_status = VerificationStatus.VERIFIED if (branch and remote_branch_exists) else VerificationStatus.LOCAL_ONLY
         verified_branch = VerifiedField(
             local_observed_value=branch,
-            remote_verified_value=branch if git_info.get("git_available") else None,
+            remote_verified_value=branch if remote_branch_exists else None,
             verification_status=branch_ver_status
         )
 
-        # 3. Stage verification
-        stage_ver_status = VerificationStatus.VERIFIED if (local_head and remote_head and local_head == remote_head) else VerificationStatus.LOCAL_ONLY
+        # Stage verification
+        stage_ver_status = VerificationStatus.VERIFIED if (local_head and remote_head and local_head == remote_head and remote_branch_exists) else VerificationStatus.LOCAL_ONLY
         verified_stage = VerifiedField(
             local_observed_value=stage,
             remote_verified_value=stage if stage_ver_status == VerificationStatus.VERIFIED else None,
             verification_status=stage_ver_status
         )
 
-        # 4. Status verification
+        # Status verification
         status_val_str = canonical_state.value if isinstance(canonical_state, CanonicalState) else str(canonical_state)
-        status_ver_status = VerificationStatus.VERIFIED if (local_head and remote_head and local_head == remote_head and not state_conflict) else VerificationStatus.LOCAL_ONLY
+        status_ver_status = VerificationStatus.VERIFIED if (local_head and remote_head and local_head == remote_head and remote_branch_exists and not state_conflict) else VerificationStatus.LOCAL_ONLY
         if state_conflict:
             status_ver_status = VerificationStatus.CONFLICT
 
@@ -284,20 +295,16 @@ class StateEvaluator:
             verification_status=status_ver_status
         )
 
-        # 5. Process Expected verification
-        proc_exp_ver = VerificationStatus.LOCAL_ONLY
         verified_process_expected = VerifiedField(
             local_observed_value=proc_expected,
             remote_verified_value=None,
-            verification_status=proc_exp_ver
+            verification_status=VerificationStatus.LOCAL_ONLY
         )
 
-        # 6. Process Running verification
-        proc_run_ver = VerificationStatus.LOCAL_ONLY
         verified_process_running = VerifiedField(
             local_observed_value=proc_running,
             remote_verified_value=None,
-            verification_status=proc_run_ver
+            verification_status=VerificationStatus.LOCAL_ONLY
         )
 
         return NormalizedProjectState(
@@ -308,6 +315,7 @@ class StateEvaluator:
             local_head=local_head,
             process_expected=proc_expected,
             process_running=proc_running,
+            unexpected_process=unexpected_proc,
             last_heartbeat=last_heartbeat,
             heartbeat_age_seconds=heartbeat_age_seconds,
             last_successful_cycle=last_successful_cycle,

@@ -14,7 +14,7 @@ def test_missing_evidence_defaults_to_unknown():
     observed_data = {
         "project": "MISSING_EVIDENCE_PROJ",
         "git_info": {},
-        "process_expected": True,
+        "process_expected": False,
         "process_running": False,
         "evidence_map": {}
     }

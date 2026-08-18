@@ -3,7 +3,7 @@ Control Plane Engine
 
 Orchestrates observations across registered projects, evaluates state machines using
 5-Tier Evidence Precedence and Remote Verification Triples, manages Control Plane self-health,
-writes output state JSONs, and handles remote status publication.
+writes output state JSONs, and handles low-frequency event-driven remote status publication.
 """
 
 import json
@@ -41,6 +41,7 @@ class ControlPlaneEngine:
         self.sweep_count = 0
         self.last_states: Dict[str, str] = {}
         self.last_error: Optional[str] = None
+        self.last_remote_publish_timestamp: Optional[datetime] = None
 
     def update_self_health(self, status_str: str = "RUNNING"):
         health_data = {
@@ -60,9 +61,10 @@ class ControlPlaneEngine:
 
     def run_sweep(self) -> Dict[str, NormalizedProjectState]:
         self.sweep_count += 1
+        now_dt = datetime.now(timezone.utc)
         states: Dict[str, NormalizedProjectState] = {}
         project_results_dict: Dict[str, Any] = {}
-        state_changed = False
+        state_transition_occurred = False
 
         for proj_key, proj_cfg in settings.REGISTERED_PROJECTS.items():
             # 1. Gather raw observation data
@@ -73,18 +75,19 @@ class ControlPlaneEngine:
             proj_evaluator = StateEvaluator(heartbeat_stale_threshold_seconds=stale_thresh)
             norm_state = proj_evaluator.evaluate(raw_obs)
 
-            # Check if state changed from previous sweep
+            # Detect state transition (state change into any canonical state)
             current_status = norm_state.status.value if hasattr(norm_state.status, "value") else str(norm_state.status)
             prev_status = self.last_states.get(proj_key)
-            if prev_status != current_status:
-                state_changed = True
-                self.last_states[proj_key] = current_status
+            if prev_status is not None and prev_status != current_status:
+                state_transition_occurred = True
+
+            self.last_states[proj_key] = current_status
 
             states[proj_key] = norm_state
             proj_dict = norm_state.to_dict()
             project_results_dict[proj_key] = proj_dict
 
-            # 3. Write individual state file (e.g. state/oracle.json or state/micro.json)
+            # 3. Write individual local state file (state/oracle.json, state/micro.json)
             file_id = proj_cfg.get("id", proj_key.lower())
             proj_state_path = self.output_dir / f"{file_id}.json"
             with open(proj_state_path, "w", encoding="utf-8") as f:
@@ -117,7 +120,7 @@ class ControlPlaneEngine:
                 },
                 "allowed_git_commands": settings.ALLOWED_GIT_COMMANDS,
                 "disallowed_git_commands": settings.DISALLOWED_GIT_COMMANDS,
-                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "observed_at": now_dt.isoformat(),
                 "total_projects_monitored": len(states),
                 "overall_health": overall_health
             },
@@ -131,16 +134,17 @@ class ControlPlaneEngine:
         # 7. Update Control Plane Self Health
         self.update_self_health(status_str="RUNNING")
 
-        # 8. Check Remote Publication Criteria
-        should_publish = (
-            state_changed or
-            has_blocked or
-            has_stale or
-            (self.sweep_count % settings.REMOTE_CHECKPOINT_SWEEPS == 0)
+        # 8. Requirement #3: Event-driven Remote Publication Debouncing
+        # Publish immediately ONLY on state TRANSITION or initial run.
+        # Otherwise, publish ONLY when REMOTE_CHECKPOINT_SECONDS interval has elapsed.
+        checkpoint_due = (
+            self.last_remote_publish_timestamp is None or
+            (now_dt - self.last_remote_publish_timestamp).total_seconds() >= settings.REMOTE_CHECKPOINT_SECONDS
         )
 
-        if should_publish:
-            self.publish_remote_status()
+        if state_transition_occurred or checkpoint_due:
+            if self.publish_remote_status():
+                self.last_remote_publish_timestamp = now_dt
 
         return states
 
@@ -156,14 +160,13 @@ class ControlPlaneEngine:
         try:
             # Stage only control plane state and audit outputs
             subprocess.run(
-                ["git", "add", "state/", "audit/"],
+                ["git", "add", "state/", "audit/", "reports/"],
                 cwd=str(cp_root),
                 capture_output=True,
                 text=True,
                 check=False
             )
 
-            # Check if there are changes to commit
             status_res = subprocess.run(
                 ["git", "status", "--porcelain"],
                 cwd=str(cp_root),
@@ -173,7 +176,7 @@ class ControlPlaneEngine:
             )
 
             if status_res.stdout.strip():
-                msg = f"chore(control-plane): auto-publish status sweep #{self.sweep_count}"
+                msg = f"chore(control-plane): state publication sweep #{self.sweep_count}"
                 subprocess.run(
                     ["git", "commit", "-m", msg],
                     cwd=str(cp_root),
@@ -182,7 +185,6 @@ class ControlPlaneEngine:
                     check=False
                 )
 
-                # Push to remote AI-CONTROL-PLANE repo
                 push_res = subprocess.run(
                     ["git", "push", "origin", settings.REMOTE_PUBLISH_BRANCH],
                     cwd=str(cp_root),

@@ -23,10 +23,10 @@ DISALLOWED_GIT_COMMANDS: List[str] = [
 ]
 
 # Continuous Observer & Remote Publication Settings
-CONTROL_PLANE_POLL_SECONDS: float = 5.0
+LOCAL_POLL_SECONDS: float = 5.0
+REMOTE_CHECKPOINT_SECONDS: float = 300.0  # Time-based remote health checkpoint interval (5 mins)
 REMOTE_PUBLISH_REPO_URL: str = "https://github.com/marcelodiazsanmartin-star/AI-CONTROL-PLANE.git"
 REMOTE_PUBLISH_BRANCH: str = "main"
-REMOTE_CHECKPOINT_SWEEPS: int = 12  # Publish periodic checkpoint every ~60s if active
 
 # Heartbeat & Freshness Thresholds (in seconds)
 DEFAULT_HEARTBEAT_STALE_THRESHOLD_SECONDS: float = 300.0
@@ -36,7 +36,7 @@ GIT_TIMEOUT_SECONDS: float = 2.0
 WORKSPACE_ROOT = Path("c:/Users/VD/Desktop/Antigravity")
 CONTROL_PLANE_ROOT = WORKSPACE_ROOT / "AI-CONTROL-PLANE"
 
-# Monitored Project Registry & Context-Aware Policies
+# Monitored Project Registry & Lifecycle Expectations
 REGISTERED_PROJECTS: Dict[str, Dict[str, Any]] = {
     "ORACLE-AI": {
         "id": "oracle",
@@ -47,8 +47,8 @@ REGISTERED_PROJECTS: Dict[str, Dict[str, Any]] = {
             "live_test.py",
             "server.py"
         ],
-        "default_process_expected": False,  # Prospective soak completed (READY_FOR_REVIEW)
-        "heartbeat_stale_threshold": 3600.0, # 1 hour policy for completed soak state
+        "default_process_expected": False,  # Soak complete (READY_FOR_REVIEW)
+        "heartbeat_stale_threshold": 3600.0,
         "state_files": [
             "sprints/AGENT_STATUS.json",
             "sprints/ACTIVE_SPRINT.md",
@@ -64,7 +64,7 @@ REGISTERED_PROJECTS: Dict[str, Dict[str, Any]] = {
             "watcher",
             "run_watcher.py"
         ],
-        "default_process_expected": False,  # Stage MICRO-00.8 in READY_FOR_AUDIT phase (watcher intentionally stopped)
+        "default_process_expected": True,  # Watcher actively expected during stage observation
         "heartbeat_stale_threshold": 300.0,
         "state_files": [
             "control/CURRENT_STAGE.json",

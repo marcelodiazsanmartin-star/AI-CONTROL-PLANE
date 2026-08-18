@@ -68,6 +68,7 @@ class NormalizedProjectState:
     local_head: Optional[str] = None
     process_expected: bool = False
     process_running: bool = False
+    unexpected_process: bool = False  # Set True when process_expected=False but process_running=True
     last_heartbeat: Optional[str] = None
     last_successful_cycle: Optional[str] = None
     last_error: Optional[str] = None
@@ -90,7 +91,7 @@ class NormalizedProjectState:
     state_conflict: bool = False
     conflicting_sources: List[str] = field(default_factory=list)
 
-    # MANDATORY CORRECTIONS & PRECEDENCE
+    # PRECEDENCE & AUDIT METADATA
     evidence_precedence_used: List[str] = field(default_factory=list)
     status_source: str = "UNKNOWN"
     status_age_seconds: Optional[float] = None

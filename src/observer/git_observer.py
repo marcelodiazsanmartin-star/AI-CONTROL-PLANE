@@ -1,9 +1,9 @@
 """
 Git Observer Module (Strict Read-Only)
 
-Observes branch, local HEAD, status, and remote HEAD without modifying repository state.
-Guarantees zero mutation of .git metadata or local worktree.
-Strictly disallows fetch, pull, checkout, reset, clean, add, commit, gc, maintenance.
+Observes branch, local HEAD, status, and remote branch HEAD without modifying repository state.
+Guarantees zero mutation of .git metadata or local worktree by enforcing GIT_OPTIONAL_LOCKS=0.
+Disallows fetch, pull, checkout, reset, clean, add, commit, gc, maintenance.
 """
 
 import os
@@ -23,6 +23,7 @@ class GitObserver:
             "branch": None,
             "local_head": None,
             "remote_head": None,
+            "remote_branch_exists": False,
             "worktree_clean": True,
             "observer_errors": []
         }
@@ -35,26 +36,37 @@ class GitObserver:
             # 1. Local Branch (rev-parse --abbrev-ref HEAD)
             branch = self._run_git(repo_path, ["rev-parse", "--abbrev-ref", "HEAD"])
             if branch:
-                result["branch"] = branch.strip()
+                branch_clean = branch.strip()
+                result["branch"] = branch_clean
 
-            # 2. Local HEAD commit hash (rev-parse HEAD)
-            local_head = self._run_git(repo_path, ["rev-parse", "HEAD"])
-            if local_head:
-                result["local_head"] = local_head.strip()
+                # 2. Local HEAD commit hash (rev-parse HEAD)
+                local_head = self._run_git(repo_path, ["rev-parse", "HEAD"])
+                if local_head:
+                    result["local_head"] = local_head.strip()
 
-            # 3. Worktree Cleanliness (status --porcelain) - purely read-only
-            status = self._run_git(repo_path, ["status", "--porcelain"])
-            if status is not None:
-                result["worktree_clean"] = len(status.strip()) == 0
+                # 3. Worktree Cleanliness (status --porcelain)
+                status = self._run_git(repo_path, ["status", "--porcelain"])
+                if status is not None:
+                    result["worktree_clean"] = len(status.strip()) == 0
 
-            # 4. Remote HEAD hash (ls-remote origin HEAD) - purely read-only remote query
-            remote_head = self._run_git(repo_path, ["ls-remote", "origin", "HEAD"])
-            if remote_head:
-                parts = remote_head.strip().split()
-                if parts:
-                    result["remote_head"] = parts[0]
-            else:
-                result["observer_errors"].append("GitHub remote unreachable or ls-remote timed out (non-fatal)")
+                # 4. Exact Remote Branch HEAD query (ls-remote --heads origin refs/heads/<branch>)
+                # Requirement: Do NOT use ls-remote origin HEAD (default branch HEAD).
+                ref_spec = f"refs/heads/{branch_clean}"
+                remote_out = self._run_git(repo_path, ["ls-remote", "--heads", "origin", ref_spec])
+                if remote_out:
+                    # Output line format: "<hash>\trefs/heads/<branch>"
+                    lines = remote_out.strip().splitlines()
+                    for line in lines:
+                        parts = line.split()
+                        if len(parts) >= 2 and parts[1] == ref_spec:
+                            result["remote_head"] = parts[0]
+                            result["remote_branch_exists"] = True
+                            break
+
+                if not result["remote_branch_exists"]:
+                    result["observer_errors"].append(
+                        f"Remote branch {ref_spec} not found or origin unreachable (non-fatal)"
+                    )
 
             result["git_available"] = True
 
@@ -71,6 +83,8 @@ class GitObserver:
 
         try:
             env = os.environ.copy()
+            # Requirement #4: Harden True Read-Only Git environment
+            env["GIT_OPTIONAL_LOCKS"] = "0"
             env["GIT_TERMINAL_PROMPT"] = "0"
             env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
             res = subprocess.run(
