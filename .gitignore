@@ -1,0 +1,7 @@
+# AI-CONTROL-PLANE gitignore
+tmp_pytest/
+.pytest_cache/
+__pycache__/
+*.pyc
+.venv/
+scratch/

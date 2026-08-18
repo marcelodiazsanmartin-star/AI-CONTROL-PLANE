@@ -1,0 +1,93 @@
+{
+  "project": "ORACLE-AI",
+  "stage": null,
+  "branch": "mvp04-shadow-10-usdc",
+  "remote_head": null,
+  "local_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
+  "process_expected": false,
+  "process_running": false,
+  "last_heartbeat": "2026-08-14T18:03:00Z",
+  "last_successful_cycle": null,
+  "last_error": null,
+  "test_status": {},
+  "critical_gates": {
+    "LIVE_MARKET_DATA_INTEGRITY": "PASS",
+    "PAPER_ONLY": "TRUE",
+    "REAL_MONEY": "BLOCKED",
+    "ACCOUNTING_DRIFT": "0.00000000 USDC",
+    "LEDGER_INTEGRITY": "PASS",
+    "WATCHDOG": "PASS",
+    "RECOVERY_MECHANISM": "PASS",
+    "NO_DATA_LEAKAGE": "PASS",
+    "NO_LOOKAHEAD_BIAS": "PASS",
+    "ADVERSE_SELECTION_VALIDATED": "PASS",
+    "ECONOMIC_METRICS_REPRODUCIBLE": "PASS",
+    "SYSTEM_STABILITY": "PASS",
+    "FINAL_STATUS": "PASS"
+  },
+  "human_decision_required": false,
+  "next_action": null,
+  "evidence_freshness": {
+    "sprints/AGENT_STATUS.json": 336488.135065,
+    "sprints/ACTIVE_SPRINT.md": 530746.024056,
+    "environment_validation_report.md": 954275.784942
+  },
+  "status": "STALE",
+  "reason": "Heartbeat age (350946.6s) exceeds project threshold (3600.0s)",
+  "observed_at": "2026-08-18T19:32:06.604868+00:00",
+  "heartbeat_age_seconds": 350946.604868,
+  "last_known_good": "2026-08-14T18:03:00Z",
+  "retry_count": 0,
+  "human_required": false,
+  "evidence_sources": [
+    "sprints/AGENT_STATUS.json",
+    "sprints/ACTIVE_SPRINT.md",
+    "environment_validation_report.md"
+  ],
+  "confidence": 0.75,
+  "state_conflict": false,
+  "conflicting_sources": [],
+  "evidence_precedence_used": [
+    "1_LOCAL_PROCESS_OBSERVATION",
+    "2_RUNTIME_HEARTBEAT",
+    "3_GITHUB_REMOTE_HEAD",
+    "4_COMMITTED_RUNTIME_EVIDENCE",
+    "5_STATIC_DECLARED_STATUS"
+  ],
+  "status_source": "2_RUNTIME_HEARTBEAT",
+  "status_age_seconds": 350946.604868,
+  "observer_errors": [
+    "GitHub remote unreachable or ls-remote timed out (non-fatal)"
+  ],
+  "external_project_activity_detected": false,
+  "verified_stage": {
+    "local_observed_value": null,
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
+  },
+  "verified_branch": {
+    "local_observed_value": "mvp04-shadow-10-usdc",
+    "remote_verified_value": "mvp04-shadow-10-usdc",
+    "verification_status": "VERIFIED"
+  },
+  "verified_head": {
+    "local_observed_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
+  },
+  "verified_status": {
+    "local_observed_value": "STALE",
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
+  },
+  "verified_process_expected": {
+    "local_observed_value": false,
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
+  },
+  "verified_process_running": {
+    "local_observed_value": false,
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
+  }
+}
