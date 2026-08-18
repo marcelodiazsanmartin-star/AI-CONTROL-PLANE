@@ -3,6 +3,7 @@ Canonical State Machine Evaluator, Contradiction Detector, and Verification Trip
 
 Evaluates normalized project state using 5-tier Evidence Precedence.
 Enforces strict remote branch verification and independent process_expected semantics.
+Passes structured remote diagnostics through state contracts.
 """
 
 from datetime import datetime, timezone
@@ -58,6 +59,8 @@ class StateEvaluator:
         remote_head = git_info.get("remote_head")
         local_head = git_info.get("local_head")
         remote_branch_exists = git_info.get("remote_branch_exists", False)
+        remote_cat = git_info.get("remote_query_stderr_category", "UNKNOWN")
+
         last_heartbeat = None
         heartbeat_age_seconds = None
         last_successful_cycle = None
@@ -181,7 +184,6 @@ class StateEvaluator:
         confidence = 1.0
         status_source = "SYSTEM_EVALUATOR"
 
-        # Requirement #2: Independent PROCESS_EXPECTATION vs PROCESS_OBSERVATION logic
         if proc_expected and proc_running:
             canonical_state = CanonicalState.RUNNING
             status_source = "1_LOCAL_PROCESS_OBSERVATION"
@@ -189,7 +191,6 @@ class StateEvaluator:
             confidence = 1.0
 
         elif proc_expected and not proc_running:
-            # expected TRUE + running FALSE -> STALE / BLOCKED
             canonical_state = CanonicalState.STALE
             status_source = "1_LOCAL_PROCESS_OBSERVATION"
             reason = "Process expected to be running but OS process table shows inactive"
@@ -214,7 +215,6 @@ class StateEvaluator:
             confidence = 0.75
 
         else:
-            # expected FALSE + running FALSE (or running TRUE -> unexpected)
             winning_src = None
             winning_status = None
             project_level_decls = [
@@ -251,41 +251,54 @@ class StateEvaluator:
             if unexpected_proc:
                 reason += f" [INCONSISTENCY: Unexpected active process running ({observed_data.get('matched_process_name')}) when process_expected=False]"
 
-        # Requirement #1: Remote Verification Triples (Exact Remote Branch Verification)
-        head_ver_status = VerificationStatus.UNKNOWN
-        if local_head and remote_head:
-            if local_head == remote_head and remote_branch_exists:
-                head_ver_status = VerificationStatus.VERIFIED
-            else:
-                head_ver_status = VerificationStatus.CONFLICT
+        # Remote Verification Triples & Categorized Status
+        # Map remote_cat string to VerificationStatus enum
+        if remote_cat == "VERIFIED":
+            head_ver_status = VerificationStatus.VERIFIED
+            branch_ver_status = VerificationStatus.VERIFIED
+        elif remote_cat == "BRANCH_NOT_FOUND":
+            head_ver_status = VerificationStatus.BRANCH_NOT_FOUND
+            branch_ver_status = VerificationStatus.BRANCH_NOT_FOUND
+        elif remote_cat == "AUTH_FAILURE":
+            head_ver_status = VerificationStatus.AUTH_FAILURE
+            branch_ver_status = VerificationStatus.AUTH_FAILURE
+        elif remote_cat == "NETWORK_FAILURE":
+            head_ver_status = VerificationStatus.NETWORK_FAILURE
+            branch_ver_status = VerificationStatus.NETWORK_FAILURE
+        elif remote_cat == "TIMEOUT":
+            head_ver_status = VerificationStatus.TIMEOUT
+            branch_ver_status = VerificationStatus.TIMEOUT
         elif local_head and not remote_head:
             head_ver_status = VerificationStatus.LOCAL_ONLY
+            branch_ver_status = VerificationStatus.LOCAL_ONLY
+        else:
+            head_ver_status = VerificationStatus.GIT_FAILURE
+            branch_ver_status = VerificationStatus.GIT_FAILURE
+
+        if local_head and remote_head and local_head != remote_head:
+            head_ver_status = VerificationStatus.CONFLICT
 
         verified_head = VerifiedField(
             local_observed_value=local_head,
-            remote_verified_value=remote_head if remote_branch_exists else None,
+            remote_verified_value=remote_head,
             verification_status=head_ver_status
         )
 
-        # Branch verification: VERIFIED only if exact remote branch refs/heads/<branch> exists!
-        branch_ver_status = VerificationStatus.VERIFIED if (branch and remote_branch_exists) else VerificationStatus.LOCAL_ONLY
         verified_branch = VerifiedField(
             local_observed_value=branch,
             remote_verified_value=branch if remote_branch_exists else None,
             verification_status=branch_ver_status
         )
 
-        # Stage verification
-        stage_ver_status = VerificationStatus.VERIFIED if (local_head and remote_head and local_head == remote_head and remote_branch_exists) else VerificationStatus.LOCAL_ONLY
+        stage_ver_status = VerificationStatus.VERIFIED if (head_ver_status == VerificationStatus.VERIFIED) else VerificationStatus.LOCAL_ONLY
         verified_stage = VerifiedField(
             local_observed_value=stage,
             remote_verified_value=stage if stage_ver_status == VerificationStatus.VERIFIED else None,
             verification_status=stage_ver_status
         )
 
-        # Status verification
         status_val_str = canonical_state.value if isinstance(canonical_state, CanonicalState) else str(canonical_state)
-        status_ver_status = VerificationStatus.VERIFIED if (local_head and remote_head and local_head == remote_head and remote_branch_exists and not state_conflict) else VerificationStatus.LOCAL_ONLY
+        status_ver_status = VerificationStatus.VERIFIED if (head_ver_status == VerificationStatus.VERIFIED and not state_conflict) else VerificationStatus.LOCAL_ONLY
         if state_conflict:
             status_ver_status = VerificationStatus.CONFLICT
 
@@ -345,5 +358,10 @@ class StateEvaluator:
             verified_head=verified_head,
             verified_status=verified_status,
             verified_process_expected=verified_process_expected,
-            verified_process_running=verified_process_running
+            verified_process_running=verified_process_running,
+            remote_query_command=git_info.get("remote_query_command"),
+            remote_query_ref=git_info.get("remote_query_ref"),
+            remote_query_returncode=git_info.get("remote_query_returncode"),
+            remote_query_timeout=git_info.get("remote_query_timeout", False),
+            remote_query_stderr_category=remote_cat
         )

@@ -25,6 +25,11 @@ class VerificationStatus(str, Enum):
     LOCAL_ONLY = "LOCAL_ONLY"
     REMOTE_ONLY = "REMOTE_ONLY"
     CONFLICT = "CONFLICT"
+    BRANCH_NOT_FOUND = "BRANCH_NOT_FOUND"
+    AUTH_FAILURE = "AUTH_FAILURE"
+    NETWORK_FAILURE = "NETWORK_FAILURE"
+    TIMEOUT = "TIMEOUT"
+    GIT_FAILURE = "GIT_FAILURE"
     UNKNOWN = "UNKNOWN"
 
 
@@ -98,13 +103,19 @@ class NormalizedProjectState:
     observer_errors: List[str] = field(default_factory=list)
     external_project_activity_detected: bool = False
 
-    # REMOTE VERIFICATION TRIPLES (Local vs Remote Verification)
+    # REMOTE VERIFICATION TRIPLES & DIAGNOSTICS
     verified_stage: Optional[VerifiedField] = None
     verified_branch: Optional[VerifiedField] = None
     verified_head: Optional[VerifiedField] = None
     verified_status: Optional[VerifiedField] = None
     verified_process_expected: Optional[VerifiedField] = None
     verified_process_running: Optional[VerifiedField] = None
+
+    remote_query_command: Optional[str] = None
+    remote_query_ref: Optional[str] = None
+    remote_query_returncode: Optional[int] = None
+    remote_query_timeout: bool = False
+    remote_query_stderr_category: str = "UNKNOWN"
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
