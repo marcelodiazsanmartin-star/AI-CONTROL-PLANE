@@ -25,7 +25,7 @@
       "gc",
       "maintenance"
     ],
-    "observed_at": "2026-08-18T19:52:22.964816+00:00",
+    "observed_at": "2026-08-18T19:52:38.420495+00:00",
     "total_projects_monitored": 2,
     "overall_health": "DEGRADED_STALE"
   },
@@ -60,14 +60,14 @@
       "human_decision_required": false,
       "next_action": null,
       "evidence_freshness": {
-        "sprints/AGENT_STATUS.json": 337701.036695,
-        "sprints/ACTIVE_SPRINT.md": 531958.924974,
-        "environment_validation_report.md": 955488.685572
+        "sprints/AGENT_STATUS.json": 337716.347211,
+        "sprints/ACTIVE_SPRINT.md": 531974.236135,
+        "environment_validation_report.md": 955503.996675
       },
       "status": "STALE",
-      "reason": "Heartbeat age (352159.5s) exceeds project threshold (3600.0s)",
-      "observed_at": "2026-08-18T19:52:19.505272+00:00",
-      "heartbeat_age_seconds": 352159.505272,
+      "reason": "Heartbeat age (352174.8s) exceeds project threshold (3600.0s)",
+      "observed_at": "2026-08-18T19:52:34.816271+00:00",
+      "heartbeat_age_seconds": 352174.816271,
       "last_known_good": "2026-08-14T18:03:00Z",
       "retry_count": 0,
       "human_required": false,
@@ -87,7 +87,7 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "2_RUNTIME_HEARTBEAT",
-      "status_age_seconds": 352159.505272,
+      "status_age_seconds": 352174.816271,
       "observer_errors": [
         "GitHub remote unreachable or ls-remote timed out (non-fatal)"
       ],
@@ -144,14 +144,14 @@
       "human_decision_required": false,
       "next_action": "CHATGPT_AUDIT_MICRO_00_8",
       "evidence_freshness": {
-        "control/CURRENT_STAGE.json": 25481.209715,
-        "control/PROJECT_STATE.json": 4176.896545,
-        "control/WATCHER_STATE.json": 4543.312883
+        "control/CURRENT_STAGE.json": 25496.666416,
+        "control/PROJECT_STATE.json": 4192.352361,
+        "control/WATCHER_STATE.json": 4558.768828
       },
       "status": "RUNNING",
       "reason": "Active expected process running (watcher)",
-      "observed_at": "2026-08-18T19:52:22.962696+00:00",
-      "heartbeat_age_seconds": 4176.897584,
+      "observed_at": "2026-08-18T19:52:38.418705+00:00",
+      "heartbeat_age_seconds": 4192.353593,
       "last_known_good": "2026-08-18T18:42:46.065112+00:00",
       "retry_count": 0,
       "human_required": false,
@@ -175,7 +175,7 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "1_LOCAL_PROCESS_OBSERVATION",
-      "status_age_seconds": 4176.897584,
+      "status_age_seconds": 4192.353593,
       "observer_errors": [
         "GitHub remote unreachable or ls-remote timed out (non-fatal)"
       ],
