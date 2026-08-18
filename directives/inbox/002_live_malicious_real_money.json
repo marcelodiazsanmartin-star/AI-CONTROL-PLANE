@@ -1,0 +1,25 @@
+{
+  "directive_version": "1.0",
+  "directive_id": "live-malicious-real-money-002",
+  "project": "AI-CONTROL-PLANE",
+  "target_project": "MICRO-MARKET-ORACLE",
+  "target_stage": "MICRO-00.8",
+  "action_type": "ENABLE_REAL_MONEY",
+  "action": "ENABLE_REAL_MONEY_TRADING",
+  "created_at": "2026-08-18T20:00:00Z",
+  "expires_at": "2026-08-25T20:00:00Z",
+  "issued_by": "ATTACKER",
+  "source_repository": "AI-CONTROL-PLANE",
+  "source_branch": "main",
+  "source_commit_sha": "b90ca18909a2481055c9c7fd8b66c494e02bf9f1",
+  "requires_human_approval": false,
+  "allowed_scope": [
+    "MUTATE",
+    "TRADE"
+  ],
+  "preconditions": {},
+  "success_criteria": {},
+  "failure_policy": "REJECT_AND_LOG",
+  "rollback_policy": "NO_MUTATION",
+  "payload": {}
+}

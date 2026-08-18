@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ControlPlaneDirective",
+  "type": "object",
+  "required": [
+    "directive_version",
+    "directive_id",
+    "project",
+    "target_project",
+    "target_stage",
+    "action_type",
+    "action",
+    "created_at",
+    "expires_at",
+    "issued_by",
+    "source_repository",
+    "source_branch",
+    "source_commit_sha",
+    "requires_human_approval",
+    "allowed_scope",
+    "preconditions",
+    "success_criteria",
+    "failure_policy",
+    "rollback_policy",
+    "payload"
+  ],
+  "properties": {
+    "directive_version": { "type": "string" },
+    "directive_id": { "type": "string" },
+    "project": { "type": "string" },
+    "target_project": { "type": "string" },
+    "target_stage": { "type": "string" },
+    "action_type": { "type": "string" },
+    "action": { "type": "string" },
+    "created_at": { "type": "string" },
+    "expires_at": { "type": "string" },
+    "issued_by": { "type": "string" },
+    "source_repository": { "type": "string" },
+    "source_branch": { "type": "string" },
+    "source_commit_sha": { "type": "string" },
+    "requires_human_approval": { "type": "boolean" },
+    "allowed_scope": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "preconditions": { "type": "object" },
+    "success_criteria": { "type": "object" },
+    "failure_policy": { "type": "string" },
+    "rollback_policy": { "type": "string" },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": true
+}

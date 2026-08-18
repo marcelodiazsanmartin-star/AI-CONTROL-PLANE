@@ -3,7 +3,8 @@ Control Plane Engine
 
 Orchestrates observations across registered projects, evaluates state machines using
 5-Tier Evidence Precedence and Remote Verification Triples, manages Control Plane self-health,
-writes output state JSONs, and handles low-frequency event-driven remote status publication.
+polls directive channel inbox (CONTROL-02.5), writes output state JSONs, and handles
+low-frequency event-driven remote status publication.
 """
 
 import json
@@ -18,6 +19,7 @@ from src.contracts import NormalizedProjectState
 from src.observer.project_observer import ProjectObserver
 from src.state_machine.evaluator import StateEvaluator
 from src.audit.audit_logger import AuditLogger
+from src.directive.watcher import DirectiveWatcher
 
 
 class ControlPlaneEngine:
@@ -26,7 +28,8 @@ class ControlPlaneEngine:
         output_dir: Optional[Path] = None,
         audit_file: Optional[Path] = None,
         project_observer: Optional[ProjectObserver] = None,
-        evaluator: Optional[StateEvaluator] = None
+        evaluator: Optional[StateEvaluator] = None,
+        directive_watcher: Optional[DirectiveWatcher] = None
     ):
         self.output_dir = output_dir or (settings.CONTROL_PLANE_ROOT / "state")
         self.audit_file = audit_file or (settings.CONTROL_PLANE_ROOT / "audit" / "events.jsonl")
@@ -36,6 +39,7 @@ class ControlPlaneEngine:
         self.project_observer = project_observer or ProjectObserver()
         self.evaluator = evaluator or StateEvaluator()
         self.audit_logger = AuditLogger(self.audit_file)
+        self.directive_watcher = directive_watcher or DirectiveWatcher()
 
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.sweep_count = 0
@@ -65,6 +69,12 @@ class ControlPlaneEngine:
         states: Dict[str, NormalizedProjectState] = {}
         project_results_dict: Dict[str, Any] = {}
         state_transition_occurred = False
+
+        # 0. CONTROL-02.5 Directive Channel Inbox Poll
+        try:
+            self.directive_watcher.poll_inbox()
+        except Exception as e:
+            self.last_error = f"Directive watcher inbox poll error: {str(e)}"
 
         for proj_key, proj_cfg in settings.REGISTERED_PROJECTS.items():
             # 1. Gather raw observation data
@@ -116,7 +126,11 @@ class ControlPlaneEngine:
                     "CONTROL_PLANE_RESTART_PROJECTS": settings.CONTROL_PLANE_RESTART_PROJECTS,
                     "CONTROL_PLANE_CHANGE_STRATEGY": settings.CONTROL_PLANE_CHANGE_STRATEGY,
                     "CONTROL_PLANE_ENABLE_REAL_MONEY": settings.CONTROL_PLANE_ENABLE_REAL_MONEY,
-                    "CONTROL_PLANE_EXECUTE_PROJECT_CODE": settings.CONTROL_PLANE_EXECUTE_PROJECT_CODE
+                    "CONTROL_PLANE_EXECUTE_PROJECT_CODE": settings.CONTROL_PLANE_EXECUTE_PROJECT_CODE,
+                    "CONTROL_PLANE_ACCEPT_DIRECTIVES": settings.CONTROL_PLANE_ACCEPT_DIRECTIVES,
+                    "CONTROL_PLANE_VALIDATE_DIRECTIVES": settings.CONTROL_PLANE_VALIDATE_DIRECTIVES,
+                    "CONTROL_PLANE_QUEUE_DIRECTIVES": settings.CONTROL_PLANE_QUEUE_DIRECTIVES,
+                    "CONTROL_PLANE_EXECUTE_MUTATING_DIRECTIVES": settings.CONTROL_PLANE_EXECUTE_MUTATING_DIRECTIVES
                 },
                 "allowed_git_commands": settings.ALLOWED_GIT_COMMANDS,
                 "disallowed_git_commands": settings.DISALLOWED_GIT_COMMANDS,
@@ -134,9 +148,7 @@ class ControlPlaneEngine:
         # 7. Update Control Plane Self Health
         self.update_self_health(status_str="RUNNING")
 
-        # 8. Requirement #3: Event-driven Remote Publication Debouncing
-        # Publish immediately ONLY on state TRANSITION or initial run.
-        # Otherwise, publish ONLY when REMOTE_CHECKPOINT_SECONDS interval has elapsed.
+        # 8. Event-driven Remote Publication Debouncing
         checkpoint_due = (
             self.last_remote_publish_timestamp is None or
             (now_dt - self.last_remote_publish_timestamp).total_seconds() >= settings.REMOTE_CHECKPOINT_SECONDS
@@ -158,9 +170,9 @@ class ControlPlaneEngine:
             return False
 
         try:
-            # Stage only control plane state and audit outputs
+            # Stage only control plane state, directives, audit, and reports
             subprocess.run(
-                ["git", "add", "state/", "audit/", "reports/"],
+                ["git", "add", "state/", "directives/", "audit/", "reports/"],
                 cwd=str(cp_root),
                 capture_output=True,
                 text=True,
