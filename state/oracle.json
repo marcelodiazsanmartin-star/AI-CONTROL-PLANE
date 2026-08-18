@@ -6,6 +6,7 @@
   "local_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
   "process_expected": false,
   "process_running": false,
+  "unexpected_process": false,
   "last_heartbeat": "2026-08-14T18:03:00Z",
   "last_successful_cycle": null,
   "last_error": null,
@@ -28,14 +29,14 @@
   "human_decision_required": false,
   "next_action": null,
   "evidence_freshness": {
-    "sprints/AGENT_STATUS.json": 338414.353375,
-    "sprints/ACTIVE_SPRINT.md": 532672.243487,
-    "environment_validation_report.md": 956202.004137
+    "sprints/AGENT_STATUS.json": 338424.182586,
+    "sprints/ACTIVE_SPRINT.md": 532682.071264,
+    "environment_validation_report.md": 956211.832204
   },
   "status": "STALE",
-  "reason": "Heartbeat age (352872.8s) exceeds project threshold (3600.0s)",
-  "observed_at": "2026-08-18T20:04:12.823790+00:00",
-  "heartbeat_age_seconds": 352872.82379,
+  "reason": "Heartbeat age (352882.7s) exceeds project threshold (3600.0s)",
+  "observed_at": "2026-08-18T20:04:22.651908+00:00",
+  "heartbeat_age_seconds": 352882.651908,
   "last_known_good": "2026-08-14T18:03:00Z",
   "retry_count": 0,
   "human_required": false,
@@ -55,9 +56,9 @@
     "5_STATIC_DECLARED_STATUS"
   ],
   "status_source": "2_RUNTIME_HEARTBEAT",
-  "status_age_seconds": 352872.82379,
+  "status_age_seconds": 352882.651908,
   "observer_errors": [
-    "GitHub remote unreachable or ls-remote timed out (non-fatal)"
+    "Remote branch refs/heads/mvp04-shadow-10-usdc not found or origin unreachable (non-fatal)"
   ],
   "external_project_activity_detected": false,
   "verified_stage": {
@@ -67,8 +68,8 @@
   },
   "verified_branch": {
     "local_observed_value": "mvp04-shadow-10-usdc",
-    "remote_verified_value": "mvp04-shadow-10-usdc",
-    "verification_status": "VERIFIED"
+    "remote_verified_value": null,
+    "verification_status": "LOCAL_ONLY"
   },
   "verified_head": {
     "local_observed_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
