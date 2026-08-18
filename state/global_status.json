@@ -25,7 +25,7 @@
       "gc",
       "maintenance"
     ],
-    "observed_at": "2026-08-18T19:52:06.875503+00:00",
+    "observed_at": "2026-08-18T19:52:22.964816+00:00",
     "total_projects_monitored": 2,
     "overall_health": "DEGRADED_STALE"
   },
@@ -34,7 +34,7 @@
       "project": "ORACLE-AI",
       "stage": null,
       "branch": "mvp04-shadow-10-usdc",
-      "remote_head": "049dfda19be236e5eba718344223c0a0ab77923d",
+      "remote_head": null,
       "local_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
       "process_expected": false,
       "process_running": false,
@@ -60,14 +60,14 @@
       "human_decision_required": false,
       "next_action": null,
       "evidence_freshness": {
-        "sprints/AGENT_STATUS.json": 337684.654999,
-        "sprints/ACTIVE_SPRINT.md": 531942.543025,
-        "environment_validation_report.md": 955472.303334
+        "sprints/AGENT_STATUS.json": 337701.036695,
+        "sprints/ACTIVE_SPRINT.md": 531958.924974,
+        "environment_validation_report.md": 955488.685572
       },
       "status": "STALE",
-      "reason": "Heartbeat age (352143.1s) exceeds project threshold (3600.0s)",
-      "observed_at": "2026-08-18T19:52:03.122841+00:00",
-      "heartbeat_age_seconds": 352143.122841,
+      "reason": "Heartbeat age (352159.5s) exceeds project threshold (3600.0s)",
+      "observed_at": "2026-08-18T19:52:19.505272+00:00",
+      "heartbeat_age_seconds": 352159.505272,
       "last_known_good": "2026-08-14T18:03:00Z",
       "retry_count": 0,
       "human_required": false,
@@ -87,8 +87,10 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "2_RUNTIME_HEARTBEAT",
-      "status_age_seconds": 352143.122841,
-      "observer_errors": [],
+      "status_age_seconds": 352159.505272,
+      "observer_errors": [
+        "GitHub remote unreachable or ls-remote timed out (non-fatal)"
+      ],
       "external_project_activity_detected": false,
       "verified_stage": {
         "local_observed_value": null,
@@ -102,8 +104,8 @@
       },
       "verified_head": {
         "local_observed_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
-        "remote_verified_value": "049dfda19be236e5eba718344223c0a0ab77923d",
-        "verification_status": "CONFLICT"
+        "remote_verified_value": null,
+        "verification_status": "LOCAL_ONLY"
       },
       "verified_status": {
         "local_observed_value": "STALE",
@@ -142,14 +144,14 @@
       "human_decision_required": false,
       "next_action": "CHATGPT_AUDIT_MICRO_00_8",
       "evidence_freshness": {
-        "control/CURRENT_STAGE.json": 25465.118508,
-        "control/PROJECT_STATE.json": 4160.805384,
-        "control/WATCHER_STATE.json": 4527.222662
+        "control/CURRENT_STAGE.json": 25481.209715,
+        "control/PROJECT_STATE.json": 4176.896545,
+        "control/WATCHER_STATE.json": 4543.312883
       },
       "status": "RUNNING",
       "reason": "Active expected process running (watcher)",
-      "observed_at": "2026-08-18T19:52:06.872982+00:00",
-      "heartbeat_age_seconds": 4160.80787,
+      "observed_at": "2026-08-18T19:52:22.962696+00:00",
+      "heartbeat_age_seconds": 4176.897584,
       "last_known_good": "2026-08-18T18:42:46.065112+00:00",
       "retry_count": 0,
       "human_required": false,
@@ -173,7 +175,7 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "1_LOCAL_PROCESS_OBSERVATION",
-      "status_age_seconds": 4160.80787,
+      "status_age_seconds": 4176.897584,
       "observer_errors": [
         "GitHub remote unreachable or ls-remote timed out (non-fatal)"
       ],
