@@ -1,22 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="25" time="46.393" timestamp="2026-08-18T16:05:17.062135-04:00" hostname="DESKTOP-8V7RA5K"><testcase classname="tests.test_contradictions" name="test_micro_contradiction_with_running_process" time="0.003" /><testcase classname="tests.test_contradictions" name="test_stopped_watcher_when_not_expected_does_not_block" time="0.001" /><testcase classname="tests.test_fail_closed" name="test_missing_evidence_defaults_to_unknown" time="0.001" /><testcase classname="tests.test_fail_closed" name="test_stale_declaration_never_infers_running" time="0.001" /><testcase classname="tests.test_git" name="test_git_observer_nonexistent_repo" time="0.028" /><testcase classname="tests.test_git" name="test_remote_branch_verification_exact_ref" time="0.006" /><testcase classname="tests.test_git" name="test_read_only_git_environment_passed" time="0.077" /><testcase classname="tests.test_heartbeat" name="test_fresh_heartbeat" time="0.001" /><testcase classname="tests.test_heartbeat" name="test_stale_heartbeat" time="0.001" /><testcase classname="tests.test_heartbeat" name="test_missing_heartbeat" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_human_decision_required" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_project_completed" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_project_idle_valid" time="0.001" /><testcase classname="tests.test_malformed_and_skew" name="test_malformed_json_evidence" time="0.001" /><testcase classname="tests.test_malformed_and_skew" name="test_future_clock_skew" time="0.001" /><testcase classname="tests.test_process" name="test_process_alive_detection" time="0.002" /><testcase classname="tests.test_process" name="test_process_dead_detection" time="0.003" /><testcase classname="tests.test_process" name="test_integration_dead_expected_process" time="2.446" /><testcase classname="tests.test_process" name="test_unexpected_process_running" time="0.003" /><testcase classname="tests.test_read_only_integrity" name="test_disallowed_git_commands_blocked" time="0.005" /><testcase classname="tests.test_read_only_integrity" name="test_read_only_file_access" time="0.007" /><testcase classname="tests.test_read_only_integrity" name="test_isolated_fixture_immutability" time="0.011" /><testcase classname="tests.test_remote_publication" name="test_commit_storm_prevention" time="25.235" /><testcase classname="tests.test_restart" name="test_control_plane_restart_and_audit" time="18.255" /><testcase classname="tests.test_single_instance" name="test_single_instance_lock_acquisition" time="0.018"><failure message="UnboundLocalError: cannot access local variable 'existing_pid' where it is not associated with a value">self = &lt;src.lock_manager.SingleInstanceLock object at 0x000001CBBEAD3C50&gt;
-
-    def acquire(self) -&gt; Tuple[bool, Optional[int], str]:
-        """
-        Attempts to acquire atomic single-instance OS file lock.
-        Returns (acquired: bool, existing_pid: Optional[int], message: str)
-        """
-        try:
-            self.file_handle = open(self.lock_file_path, "a+", encoding="utf-8")
-            self.file_handle.seek(0)
-&gt;           existing_content = self.file_handle.read().strip()
-                               ^^^^^^^^^^^^^^^^^^^^^^^
-E           PermissionError: [Errno 13] Permission denied
-
-src\lock_manager.py:34: PermissionError
-
-During handling of the above exception, another exception occurred:
-
-tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_single_instance_lock_acqu0')
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="25" time="45.913" timestamp="2026-08-18T16:06:25.120876-04:00" hostname="DESKTOP-8V7RA5K"><testcase classname="tests.test_contradictions" name="test_micro_contradiction_with_running_process" time="0.004" /><testcase classname="tests.test_contradictions" name="test_stopped_watcher_when_not_expected_does_not_block" time="0.001" /><testcase classname="tests.test_fail_closed" name="test_missing_evidence_defaults_to_unknown" time="0.000" /><testcase classname="tests.test_fail_closed" name="test_stale_declaration_never_infers_running" time="0.001" /><testcase classname="tests.test_git" name="test_git_observer_nonexistent_repo" time="0.034" /><testcase classname="tests.test_git" name="test_remote_branch_verification_exact_ref" time="0.008" /><testcase classname="tests.test_git" name="test_read_only_git_environment_passed" time="0.057" /><testcase classname="tests.test_heartbeat" name="test_fresh_heartbeat" time="0.002" /><testcase classname="tests.test_heartbeat" name="test_stale_heartbeat" time="0.001" /><testcase classname="tests.test_heartbeat" name="test_missing_heartbeat" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_human_decision_required" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_project_completed" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_project_idle_valid" time="0.001" /><testcase classname="tests.test_malformed_and_skew" name="test_malformed_json_evidence" time="0.001" /><testcase classname="tests.test_malformed_and_skew" name="test_future_clock_skew" time="0.001" /><testcase classname="tests.test_process" name="test_process_alive_detection" time="0.001" /><testcase classname="tests.test_process" name="test_process_dead_detection" time="0.002" /><testcase classname="tests.test_process" name="test_integration_dead_expected_process" time="2.155" /><testcase classname="tests.test_process" name="test_unexpected_process_running" time="0.004" /><testcase classname="tests.test_read_only_integrity" name="test_disallowed_git_commands_blocked" time="0.008" /><testcase classname="tests.test_read_only_integrity" name="test_read_only_file_access" time="0.006" /><testcase classname="tests.test_read_only_integrity" name="test_isolated_fixture_immutability" time="0.011" /><testcase classname="tests.test_remote_publication" name="test_commit_storm_prevention" time="24.746" /><testcase classname="tests.test_restart" name="test_control_plane_restart_and_audit" time="18.540" /><testcase classname="tests.test_single_instance" name="test_single_instance_lock_acquisition" time="0.010"><failure message="assert None == 1192">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_single_instance_lock_acqu0')
 
     def test_single_instance_lock_acquisition(tmp_path):
         lock_path = tmp_path / "test_control_plane.lock"
@@ -31,57 +13,10 @@ tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pyt
     
         # Instance 2 attempts to acquire lock while Instance 1 is active -&gt; REJECTED!
         lock2 = SingleInstanceLock(lock_path)
-&gt;       acquired2, pid2, msg2 = lock2.acquire()
-                                ^^^^^^^^^^^^^^^
+        acquired2, pid2, msg2 = lock2.acquire()
+    
+        assert acquired2 is False
+&gt;       assert pid2 == pid1
+E       assert None == 1192
 
-tests\test_single_instance.py:23: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = &lt;src.lock_manager.SingleInstanceLock object at 0x000001CBBEAD3C50&gt;
-
-    def acquire(self) -&gt; Tuple[bool, Optional[int], str]:
-        """
-        Attempts to acquire atomic single-instance OS file lock.
-        Returns (acquired: bool, existing_pid: Optional[int], message: str)
-        """
-        try:
-            self.file_handle = open(self.lock_file_path, "a+", encoding="utf-8")
-            self.file_handle.seek(0)
-            existing_content = self.file_handle.read().strip()
-            existing_pid = None
-            if existing_content:
-                try:
-                    existing_pid = int(existing_content)
-                except ValueError:
-                    pass
-    
-            # Non-blocking OS lock
-            if os.name == 'nt':
-                self.file_handle.seek(0)
-                msvcrt.locking(self.file_handle.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                fcntl.flock(self.file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    
-            # Write current PID into lock file
-            self.file_handle.seek(0)
-            self.file_handle.truncate()
-            self.file_handle.write(str(os.getpid()))
-            self.file_handle.flush()
-    
-            return True, os.getpid(), f"Lock acquired successfully by PID {os.getpid()}"
-    
-        except (IOError, OSError) as e:
-            # Lock is held by another running process
-            if self.file_handle:
-                try:
-                    self.file_handle.close()
-                except Exception:
-                    pass
-                self.file_handle = None
-    
-            # Read existing PID from lockfile
-&gt;           active_pid = existing_pid
-                         ^^^^^^^^^^^^
-E           UnboundLocalError: cannot access local variable 'existing_pid' where it is not associated with a value
-
-src\lock_manager.py:67: UnboundLocalError</failure></testcase></testsuite></testsuites>
+tests\test_single_instance.py:26: AssertionError</failure></testcase></testsuite></testsuites>
