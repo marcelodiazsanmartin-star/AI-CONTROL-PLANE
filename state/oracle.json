@@ -28,14 +28,14 @@
   "human_decision_required": false,
   "next_action": null,
   "evidence_freshness": {
-    "sprints/AGENT_STATUS.json": 337339.903142,
-    "sprints/ACTIVE_SPRINT.md": 531597.791691,
-    "environment_validation_report.md": 955127.552536
+    "sprints/AGENT_STATUS.json": 337356.268049,
+    "sprints/ACTIVE_SPRINT.md": 531614.156565,
+    "environment_validation_report.md": 955143.917491
   },
   "status": "STALE",
-  "reason": "Heartbeat age (351798.4s) exceeds project threshold (3600.0s)",
-  "observed_at": "2026-08-18T19:46:18.372294+00:00",
-  "heartbeat_age_seconds": 351798.372294,
+  "reason": "Heartbeat age (351814.7s) exceeds project threshold (3600.0s)",
+  "observed_at": "2026-08-18T19:46:34.737260+00:00",
+  "heartbeat_age_seconds": 351814.73726,
   "last_known_good": "2026-08-14T18:03:00Z",
   "retry_count": 0,
   "human_required": false,
@@ -55,7 +55,7 @@
     "5_STATIC_DECLARED_STATUS"
   ],
   "status_source": "2_RUNTIME_HEARTBEAT",
-  "status_age_seconds": 351798.372294,
+  "status_age_seconds": 351814.73726,
   "observer_errors": [
     "GitHub remote unreachable or ls-remote timed out (non-fatal)"
   ],
