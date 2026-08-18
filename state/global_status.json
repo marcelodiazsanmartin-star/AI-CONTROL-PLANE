@@ -25,7 +25,7 @@
       "gc",
       "maintenance"
     ],
-    "observed_at": "2026-08-18T20:03:28.882520+00:00",
+    "observed_at": "2026-08-18T20:03:44.604717+00:00",
     "total_projects_monitored": 2,
     "overall_health": "DEGRADED_STALE"
   },
@@ -34,7 +34,7 @@
       "project": "ORACLE-AI",
       "stage": null,
       "branch": "mvp04-shadow-10-usdc",
-      "remote_head": null,
+      "remote_head": "049dfda19be236e5eba718344223c0a0ab77923d",
       "local_head": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
       "process_expected": false,
       "process_running": false,
@@ -60,14 +60,14 @@
       "human_decision_required": false,
       "next_action": null,
       "evidence_freshness": {
-        "sprints/AGENT_STATUS.json": 338366.872329,
-        "sprints/ACTIVE_SPRINT.md": 532624.760532,
-        "environment_validation_report.md": 956154.520989
+        "sprints/AGENT_STATUS.json": 338382.848538,
+        "sprints/ACTIVE_SPRINT.md": 532640.736702,
+        "environment_validation_report.md": 956170.497318
       },
       "status": "STALE",
-      "reason": "Heartbeat age (352825.3s) exceeds project threshold (3600.0s)",
-      "observed_at": "2026-08-18T20:03:25.340640+00:00",
-      "heartbeat_age_seconds": 352825.34064,
+      "reason": "Heartbeat age (352841.3s) exceeds project threshold (3600.0s)",
+      "observed_at": "2026-08-18T20:03:41.316965+00:00",
+      "heartbeat_age_seconds": 352841.316965,
       "last_known_good": "2026-08-14T18:03:00Z",
       "retry_count": 0,
       "human_required": false,
@@ -87,10 +87,8 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "2_RUNTIME_HEARTBEAT",
-      "status_age_seconds": 352825.34064,
-      "observer_errors": [
-        "GitHub remote unreachable or ls-remote timed out (non-fatal)"
-      ],
+      "status_age_seconds": 352841.316965,
+      "observer_errors": [],
       "external_project_activity_detected": false,
       "verified_stage": {
         "local_observed_value": null,
@@ -104,8 +102,8 @@
       },
       "verified_head": {
         "local_observed_value": "50e457f3f4b136de17fccaa679862d5f4dcb9924",
-        "remote_verified_value": null,
-        "verification_status": "LOCAL_ONLY"
+        "remote_verified_value": "049dfda19be236e5eba718344223c0a0ab77923d",
+        "verification_status": "CONFLICT"
       },
       "verified_status": {
         "local_observed_value": "STALE",
@@ -127,7 +125,7 @@
       "project": "MICRO-MARKET-ORACLE",
       "stage": "MICRO-00.8",
       "branch": "micro00-8-antigravity-watcher",
-      "remote_head": null,
+      "remote_head": "ad95d379173a7625a8d70411c45236b01fdee62d",
       "local_head": "e55580aaa8a529d694af5bbf595386992cb3c1c4",
       "process_expected": true,
       "process_running": true,
@@ -144,14 +142,14 @@
       "human_decision_required": false,
       "next_action": "CHATGPT_AUDIT_MICRO_00_8",
       "evidence_freshness": {
-        "control/CURRENT_STAGE.json": 26147.129005,
-        "control/PROJECT_STATE.json": 4842.814764,
-        "control/WATCHER_STATE.json": 5209.231
+        "control/CURRENT_STAGE.json": 26162.846541,
+        "control/PROJECT_STATE.json": 4858.533184,
+        "control/WATCHER_STATE.json": 5224.950756
       },
       "status": "RUNNING",
       "reason": "Active expected process running (watcher)",
-      "observed_at": "2026-08-18T20:03:28.880721+00:00",
-      "heartbeat_age_seconds": 4842.815609,
+      "observed_at": "2026-08-18T20:03:44.600701+00:00",
+      "heartbeat_age_seconds": 4858.535589,
       "last_known_good": "2026-08-18T18:42:46.065112+00:00",
       "retry_count": 0,
       "human_required": false,
@@ -175,10 +173,8 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "1_LOCAL_PROCESS_OBSERVATION",
-      "status_age_seconds": 4842.815609,
-      "observer_errors": [
-        "GitHub remote unreachable or ls-remote timed out (non-fatal)"
-      ],
+      "status_age_seconds": 4858.535589,
+      "observer_errors": [],
       "external_project_activity_detected": true,
       "verified_stage": {
         "local_observed_value": "MICRO-00.8",
@@ -192,8 +188,8 @@
       },
       "verified_head": {
         "local_observed_value": "e55580aaa8a529d694af5bbf595386992cb3c1c4",
-        "remote_verified_value": null,
-        "verification_status": "LOCAL_ONLY"
+        "remote_verified_value": "ad95d379173a7625a8d70411c45236b01fdee62d",
+        "verification_status": "CONFLICT"
       },
       "verified_status": {
         "local_observed_value": "RUNNING",
