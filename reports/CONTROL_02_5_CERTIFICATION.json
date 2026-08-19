@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-08-19T15:40:48.518390+00:00",
-  "code_under_test_sha": "bae6c43ca612c73df59988ca3a7bb97621597201",
-  "certification_source_sha": "bae6c43ca612c73df59988ca3a7bb97621597201",
+  "timestamp": "2026-08-19T15:44:10.094705+00:00",
+  "code_under_test_sha": "0ac2cdb5f9728d76e0fe722a3a20b580e1d276b5",
+  "certification_source_sha": "0ac2cdb5f9728d76e0fe722a3a20b580e1d276b5",
   "evidence_commit_sha": null,
   "evidence_commit_status": "PENDING_COMMIT",
   "tests_collected": 77,
-  "tests_passed": 59,
-  "tests_failed": 18,
+  "tests_passed": 60,
+  "tests_failed": 17,
   "control_plane_instance_count": 1,
   "active_control_plane_pids": [
     12264
