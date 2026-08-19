@@ -2,9 +2,9 @@
   "status": "RUNNING",
   "pid": 12264,
   "started_at": "2026-08-18T20:21:42.690351+00:00",
-  "last_heartbeat": "2026-08-19T15:24:36.170553+00:00",
-  "last_successful_sweep": "2026-08-19T15:24:36.170573+00:00",
+  "last_heartbeat": "2026-08-19T15:24:49.181772+00:00",
+  "last_successful_sweep": "2026-08-19T15:24:49.181796+00:00",
   "last_error": null,
-  "sweep_count": 6595,
+  "sweep_count": 6596,
   "observer_version": "1.0.0"
 }
