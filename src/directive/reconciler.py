@@ -1,29 +1,33 @@
 """
-Execution Evidence Reconciliation Module: CONTROL-02.5 Block 1
+Execution Evidence Reconciliation Module: CONTROL-02.5 Block 1.1
 
 Reconciles execution evidence across mandatory required sources:
 1. directives/runtime/execution_queue.jsonl
 2. directives/runtime/consumed_directives.jsonl
 3. directives/ack/*.json
 
-Enforces fail-closed validation: missing sources, corrupt JSON, contradictory states,
+Enforces fail-closed validation: missing sources, corrupt JSON, contradictory terminal states,
 or unclassifiable mutation types result in fail-closed returns with mutating_directives_executed = None.
 Only explicitly EXECUTED directives (not QUEUED, ACCEPTED, REJECTED, WAITING_HUMAN) are counted.
 """
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Set
+from typing import Dict, Any, Set, List
 
 from config import settings
 
 NON_EXECUTION_STATES = {
     "ACCEPTED", "REJECTED", "WAITING_HUMAN", "QUEUED",
-    "SUBMITTED", "PENDING", "RECEIVED", "VALIDATED"
+    "SUBMITTED", "PENDING", "RECEIVED", "VALIDATED", "FAILED"
 }
 
 EXECUTION_STATES = {
     "EXECUTED", "COMPLETED"
+}
+
+TERMINAL_FAILURE_STATES = {
+    "REJECTED", "FAILED"
 }
 
 KNOWN_READ_ONLY_ACTIONS = {
@@ -51,14 +55,22 @@ def is_explicitly_executed(item: dict) -> bool:
     return False
 
 
-def is_explicitly_not_executed(item: dict) -> bool:
-    if item.get("executed") is False:
+def is_terminally_failed_or_rejected(item: dict) -> bool:
+    if item.get("decision") in TERMINAL_FAILURE_STATES:
         return True
-    if item.get("status") in NON_EXECUTION_STATES:
+    if item.get("status") in TERMINAL_FAILURE_STATES:
         return True
-    if item.get("decision") in NON_EXECUTION_STATES:
+    if item.get("execution_status") in TERMINAL_FAILURE_STATES:
         return True
-    if item.get("state") in NON_EXECUTION_STATES:
+    if item.get("state") in TERMINAL_FAILURE_STATES:
+        return True
+    if item.get("executed") is False and (
+        item.get("decision") in TERMINAL_FAILURE_STATES or
+        item.get("status") in TERMINAL_FAILURE_STATES or
+        item.get("execution_status") in TERMINAL_FAILURE_STATES or
+        "REJECTED" in str(item.get("error", "")) or
+        "FAILED" in str(item.get("error", ""))
+    ):
         return True
     return False
 
@@ -114,9 +126,11 @@ def reconcile_execution_evidence(root_dir: Path = None) -> Dict[str, Any]:
             "error": "EXECUTION_EVIDENCE_INCOMPLETE"
         }
 
-    executed_ids: Set[str] = set()
-    directive_execution_records: Dict[str, dict] = {}
-    mutating_count = 0
+    records_by_directive: Dict[str, Dict[str, List[dict]]] = {}
+
+    def _ensure_did(did: str):
+        if did not in records_by_directive:
+            records_by_directive[did] = {"queue": [], "consumed": [], "ack": []}
 
     # 1. Parse execution queue
     try:
@@ -125,11 +139,9 @@ def reconcile_execution_evidence(root_dir: Path = None) -> Dict[str, Any]:
                 if line.strip():
                     item = json.loads(line)
                     did = item.get("directive_id")
-                    if not did:
-                        continue
-                    directive_execution_records[did] = item
-                    if is_explicitly_executed(item):
-                        executed_ids.add(did)
+                    if did:
+                        _ensure_did(did)
+                        records_by_directive[did]["queue"].append(item)
     except Exception:
         return {
             "available": False,
@@ -151,26 +163,9 @@ def reconcile_execution_evidence(root_dir: Path = None) -> Dict[str, Any]:
                 if line.strip():
                     item = json.loads(line)
                     did = item.get("directive_id")
-                    if not did:
-                        continue
-                    if did in directive_execution_records:
-                        prev = directive_execution_records[did]
-                        if is_explicitly_executed(prev) and is_explicitly_not_executed(item):
-                            return {
-                                "available": True,
-                                "complete": True,
-                                "consistent": False,
-                                "source_count": 3,
-                                "required_source_count": 3,
-                                "missing_sources": [],
-                                "executed_directive_count": None,
-                                "executed_directive_ids": [],
-                                "mutating_directives_executed": None,
-                                "error": "EXECUTION_EVIDENCE_INCONSISTENT"
-                            }
-                    directive_execution_records[did] = item
-                    if is_explicitly_executed(item):
-                        executed_ids.add(did)
+                    if did:
+                        _ensure_did(did)
+                        records_by_directive[did]["consumed"].append(item)
     except Exception:
         return {
             "available": False,
@@ -190,10 +185,9 @@ def reconcile_execution_evidence(root_dir: Path = None) -> Dict[str, Any]:
         for ack_file in ack_files:
             item = json.loads(ack_file.read_text(encoding="utf-8"))
             did = item.get("directive_id")
-            if not did:
-                continue
-            if is_explicitly_executed(item):
-                executed_ids.add(did)
+            if did:
+                _ensure_did(did)
+                records_by_directive[did]["ack"].append(item)
     except Exception:
         return {
             "available": False,
@@ -208,13 +202,18 @@ def reconcile_execution_evidence(root_dir: Path = None) -> Dict[str, Any]:
             "error": "EXECUTION_EVIDENCE_CORRUPT"
         }
 
-    # 4. Evaluate mutating count for explicitly executed directives ONLY
-    for did in executed_ids:
-        rec = directive_execution_records.get(did, {})
-        is_mut = determine_mutation_type(rec)
-        if is_mut is True:
-            mutating_count += 1
-        elif is_mut is None:
+    executed_ids: Set[str] = set()
+    mutating_count = 0
+
+    # 4. Cross-source contradiction analysis
+    for did, sources in records_by_directive.items():
+        all_items = sources["queue"] + sources["consumed"] + sources["ack"]
+
+        has_executed = any(is_explicitly_executed(item) for item in all_items)
+        has_terminal_failure = any(is_terminally_failed_or_rejected(item) for item in all_items)
+
+        # Terminal contradiction check: EXECUTED vs REJECTED / FAILED / executed=False terminal
+        if has_executed and has_terminal_failure:
             return {
                 "available": True,
                 "complete": True,
@@ -225,8 +224,31 @@ def reconcile_execution_evidence(root_dir: Path = None) -> Dict[str, Any]:
                 "executed_directive_count": None,
                 "executed_directive_ids": [],
                 "mutating_directives_executed": None,
-                "error": "EXECUTION_CLASSIFICATION_UNKNOWN"
+                "error": "EXECUTION_EVIDENCE_INCONSISTENT"
             }
+
+        if has_executed:
+            executed_ids.add(did)
+            # Evaluate mutation type across execution records
+            exec_records = [item for item in all_items if is_explicitly_executed(item)]
+            mutation_types = [determine_mutation_type(rec) for rec in exec_records]
+
+            if any(m is None for m in mutation_types):
+                return {
+                    "available": True,
+                    "complete": True,
+                    "consistent": False,
+                    "source_count": 3,
+                    "required_source_count": 3,
+                    "missing_sources": [],
+                    "executed_directive_count": None,
+                    "executed_directive_ids": [],
+                    "mutating_directives_executed": None,
+                    "error": "EXECUTION_CLASSIFICATION_UNKNOWN"
+                }
+
+            if any(m is True for m in mutation_types):
+                mutating_count += 1
 
     return {
         "available": True,

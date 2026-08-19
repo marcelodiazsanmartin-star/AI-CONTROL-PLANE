@@ -1,9 +1,9 @@
 """
-Certification Evidence & Integrity Test Suite (Tests A-M): CONTROL-02.5 Block 1
+Certification Evidence & Integrity Test Suite (Tests A-M + Block 1.1 Cross-Source Consistency Tests): CONTROL-02.5
 
 Verifies non-circular evidence derivation, production signer manifest validation,
 stale evidence rejection, run ID mismatch detection, execution evidence reconciliation (calling production reconciler),
-and AST self-auditing scanner rules.
+cross-source contradiction detection, and AST self-auditing scanner rules.
 """
 
 import os
@@ -60,7 +60,7 @@ def test_test_key_leak_to_production_fails():
     assert len(intersection) > 0, "Leakage detection failed to detect test key in allowlist"
 
 
-# RECONCILIATION BLOCK 1 TESTS (A - J) calling production reconcile_execution_evidence()
+# RECONCILIATION BLOCK 1 TESTS (Fail-closed & Basic Reconciliation)
 
 def test_reconcile_missing_execution_queue_fail_closed(tmp_path):
     runtime_dir = tmp_path / "directives" / "runtime"
@@ -232,6 +232,106 @@ def test_reconcile_explicitly_executed_mutating(tmp_path):
     assert res["executed_directive_count"] == 1
     assert res["executed_directive_ids"] == ["mut-001"]
     assert res["mutating_directives_executed"] == 1
+
+
+# RECONCILIATION BLOCK 1.1 TESTS (Cross-Source Contradiction Resolution)
+
+# Test 1.1-A: Valid lifecycle progression (queue=QUEUED, consumed=EXECUTED, ack=executed=True) -> consistent=True
+def test_block1_1_valid_lifecycle_progression(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text(json.dumps({"directive_id": "d-prog-001", "status": "QUEUED"}) + "\n", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text(json.dumps({"directive_id": "d-prog-001", "executed": True, "action_type": "STATUS_REQUEST"}) + "\n", encoding="utf-8")
+    (acks_dir / "ack-prog.json").write_text(json.dumps({"directive_id": "d-prog-001", "executed": True, "action_type": "STATUS_REQUEST"}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["consistent"] is True
+    assert res["executed_directive_count"] == 1
+    assert res["executed_directive_ids"] == ["d-prog-001"]
+
+
+# Test 1.1-B: Consumed says executed=True, but ACK says decision=REJECTED, executed=False -> consistent=False
+def test_block1_1_executed_vs_ack_rejected_contradiction(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text(json.dumps({"directive_id": "d-bad-001", "status": "QUEUED"}) + "\n", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text(json.dumps({"directive_id": "d-bad-001", "executed": True, "action_type": "STATUS_REQUEST"}) + "\n", encoding="utf-8")
+    (acks_dir / "ack-bad.json").write_text(json.dumps({"directive_id": "d-bad-001", "decision": "REJECTED", "executed": False}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["consistent"] is False
+    assert res["executed_directive_count"] is None
+    assert res["mutating_directives_executed"] is None
+    assert res["error"] == "EXECUTION_EVIDENCE_INCONSISTENT"
+
+
+# Test 1.1-C: Consumed says REJECTED, but ACK says executed=True -> consistent=False
+def test_block1_1_consumed_rejected_vs_ack_executed_contradiction(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text(json.dumps({"directive_id": "d-bad-002", "status": "QUEUED"}) + "\n", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text(json.dumps({"directive_id": "d-bad-002", "decision": "REJECTED", "executed": False}) + "\n", encoding="utf-8")
+    (acks_dir / "ack-bad2.json").write_text(json.dumps({"directive_id": "d-bad-002", "executed": True, "action_type": "STATUS_REQUEST"}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["consistent"] is False
+    assert res["executed_directive_count"] is None
+    assert res["mutating_directives_executed"] is None
+    assert res["error"] == "EXECUTION_EVIDENCE_INCONSISTENT"
+
+
+# Test 1.1-D: Lifecycle before execution (queue=QUEUED, consumed=ACCEPTED, ack=QUEUED) -> consistent=True, count=0
+def test_block1_1_pre_execution_lifecycle_progression(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text(json.dumps({"directive_id": "d-pre-001", "status": "QUEUED"}) + "\n", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text(json.dumps({"directive_id": "d-pre-001", "decision": "ACCEPTED"}) + "\n", encoding="utf-8")
+    (acks_dir / "ack-pre.json").write_text(json.dumps({"directive_id": "d-pre-001", "status": "QUEUED"}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["consistent"] is True
+    assert res["executed_directive_count"] == 0
+    assert res["executed_directive_ids"] == []
+
+
+# Test 1.1-E: COMPLETED vs FAILED terminal evidence -> consistent=False
+def test_block1_1_completed_vs_failed_terminal_contradiction(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text(json.dumps({"directive_id": "d-fail-001", "status": "COMPLETED", "executed": True}) + "\n", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text(json.dumps({"directive_id": "d-fail-001", "status": "FAILED", "executed": False}) + "\n", encoding="utf-8")
+    (acks_dir / "ack-fail.json").write_text(json.dumps({"directive_id": "d-fail-001", "status": "FAILED"}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["consistent"] is False
+    assert res["executed_directive_count"] is None
+    assert res["mutating_directives_executed"] is None
+    assert res["error"] == "EXECUTION_EVIDENCE_INCONSISTENT"
 
 
 # H. TEST_CRITICAL_EVIDENCE_UNAVAILABLE_CANNOT_PASS
