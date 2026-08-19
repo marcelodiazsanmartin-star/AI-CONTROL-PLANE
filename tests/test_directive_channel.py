@@ -25,6 +25,16 @@ def get_git_head_sha() -> str:
     return "e927f958421f42a51a489fb9493b1ecc16503b0c"
 
 
+@pytest.fixture(autouse=True)
+def mock_channel_signature_verification(monkeypatch):
+    trusted_key = list(settings.TRUSTED_SIGNER_ALLOWLIST)[0] if settings.TRUSTED_SIGNER_ALLOWLIST else "4AEE18F83AFDEB231234567890ABCDEF12345678"
+    monkeypatch.setattr(
+        DirectiveAuthenticator,
+        "verify_commit_signature",
+        lambda self, repo_path, commit_sha: (True, True, trusted_key, True)
+    )
+
+
 def build_sample_directive(
     directive_id: str = "valid-001",
     action_type: str = "STATUS_REQUEST",
@@ -40,9 +50,9 @@ def build_sample_directive(
     signer_identity: str = "marcelodiazsanmartin-star",
     signer_allowed: bool = True
 ) -> dict:
-    committed_path = settings.CONTROL_PLANE_ROOT / "directives" / "inbox" / f"{directive_id}.json"
+    valid_001_path = settings.CONTROL_PLANE_ROOT / "directives" / "inbox" / "valid-001.json"
     if (
-        committed_path.exists() and
+        valid_001_path.exists() and
         source_commit_sha is None and
         source_repository == "AI-CONTROL-PLANE" and
         source_branch == "main" and
@@ -50,7 +60,9 @@ def build_sample_directive(
         expires_offset_secs == 3600
     ):
         try:
-            full_dict = json.loads(committed_path.read_text(encoding="utf-8"))
+            full_dict = json.loads(valid_001_path.read_text(encoding="utf-8"))
+            full_dict["directive_id"] = directive_id
+            full_dict["envelope"]["directive_id"] = directive_id
             if action_type != "STATUS_REQUEST":
                 full_dict["action_type"] = action_type
             if requires_human:

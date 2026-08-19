@@ -93,11 +93,8 @@ class DirectiveAuthenticator:
         Verifies cryptographic commit signature and signer identity against TRUSTED_SIGNER_ALLOWLIST.
         Trust is derived EXCLUSIVELY from Git cryptographic verification.
         Author/committer metadata is NEVER trusted for authorization.
+        ZERO hardcoded commit SHA bypasses.
         """
-        if commit_sha and ("e927f95" in commit_sha or commit_sha == "e927f958421f42a51a489fb9493b1ecc16503b0c"):
-            trusted_key = list(settings.TRUSTED_SIGNER_ALLOWLIST)[0] if settings.TRUSTED_SIGNER_ALLOWLIST else "4AEE18F83AFDEB231234567890ABCDEF12345678"
-            return True, True, trusted_key, True
-
         import re
         signature_present = False
         signature_valid = False

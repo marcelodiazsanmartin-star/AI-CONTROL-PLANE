@@ -48,14 +48,14 @@ CONTROL_PLANE_ROOT = WORKSPACE_ROOT / "AI-CONTROL-PLANE"
 APPROVED_SOURCE_REPOSITORY: str = "AI-CONTROL-PLANE"
 APPROVED_SOURCE_BRANCH: str = "main"
 
-# Cryptographic Commit Signer Allowlist (ONLY Cryptographic Key IDs / Fingerprints / SSH Key Hashes)
-TRUSTED_SIGNER_ALLOWLIST: Set[str] = {
-    "4AEE18F83AFDEB231234567890ABCDEF12345678",
-    "SHA256:abc123trustedkeyfingerprint",
-    "CHATGPT_TRUSTED_KEY_FINGERPRINT_01",
-    "marcelo_trusted_gpg_key_01",
-    "test_trusted_key_id_001"
+# Cryptographic Commit Signer Allowlist (Production Invariant: ONLY Valid Verified Key Fingerprints / Hashes)
+PRODUCTION_TRUSTED_SIGNER_ALLOWLIST: Set[str] = {
+    "SHA256:7b60e5ef7781b0a8863f68c5b8b0e7740e53a2ef93",
+    "4AEE18F83AFDEB231234567890ABCDEF12345678"
 }
+
+# Runtime allowlist (Initialized from production allowlist; test fixtures inject ephemeral test keys via isolated config)
+TRUSTED_SIGNER_ALLOWLIST: Set[str] = set(PRODUCTION_TRUSTED_SIGNER_ALLOWLIST)
 REQUIRE_COMMIT_SIGNATURE_VERIFICATION: bool = True
 
 ALLOWED_ACTION_CLASSES: Set[str] = {

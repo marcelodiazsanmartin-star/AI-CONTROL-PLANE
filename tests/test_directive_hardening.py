@@ -317,6 +317,8 @@ def test_valid_directive_e2e_accepted(tmp_path):
 # 14. Tampered Payload Rejected
 def test_tampered_payload_rejected():
     auth = DirectiveAuthenticator(repo_root=settings.CONTROL_PLANE_ROOT)
+    trusted_key = list(settings.TRUSTED_SIGNER_ALLOWLIST)[0]
+    auth.verify_commit_signature = lambda path, sha: (True, True, trusted_key, True)
     payload = create_sample_payload(directive_id="valid-001")
     payload.action = "TAMPERED_ACTION"
     envelope = DirectiveEnvelope(
@@ -337,6 +339,8 @@ def test_tampered_payload_rejected():
 # 15. Wrong SHA256 Rejected
 def test_wrong_sha256_rejected():
     auth = DirectiveAuthenticator(repo_root=settings.CONTROL_PLANE_ROOT)
+    trusted_key = list(settings.TRUSTED_SIGNER_ALLOWLIST)[0]
+    auth.verify_commit_signature = lambda path, sha: (True, True, trusted_key, True)
     payload = create_sample_payload(directive_id="valid-001")
     envelope = DirectiveEnvelope(
         directive_id="valid-001",
@@ -356,6 +360,8 @@ def test_wrong_sha256_rejected():
 # 16. Wrong Blob SHA Rejected
 def test_wrong_blob_sha_rejected():
     auth = DirectiveAuthenticator(repo_root=settings.CONTROL_PLANE_ROOT)
+    trusted_key = list(settings.TRUSTED_SIGNER_ALLOWLIST)[0]
+    auth.verify_commit_signature = lambda path, sha: (True, True, trusted_key, True)
     payload = create_sample_payload(directive_id="valid-001")
     envelope = DirectiveEnvelope(
         directive_id="valid-001",
