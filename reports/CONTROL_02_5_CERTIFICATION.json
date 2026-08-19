@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-08-19T15:18:04.372774+00:00",
-  "code_under_test_sha": "d4ec151f9b8a54ae062a22ccf3260bf84f886594",
-  "certification_source_sha": "d4ec151f9b8a54ae062a22ccf3260bf84f886594",
+  "timestamp": "2026-08-19T15:21:34.373873+00:00",
+  "code_under_test_sha": "cc9dc02447f6ea729ff28c35794279f5d19f22c5",
+  "certification_source_sha": "cc9dc02447f6ea729ff28c35794279f5d19f22c5",
   "evidence_commit_sha": null,
   "evidence_commit_status": "PENDING_COMMIT",
   "tests_collected": 77,
