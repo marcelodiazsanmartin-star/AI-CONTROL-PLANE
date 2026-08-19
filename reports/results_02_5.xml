@@ -1,1 +1,364 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="83" time="168.577" timestamp="2026-08-19T12:34:07.204454-04:00" hostname="DESKTOP-8V7RA5K"><testcase classname="tests.test_contradictions" name="test_micro_contradiction_with_running_process" time="0.002" /><testcase classname="tests.test_contradictions" name="test_stopped_watcher_when_not_expected_does_not_block" time="0.001" /><testcase classname="tests.test_directive_channel" name="test_valid_directive_accepted" time="2.739" /><testcase classname="tests.test_directive_channel" name="test_schema_invalid_rejected" time="0.155" /><testcase classname="tests.test_directive_channel" name="test_unknown_action_rejected" time="2.427" /><testcase classname="tests.test_directive_channel" name="test_expired_directive_rejected" time="2.480" /><testcase classname="tests.test_directive_channel" name="test_future_clock_skew_rejected" time="3.520" /><testcase classname="tests.test_directive_channel" name="test_wrong_repository_rejected" time="0.490" /><testcase classname="tests.test_directive_channel" name="test_wrong_branch_rejected" time="0.300" /><testcase classname="tests.test_directive_channel" name="test_missing_commit_rejected" time="0.351" /><testcase classname="tests.test_directive_channel" name="test_content_mismatch_rejected" time="0.339" /><testcase classname="tests.test_directive_channel" name="test_replay_directive_rejected" time="3.282" /><testcase classname="tests.test_directive_channel" name="test_replay_survives_restart" time="2.673" /><testcase classname="tests.test_directive_channel" name="test_human_required_waiting_state" time="2.969" /><testcase classname="tests.test_directive_channel" name="test_disallowed_destructive_action_rejected" time="2.647" /><testcase classname="tests.test_directive_channel" name="test_real_money_directive_rejected_or_waiting_human" time="2.561" /><testcase classname="tests.test_directive_channel" name="test_directive_ack_generated" time="2.727" /><testcase classname="tests.test_directive_channel" name="test_directive_never_executes_target_mutation" time="3.035" /><testcase classname="tests.test_directive_channel" name="test_oracle_remains_unmodified" time="0.037" /><testcase classname="tests.test_directive_channel" name="test_micro_remains_unmodified" time="0.030" /><testcase classname="tests.test_directive_channel" name="test_single_daemon_still_enforced" time="0.020" /><testcase classname="tests.test_directive_channel" name="test_directive_watcher_does_not_spawn_second_daemon" time="0.020" /><testcase classname="tests.test_directive_channel" name="test_fail_closed_on_github_unavailable" time="0.031" /><testcase classname="tests.test_directive_channel" name="test_fail_closed_on_malformed_json" time="0.097" /><testcase classname="tests.test_directive_channel" name="test_provenance_fields_present" time="2.616" /><testcase classname="tests.test_directive_channel" name="test_commit_exists_but_directive_absent_rejected" time="2.572" /><testcase classname="tests.test_directive_channel" name="test_directive_commit_not_reachable_from_main_rejected" time="0.186" /><testcase classname="tests.test_directive_channel" name="test_real_committed_content_mismatch_rejected" time="0.163" /><testcase classname="tests.test_directive_channel" name="test_local_modified_copy_cannot_authenticate" time="0.170" /><testcase classname="tests.test_directive_channel" name="test_exact_committed_blob_authenticates" time="2.556" /><testcase classname="tests.test_directive_channel" name="test_waiting_human_survives_second_poll" time="3.165" /><testcase classname="tests.test_directive_channel" name="test_waiting_human_survives_restart" time="3.295" /><testcase classname="tests.test_directive_channel" name="test_waiting_human_not_classified_as_replay" time="2.667" /><testcase classname="tests.test_directive_channel" name="test_duplicate_submission_of_waiting_human_is_rejected" time="2.818" /><testcase classname="tests.test_directive_channel" name="test_accepted_queue_survives_restart" time="2.928" /><testcase classname="tests.test_directive_channel" name="test_accepted_item_not_lost_after_restart" time="0.097" /><testcase classname="tests.test_directive_channel" name="test_restart_does_not_requeue_duplicate" time="2.769" /><testcase classname="tests.test_directive_channel" name="test_queue_and_replay_ledger_consistent" time="2.711" /><testcase classname="tests.test_directive_channel" name="test_channel_status_reconstructed_after_restart" time="6.904" /><testcase classname="tests.test_directive_hardening" name="test_real_remote_unavailable_fail_closed" time="0.088" /><testcase classname="tests.test_directive_hardening" name="test_local_head_valid_but_remote_down_fail_closed" time="0.165" /><testcase classname="tests.test_directive_hardening" name="test_local_only_commit_rejected" time="0.078" /><testcase classname="tests.test_directive_hardening" name="test_unsigned_commit_rejected" time="2.615" /><testcase classname="tests.test_directive_hardening" name="test_signed_trusted_commit_accepted" time="5.098" /><testcase classname="tests.test_directive_hardening" name="test_signed_untrusted_commit_rejected" time="3.730" /><testcase classname="tests.test_directive_hardening" name="test_envelope_self_attestation_bypass_rejected" time="2.611" /><testcase classname="tests.test_directive_hardening" name="test_blob_absent_from_commit_but_in_worktree_rejected" time="2.268" /><testcase classname="tests.test_directive_hardening" name="test_queue_corrupted_after_restart_fail_closed" time="0.015" /><testcase classname="tests.test_directive_hardening" name="test_queue_integrity_after_restart" time="0.033" /><testcase classname="tests.test_directive_hardening" name="test_toctou_hash_mismatch_blocks_execution" time="2.394" /><testcase classname="tests.test_directive_hardening" name="test_remote_head_change_between_auth_and_execution" time="0.073" /><testcase classname="tests.test_directive_hardening" name="test_valid_directive_e2e_accepted" time="2.736" /><testcase classname="tests.test_directive_hardening" name="test_tampered_payload_rejected" time="2.549" /><testcase classname="tests.test_directive_hardening" name="test_wrong_sha256_rejected" time="2.552" /><testcase classname="tests.test_directive_hardening" name="test_wrong_blob_sha_rejected" time="2.513" /><testcase classname="tests.test_directive_hardening" name="test_invalid_signature_rejected" time="2.639" /><testcase classname="tests.test_directive_hardening" name="test_toctou_revalidation_executes_auth_meta_branch" time="0.066" /><testcase classname="tests.test_fail_closed" name="test_missing_evidence_defaults_to_unknown" time="0.001" /><testcase classname="tests.test_fail_closed" name="test_stale_declaration_never_infers_running" time="0.001" /><testcase classname="tests.test_git" name="test_git_observer_nonexistent_repo" time="0.003" /><testcase classname="tests.test_git" name="test_remote_branch_verification_exact_ref" time="0.008" /><testcase classname="tests.test_git" name="test_read_only_git_environment_passed" time="0.074" /><testcase classname="tests.test_heartbeat" name="test_fresh_heartbeat" time="0.003" /><testcase classname="tests.test_heartbeat" name="test_stale_heartbeat" time="0.001" /><testcase classname="tests.test_heartbeat" name="test_missing_heartbeat" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_human_decision_required" time="0.000" /><testcase classname="tests.test_idle_and_completed" name="test_project_completed" time="0.000" /><testcase classname="tests.test_idle_and_completed" name="test_project_idle_valid" time="0.000" /><testcase classname="tests.test_malformed_and_skew" name="test_malformed_json_evidence" time="0.000" /><testcase classname="tests.test_malformed_and_skew" name="test_future_clock_skew" time="0.001" /><testcase classname="tests.test_process" name="test_process_alive_detection" time="0.001" /><testcase classname="tests.test_process" name="test_process_dead_detection" time="0.000" /><testcase classname="tests.test_process" name="test_integration_dead_expected_process" time="2.420" /><testcase classname="tests.test_process" name="test_unexpected_process_running" time="0.004" /><testcase classname="tests.test_read_only_integrity" name="test_disallowed_git_commands_blocked" time="0.004" /><testcase classname="tests.test_read_only_integrity" name="test_read_only_file_access" time="0.012" /><testcase classname="tests.test_read_only_integrity" name="test_isolated_fixture_immutability" time="0.017" /><testcase classname="tests.test_remote_publication" name="test_commit_storm_prevention" time="32.406" /><testcase classname="tests.test_restart" name="test_control_plane_restart_and_audit" time="22.078" /><testcase classname="tests.test_single_instance" name="test_single_instance_lock_acquisition" time="0.025" /><testcase classname="tests.test_single_instance" name="test_second_daemon_is_rejected" time="0.046" /><testcase classname="tests.test_single_instance" name="test_stale_daemon_lock_recovery" time="0.019" /><testcase classname="tests.test_single_instance" name="test_monitored_processes_never_terminated" time="10.428" /></testsuite></testsuites>
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="19" skipped="0" tests="83" time="151.882" timestamp="2026-08-19T12:37:48.032337-04:00" hostname="DESKTOP-8V7RA5K"><testcase classname="tests.test_contradictions" name="test_micro_contradiction_with_running_process" time="0.002" /><testcase classname="tests.test_contradictions" name="test_stopped_watcher_when_not_expected_does_not_block" time="0.002" /><testcase classname="tests.test_directive_channel" name="test_valid_directive_accepted" time="2.815"><failure message="AssertionError: assert 'REJECTED' == 'ACCEPTED'&#10;  &#10;  - ACCEPTED&#10;  + REJECTED">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_valid_directive_accepted0')
+
+    def test_valid_directive_accepted(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="valid-001")
+        inbox_file = watcher.inbox_dir / "valid-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        acks = watcher.poll_inbox()
+        assert len(acks) == 1
+        print("DEBUG ACK:", acks[0])
+&gt;       assert acks[0].decision == "ACCEPTED"
+E       AssertionError: assert 'REJECTED' == 'ACCEPTED'
+E         
+E         - ACCEPTED
+E         + REJECTED
+
+tests\test_directive_channel.py:129: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_schema_invalid_rejected" time="0.154" /><testcase classname="tests.test_directive_channel" name="test_unknown_action_rejected" time="2.369"><failure message="assert 'ACTION_NOT_ALLOWED' in &quot;COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/unknown-act-001.json' does not exist in commit c96f9cc&quot;&#10; +  where &quot;COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/unknown-act-001.json' does not exist in commit c96f9cc&quot; = DirectiveAck(directive_id='unknown-act-001', received_at='2026-08-19T16:37:53.665156+00:00', source_commit_sha='c96f9c...e, control_plane_commit_sha='c96f9ccd2b5723317cceaeeef59ce35772d9114d', readback_verified=True, observer_version='2.0').decision_reason">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_unknown_action_rejected0')
+
+    def test_unknown_action_rejected(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="unknown-act-001", action_type="MAGIC_UNKNOWN_ACTION")
+        inbox_file = watcher.inbox_dir / "unknown-act-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        acks = watcher.poll_inbox()
+        assert len(acks) == 1
+        assert acks[0].decision == "REJECTED"
+&gt;       assert "ACTION_NOT_ALLOWED" in acks[0].decision_reason
+E       assert 'ACTION_NOT_ALLOWED' in "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/unknown-act-001.json' does not exist in commit c96f9cc"
+E        +  where "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/unknown-act-001.json' does not exist in commit c96f9cc" = DirectiveAck(directive_id='unknown-act-001', received_at='2026-08-19T16:37:53.665156+00:00', source_commit_sha='c96f9c...e, control_plane_commit_sha='c96f9ccd2b5723317cceaeeef59ce35772d9114d', readback_verified=True, observer_version='2.0').decision_reason
+
+tests\test_directive_channel.py:167: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_expired_directive_rejected" time="2.602"><failure message="assert 'EXPIRED' in &quot;COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/expired-001.json' does not exist in commit c96f9cc&quot;&#10; +  where &quot;COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/expired-001.json' does not exist in commit c96f9cc&quot; = DirectiveAck(directive_id='expired-001', received_at='2026-08-19T16:37:56.278831+00:00', source_commit_sha='c96f9ccd2b...e, control_plane_commit_sha='c96f9ccd2b5723317cceaeeef59ce35772d9114d', readback_verified=True, observer_version='2.0').decision_reason">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_expired_directive_rejecte0')
+
+    def test_expired_directive_rejected(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        # Expired 100 seconds ago
+        data = build_sample_directive(directive_id="expired-001", created_offset_secs=-3600, expires_offset_secs=-100)
+        inbox_file = watcher.inbox_dir / "expired-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        acks = watcher.poll_inbox()
+        assert len(acks) == 1
+        assert acks[0].decision == "REJECTED"
+&gt;       assert "EXPIRED" in acks[0].decision_reason
+E       assert 'EXPIRED' in "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/expired-001.json' does not exist in commit c96f9cc"
+E        +  where "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/expired-001.json' does not exist in commit c96f9cc" = DirectiveAck(directive_id='expired-001', received_at='2026-08-19T16:37:56.278831+00:00', source_commit_sha='c96f9ccd2b...e, control_plane_commit_sha='c96f9ccd2b5723317cceaeeef59ce35772d9114d', readback_verified=True, observer_version='2.0').decision_reason
+
+tests\test_directive_channel.py:183: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_future_clock_skew_rejected" time="3.002"><failure message="assert 'CLOCK_SKEW_EXCEEDED' in &quot;COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/skew-001.json' does not exist in commit c96f9cc&quot;&#10; +  where &quot;COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/skew-001.json' does not exist in commit c96f9cc&quot; = DirectiveAck(directive_id='skew-001', received_at='2026-08-19T16:37:59.320778+00:00', source_commit_sha='c96f9ccd2b572...e, control_plane_commit_sha='c96f9ccd2b5723317cceaeeef59ce35772d9114d', readback_verified=True, observer_version='2.0').decision_reason">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_future_clock_skew_rejecte0')
+
+    def test_future_clock_skew_rejected(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        # Created 1000 seconds in the future (&gt; 300s allowed skew)
+        data = build_sample_directive(directive_id="skew-001", created_offset_secs=1000)
+        inbox_file = watcher.inbox_dir / "skew-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        acks = watcher.poll_inbox()
+        assert len(acks) == 1
+        assert acks[0].decision == "REJECTED"
+&gt;       assert "CLOCK_SKEW_EXCEEDED" in acks[0].decision_reason
+E       assert 'CLOCK_SKEW_EXCEEDED' in "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/skew-001.json' does not exist in commit c96f9cc"
+E        +  where "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/skew-001.json' does not exist in commit c96f9cc" = DirectiveAck(directive_id='skew-001', received_at='2026-08-19T16:37:59.320778+00:00', source_commit_sha='c96f9ccd2b572...e, control_plane_commit_sha='c96f9ccd2b5723317cceaeeef59ce35772d9114d', readback_verified=True, observer_version='2.0').decision_reason
+
+tests\test_directive_channel.py:199: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_wrong_repository_rejected" time="0.192" /><testcase classname="tests.test_directive_channel" name="test_wrong_branch_rejected" time="0.181" /><testcase classname="tests.test_directive_channel" name="test_missing_commit_rejected" time="0.189" /><testcase classname="tests.test_directive_channel" name="test_content_mismatch_rejected" time="0.198" /><testcase classname="tests.test_directive_channel" name="test_replay_directive_rejected" time="2.977"><failure message="AssertionError: assert 'REJECTED' == 'ACCEPTED'&#10;  &#10;  - ACCEPTED&#10;  + REJECTED">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_replay_directive_rejected0')
+
+    def test_replay_directive_rejected(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="replay-001")
+    
+        # First attempt -&gt; Accepted
+        inbox_file1 = watcher.inbox_dir / "replay-001.json"
+        inbox_file1.write_text(json.dumps(data), encoding="utf-8")
+        acks1 = watcher.poll_inbox()
+&gt;       assert acks1[0].decision == "ACCEPTED"
+E       AssertionError: assert 'REJECTED' == 'ACCEPTED'
+E         
+E         - ACCEPTED
+E         + REJECTED
+
+tests\test_directive_channel.py:276: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_replay_survives_restart" time="2.946" /><testcase classname="tests.test_directive_channel" name="test_human_required_waiting_state" time="2.994"><failure message="AssertionError: assert 'REJECTED' == 'WAITING_HUMAN'&#10;  &#10;  - WAITING_HUMAN&#10;  + REJECTED">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_human_required_waiting_st0')
+
+    def test_human_required_waiting_state(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="human-001", requires_human=True)
+        inbox_file = watcher.inbox_dir / "human-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        acks = watcher.poll_inbox()
+        assert len(acks) == 1
+&gt;       assert acks[0].decision == "WAITING_HUMAN"
+E       AssertionError: assert 'REJECTED' == 'WAITING_HUMAN'
+E         
+E         - WAITING_HUMAN
+E         + REJECTED
+
+tests\test_directive_channel.py:317: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_disallowed_destructive_action_rejected" time="2.469"><failure message="assert 'ACTION_NOT_ALLOWED' in &quot;COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/destruct-001.json' does not exist in commit c96f9cc&quot;&#10; +  where &quot;COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/destruct-001.json' does not exist in commit c96f9cc&quot; = DirectiveAck(directive_id='destruct-001', received_at='2026-08-19T16:38:11.551587+00:00', source_commit_sha='c96f9ccd2...e, control_plane_commit_sha='c96f9ccd2b5723317cceaeeef59ce35772d9114d', readback_verified=True, observer_version='2.0').decision_reason">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_disallowed_destructive_ac0')
+
+    def test_disallowed_destructive_action_rejected(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="destruct-001", action_type="RESTART_PROJECT")
+        inbox_file = watcher.inbox_dir / "destruct-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        acks = watcher.poll_inbox()
+        assert len(acks) == 1
+        assert acks[0].decision == "REJECTED"
+&gt;       assert "ACTION_NOT_ALLOWED" in acks[0].decision_reason
+E       assert 'ACTION_NOT_ALLOWED' in "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/destruct-001.json' does not exist in commit c96f9cc"
+E        +  where "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/destruct-001.json' does not exist in commit c96f9cc" = DirectiveAck(directive_id='destruct-001', received_at='2026-08-19T16:38:11.551587+00:00', source_commit_sha='c96f9ccd2...e, control_plane_commit_sha='c96f9ccd2b5723317cceaeeef59ce35772d9114d', readback_verified=True, observer_version='2.0').decision_reason
+
+tests\test_directive_channel.py:334: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_real_money_directive_rejected_or_waiting_human" time="3.130" /><testcase classname="tests.test_directive_channel" name="test_directive_ack_generated" time="3.251"><failure message="AssertionError: assert 'REJECTED' == 'ACCEPTED'&#10;  &#10;  - ACCEPTED&#10;  + REJECTED">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_directive_ack_generated0')
+
+    def test_directive_ack_generated(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="ack-gen-001")
+        inbox_file = watcher.inbox_dir / "ack-gen-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        watcher.poll_inbox()
+        ack_path = watcher.ack_dir / "ack-gen-001.json"
+    
+        assert ack_path.exists()
+        ack_data = json.loads(ack_path.read_text(encoding="utf-8"))
+        assert ack_data["directive_id"] == "ack-gen-001"
+&gt;       assert ack_data["decision"] == "ACCEPTED"
+E       AssertionError: assert 'REJECTED' == 'ACCEPTED'
+E         
+E         - ACCEPTED
+E         + REJECTED
+
+tests\test_directive_channel.py:365: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_directive_never_executes_target_mutation" time="2.570" /><testcase classname="tests.test_directive_channel" name="test_oracle_remains_unmodified" time="0.019" /><testcase classname="tests.test_directive_channel" name="test_micro_remains_unmodified" time="0.022" /><testcase classname="tests.test_directive_channel" name="test_single_daemon_still_enforced" time="0.009" /><testcase classname="tests.test_directive_channel" name="test_directive_watcher_does_not_spawn_second_daemon" time="0.019" /><testcase classname="tests.test_directive_channel" name="test_fail_closed_on_github_unavailable" time="0.049" /><testcase classname="tests.test_directive_channel" name="test_fail_closed_on_malformed_json" time="0.085" /><testcase classname="tests.test_directive_channel" name="test_provenance_fields_present" time="2.522" /><testcase classname="tests.test_directive_channel" name="test_commit_exists_but_directive_absent_rejected" time="2.904" /><testcase classname="tests.test_directive_channel" name="test_directive_commit_not_reachable_from_main_rejected" time="0.202" /><testcase classname="tests.test_directive_channel" name="test_real_committed_content_mismatch_rejected" time="0.198" /><testcase classname="tests.test_directive_channel" name="test_local_modified_copy_cannot_authenticate" time="0.188" /><testcase classname="tests.test_directive_channel" name="test_exact_committed_blob_authenticates" time="2.493"><failure message="AssertionError: assert 'REJECTED' == 'ACCEPTED'&#10;  &#10;  - ACCEPTED&#10;  + REJECTED">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_exact_committed_blob_auth0')
+
+    def test_exact_committed_blob_authenticates(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="exact-blob-001")
+    
+        inbox_file = watcher.inbox_dir / "exact-blob-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        acks = watcher.poll_inbox()
+        assert len(acks) == 1
+&gt;       assert acks[0].decision == "ACCEPTED"
+E       AssertionError: assert 'REJECTED' == 'ACCEPTED'
+E         
+E         - ACCEPTED
+E         + REJECTED
+
+tests\test_directive_channel.py:560: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_waiting_human_survives_second_poll" time="2.677"><failure message="AssertionError: assert 'REJECTED' == 'WAITING_HUMAN'&#10;  &#10;  - WAITING_HUMAN&#10;  + REJECTED">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_waiting_human_survives_se0')
+
+    def test_waiting_human_survives_second_poll(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="human-multi-001", requires_human=True)
+        inbox_file = watcher.inbox_dir / "human-multi-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        acks1 = watcher.poll_inbox()
+&gt;       assert acks1[0].decision == "WAITING_HUMAN"
+E       AssertionError: assert 'REJECTED' == 'WAITING_HUMAN'
+E         
+E         - WAITING_HUMAN
+E         + REJECTED
+
+tests\test_directive_channel.py:572: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_waiting_human_survives_restart" time="2.483"><failure message="AssertionError: assert False&#10; +  where False = exists()&#10; +    where exists = (WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_waiting_human_survives_re0/directives/waiting_human') / 'human-restart-001.json').exists&#10; +      where WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_waiting_human_survives_re0/directives/waiting_human') = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B979559E50&gt;.waiting_human_dir">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_waiting_human_survives_re0')
+
+    def test_waiting_human_survives_restart(tmp_path):
+        root = tmp_path / "directives"
+        watcher1 = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="human-restart-001", requires_human=True)
+        inbox_file = watcher1.inbox_dir / "human-restart-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        watcher1.poll_inbox()
+&gt;       assert (watcher1.waiting_human_dir / "human-restart-001.json").exists()
+E       AssertionError: assert False
+E        +  where False = exists()
+E        +    where exists = (WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_waiting_human_survives_re0/directives/waiting_human') / 'human-restart-001.json').exists
+E        +      where WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_waiting_human_survives_re0/directives/waiting_human') = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B979559E50&gt;.waiting_human_dir
+
+tests\test_directive_channel.py:590: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_waiting_human_not_classified_as_replay" time="2.926" /><testcase classname="tests.test_directive_channel" name="test_duplicate_submission_of_waiting_human_is_rejected" time="2.686" /><testcase classname="tests.test_directive_channel" name="test_accepted_queue_survives_restart" time="2.768"><failure message="assert 0 == 1&#10; +  where 0 = len([])&#10; +    where [] = get_items()&#10; +      where get_items = &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B979598F30&gt;.get_items&#10; +        where &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B979598F30&gt; = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B97955A2D0&gt;.durable_queue">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_accepted_queue_survives_r0')
+
+    def test_accepted_queue_survives_restart(tmp_path):
+        root = tmp_path / "directives"
+        watcher1 = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="queue-restart-001")
+        inbox_file = watcher1.inbox_dir / "queue-restart-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    
+        watcher1.poll_inbox()
+&gt;       assert len(watcher1.durable_queue.get_items()) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+E        +    where [] = get_items()
+E        +      where get_items = &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B979598F30&gt;.get_items
+E        +        where &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B979598F30&gt; = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B97955A2D0&gt;.durable_queue
+
+tests\test_directive_channel.py:637: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_accepted_item_not_lost_after_restart" time="0.123" /><testcase classname="tests.test_directive_channel" name="test_restart_does_not_requeue_duplicate" time="3.274"><failure message="assert 0 == 1&#10; +  where 0 = len([])&#10; +    where [] = get_items()&#10; +      where get_items = &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B979599D30&gt;.get_items&#10; +        where &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B979599D30&gt; = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B97945AED0&gt;.durable_queue">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_restart_does_not_requeue_0')
+
+    def test_restart_does_not_requeue_duplicate(tmp_path):
+        root = tmp_path / "directives"
+        watcher1 = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="no-dup-queue-001")
+        inbox_file = watcher1.inbox_dir / "no-dup-queue-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+        watcher1.poll_inbox()
+    
+        watcher2 = DirectiveWatcher(directives_root=root)
+        watcher2.poll_inbox()
+&gt;       assert len(watcher2.durable_queue.get_items()) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+E        +    where [] = get_items()
+E        +      where get_items = &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B979599D30&gt;.get_items
+E        +        where &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B979599D30&gt; = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B97945AED0&gt;.durable_queue
+
+tests\test_directive_channel.py:673: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_queue_and_replay_ledger_consistent" time="3.547"><failure message="AssertionError: assert False is True&#10; +  where False = is_queued('consistent-001')&#10; +    where is_queued = &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B97959A7B0&gt;.is_queued&#10; +      where &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B97959A7B0&gt; = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B97945B4D0&gt;.durable_queue">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_queue_and_replay_ledger_c0')
+
+    def test_queue_and_replay_ledger_consistent(tmp_path):
+        root = tmp_path / "directives"
+        watcher = DirectiveWatcher(directives_root=root)
+    
+        data = build_sample_directive(directive_id="consistent-001")
+        inbox_file = watcher.inbox_dir / "consistent-001.json"
+        inbox_file.write_text(json.dumps(data), encoding="utf-8")
+        watcher.poll_inbox()
+    
+&gt;       assert watcher.durable_queue.is_queued("consistent-001") is True
+E       AssertionError: assert False is True
+E        +  where False = is_queued('consistent-001')
+E        +    where is_queued = &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B97959A7B0&gt;.is_queued
+E        +      where &lt;src.directive.durable_queue.DurableExecutionQueue object at 0x000001B97959A7B0&gt; = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B97945B4D0&gt;.durable_queue
+
+tests\test_directive_channel.py:685: AssertionError</failure></testcase><testcase classname="tests.test_directive_channel" name="test_channel_status_reconstructed_after_restart" time="5.230"><failure message="AssertionError: assert 0 == 1&#10; +  where 0 = DirectiveChannelStatus(status='RUNNING', last_poll='2026-08-19T16:38:55.118277+00:00', last_directive_seen='recon-hum-...=0, auth_rejections=0, github_errors=0, state_conflicts=0, toctou_failures=0, last_error=None, channel_version='2.0.0').accepted_count&#10; +    where DirectiveChannelStatus(status='RUNNING', last_poll='2026-08-19T16:38:55.118277+00:00', last_directive_seen='recon-hum-...=0, auth_rejections=0, github_errors=0, state_conflicts=0, toctou_failures=0, last_error=None, channel_version='2.0.0') = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B97945A990&gt;.status">tmp_path = WindowsPath('C:/Users/VD/Desktop/Antigravity/AI-CONTROL-PLANE/tmp_pytest/test_channel_status_reconstruc0')
+
+    def test_channel_status_reconstructed_after_restart(tmp_path):
+        root = tmp_path / "directives"
+        watcher1 = DirectiveWatcher(directives_root=root)
+    
+        data1 = build_sample_directive(directive_id="recon-acc-001")
+        data2 = build_sample_directive(directive_id="recon-hum-002", requires_human=True)
+    
+        (watcher1.inbox_dir / "recon-acc-001.json").write_text(json.dumps(data1), encoding="utf-8")
+        (watcher1.inbox_dir / "recon-hum-002.json").write_text(json.dumps(data2), encoding="utf-8")
+    
+        watcher1.poll_inbox()
+    
+        watcher2 = DirectiveWatcher(directives_root=root)
+&gt;       assert watcher2.status.accepted_count == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = DirectiveChannelStatus(status='RUNNING', last_poll='2026-08-19T16:38:55.118277+00:00', last_directive_seen='recon-hum-...=0, auth_rejections=0, github_errors=0, state_conflicts=0, toctou_failures=0, last_error=None, channel_version='2.0.0').accepted_count
+E        +    where DirectiveChannelStatus(status='RUNNING', last_poll='2026-08-19T16:38:55.118277+00:00', last_directive_seen='recon-hum-...=0, auth_rejections=0, github_errors=0, state_conflicts=0, toctou_failures=0, last_error=None, channel_version='2.0.0') = &lt;src.directive.watcher.DirectiveWatcher object at 0x000001B97945A990&gt;.status
+
+tests\test_directive_channel.py:702: AssertionError</failure></testcase><testcase classname="tests.test_directive_hardening" name="test_real_remote_unavailable_fail_closed" time="0.067" /><testcase classname="tests.test_directive_hardening" name="test_local_head_valid_but_remote_down_fail_closed" time="0.146" /><testcase classname="tests.test_directive_hardening" name="test_local_only_commit_rejected" time="0.076" /><testcase classname="tests.test_directive_hardening" name="test_unsigned_commit_rejected" time="2.582" /><testcase classname="tests.test_directive_hardening" name="test_signed_trusted_commit_accepted" time="2.289"><failure message="assert (&lt;ValidationSt...CTIVE_ABSENT'&gt; == &lt;ValidationSt...: 'AUTHENTIC'&gt;&#10;  &#10;  - AUTHENTIC&#10;  + COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT or 'WAITING_HUMAN' in &quot;COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/valid-001.json' does not exist in commit c96f9cc&quot;)">def test_signed_trusted_commit_accepted():
+        auth = DirectiveAuthenticator(repo_root=settings.CONTROL_PLANE_ROOT)
+    
+        payload = create_sample_payload(directive_id="valid-001")
+        envelope = DirectiveEnvelope(
+            directive_id="valid-001",
+            payload_commit_sha=get_git_head_sha(),
+            payload_blob_sha="UNKNOWN_BLOB",
+            payload_sha256="UNKNOWN_HASH",
+            trusted_remote="AI-CONTROL-PLANE",
+            trusted_branch="main"
+        )
+    
+        auth.verify_commit_signature = lambda path, sha: (True, True, "marcelodiazsanmartin-star", True)
+    
+        status, reason, req_human, meta = auth.authenticate(
+            payload, envelope, settings.CONTROL_PLANE_ROOT / "directives" / "inbox" / "valid-001.json"
+        )
+&gt;       assert status == ValidationStatus.AUTHENTIC or "WAITING_HUMAN" in reason
+E       assert (&lt;ValidationSt...CTIVE_ABSENT'&gt; == &lt;ValidationSt...: 'AUTHENTIC'&gt;
+E         
+E         - AUTHENTIC
+E         + COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT or 'WAITING_HUMAN' in "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/valid-001.json' does not exist in commit c96f9cc")
+
+tests\test_directive_hardening.py:156: AssertionError</failure></testcase><testcase classname="tests.test_directive_hardening" name="test_signed_untrusted_commit_rejected" time="2.185" /><testcase classname="tests.test_directive_hardening" name="test_envelope_self_attestation_bypass_rejected" time="2.202" /><testcase classname="tests.test_directive_hardening" name="test_blob_absent_from_commit_but_in_worktree_rejected" time="2.370" /><testcase classname="tests.test_directive_hardening" name="test_queue_corrupted_after_restart_fail_closed" time="0.011" /><testcase classname="tests.test_directive_hardening" name="test_queue_integrity_after_restart" time="0.029" /><testcase classname="tests.test_directive_hardening" name="test_toctou_hash_mismatch_blocks_execution" time="2.882" /><testcase classname="tests.test_directive_hardening" name="test_remote_head_change_between_auth_and_execution" time="0.064" /><testcase classname="tests.test_directive_hardening" name="test_valid_directive_e2e_accepted" time="0.021" /><testcase classname="tests.test_directive_hardening" name="test_tampered_payload_rejected" time="2.535"><failure message="AssertionError: assert &lt;ValidationSt...CTIVE_ABSENT'&gt; == &lt;ValidationSt...ENT_MISMATCH'&gt;&#10;  &#10;  - CONTENT_MISMATCH&#10;  + COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT">def test_tampered_payload_rejected():
+        auth = DirectiveAuthenticator(repo_root=settings.CONTROL_PLANE_ROOT)
+        payload = create_sample_payload(directive_id="valid-001")
+        payload.action = "TAMPERED_ACTION"
+        envelope = DirectiveEnvelope(
+            directive_id="valid-001",
+            payload_commit_sha=get_git_head_sha(),
+            payload_blob_sha="blob",
+            payload_sha256="sha",
+            trusted_remote="AI-CONTROL-PLANE",
+            trusted_branch="main"
+        )
+    
+        status, reason, req_human, meta = auth.authenticate(
+            payload, envelope, settings.CONTROL_PLANE_ROOT / "directives" / "inbox" / "valid-001.json"
+        )
+&gt;       assert status == ValidationStatus.CONTENT_MISMATCH
+E       AssertionError: assert &lt;ValidationSt...CTIVE_ABSENT'&gt; == &lt;ValidationSt...ENT_MISMATCH'&gt;
+E         
+E         - CONTENT_MISMATCH
+E         + COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT
+
+tests\test_directive_hardening.py:343: AssertionError</failure></testcase><testcase classname="tests.test_directive_hardening" name="test_wrong_sha256_rejected" time="2.431"><failure message="AssertionError: assert &lt;ValidationSt...CTIVE_ABSENT'&gt; == &lt;ValidationSt...ENT_MISMATCH'&gt;&#10;  &#10;  - CONTENT_MISMATCH&#10;  + COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT">def test_wrong_sha256_rejected():
+        auth = DirectiveAuthenticator(repo_root=settings.CONTROL_PLANE_ROOT)
+        payload = create_sample_payload(directive_id="valid-001")
+        envelope = DirectiveEnvelope(
+            directive_id="valid-001",
+            payload_commit_sha=get_git_head_sha(),
+            payload_blob_sha="blob",
+            payload_sha256="wrong_sha256_value",
+            trusted_remote="AI-CONTROL-PLANE",
+            trusted_branch="main"
+        )
+    
+        status, reason, req_human, meta = auth.authenticate(
+            payload, envelope, settings.CONTROL_PLANE_ROOT / "directives" / "inbox" / "valid-001.json"
+        )
+&gt;       assert status == ValidationStatus.CONTENT_MISMATCH
+E       AssertionError: assert &lt;ValidationSt...CTIVE_ABSENT'&gt; == &lt;ValidationSt...ENT_MISMATCH'&gt;
+E         
+E         - CONTENT_MISMATCH
+E         + COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT
+
+tests\test_directive_hardening.py:362: AssertionError</failure></testcase><testcase classname="tests.test_directive_hardening" name="test_wrong_blob_sha_rejected" time="2.483"><failure message="AssertionError: assert &lt;ValidationSt...CTIVE_ABSENT'&gt; == &lt;ValidationSt...ENT_MISMATCH'&gt;&#10;  &#10;  - CONTENT_MISMATCH&#10;  + COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT">def test_wrong_blob_sha_rejected():
+        auth = DirectiveAuthenticator(repo_root=settings.CONTROL_PLANE_ROOT)
+        payload = create_sample_payload(directive_id="valid-001")
+        envelope = DirectiveEnvelope(
+            directive_id="valid-001",
+            payload_commit_sha=get_git_head_sha(),
+            payload_blob_sha="wrong_blob_sha_value",
+            payload_sha256="UNKNOWN_HASH",
+            trusted_remote="AI-CONTROL-PLANE",
+            trusted_branch="main"
+        )
+    
+        status, reason, req_human, meta = auth.authenticate(
+            payload, envelope, settings.CONTROL_PLANE_ROOT / "directives" / "inbox" / "valid-001.json"
+        )
+&gt;       assert status == ValidationStatus.CONTENT_MISMATCH
+E       AssertionError: assert &lt;ValidationSt...CTIVE_ABSENT'&gt; == &lt;ValidationSt...ENT_MISMATCH'&gt;
+E         
+E         - CONTENT_MISMATCH
+E         + COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT
+
+tests\test_directive_hardening.py:381: AssertionError</failure></testcase><testcase classname="tests.test_directive_hardening" name="test_invalid_signature_rejected" time="2.719" /><testcase classname="tests.test_directive_hardening" name="test_toctou_revalidation_executes_auth_meta_branch" time="0.130" /><testcase classname="tests.test_fail_closed" name="test_missing_evidence_defaults_to_unknown" time="0.001" /><testcase classname="tests.test_fail_closed" name="test_stale_declaration_never_infers_running" time="0.003" /><testcase classname="tests.test_git" name="test_git_observer_nonexistent_repo" time="0.009" /><testcase classname="tests.test_git" name="test_remote_branch_verification_exact_ref" time="0.010" /><testcase classname="tests.test_git" name="test_read_only_git_environment_passed" time="0.134" /><testcase classname="tests.test_heartbeat" name="test_fresh_heartbeat" time="0.001" /><testcase classname="tests.test_heartbeat" name="test_stale_heartbeat" time="0.001" /><testcase classname="tests.test_heartbeat" name="test_missing_heartbeat" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_human_decision_required" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_project_completed" time="0.001" /><testcase classname="tests.test_idle_and_completed" name="test_project_idle_valid" time="0.003" /><testcase classname="tests.test_malformed_and_skew" name="test_malformed_json_evidence" time="0.001" /><testcase classname="tests.test_malformed_and_skew" name="test_future_clock_skew" time="0.001" /><testcase classname="tests.test_process" name="test_process_alive_detection" time="0.001" /><testcase classname="tests.test_process" name="test_process_dead_detection" time="0.001" /><testcase classname="tests.test_process" name="test_integration_dead_expected_process" time="2.623" /><testcase classname="tests.test_process" name="test_unexpected_process_running" time="0.004" /><testcase classname="tests.test_read_only_integrity" name="test_disallowed_git_commands_blocked" time="0.005" /><testcase classname="tests.test_read_only_integrity" name="test_read_only_file_access" time="0.011" /><testcase classname="tests.test_read_only_integrity" name="test_isolated_fixture_immutability" time="0.016" /><testcase classname="tests.test_remote_publication" name="test_commit_storm_prevention" time="26.364" /><testcase classname="tests.test_restart" name="test_control_plane_restart_and_audit" time="20.652" /><testcase classname="tests.test_single_instance" name="test_single_instance_lock_acquisition" time="0.015" /><testcase classname="tests.test_single_instance" name="test_second_daemon_is_rejected" time="0.012" /><testcase classname="tests.test_single_instance" name="test_stale_daemon_lock_recovery" time="0.011" /><testcase classname="tests.test_single_instance" name="test_monitored_processes_never_terminated" time="9.586" /></testsuite></testsuites>
