@@ -1,14 +1,14 @@
 {
   "directive_id": "exact-blob-001",
-  "received_at": "2026-08-19T16:35:51.094897+00:00",
-  "source_commit_sha": "80eafe427865f188f8026b716d99632f49352ffb",
+  "received_at": "2026-08-19T16:51:02.284106+00:00",
+  "source_commit_sha": "b14d704e2fea899db0b9cc7758d388ebeaa20cb0",
   "validation_status": "STATE_CONFLICT",
   "decision": "REJECTED",
-  "decision_reason": "STATE_CONFLICT: directive_id exact-blob-001 resubmitted with different payload commit 80eafe4",
+  "decision_reason": "STATE_CONFLICT: directive_id exact-blob-001 resubmitted with different payload commit b14d704",
   "human_required": false,
   "queued": false,
   "executed": false,
-  "control_plane_commit_sha": "16e06eec724daac2faa9b1f449d47a1b7648ba51",
+  "control_plane_commit_sha": "35cf0ef710b399757304e9e3a24651dedba78368",
   "readback_verified": true,
   "observer_version": "2.0"
 }
