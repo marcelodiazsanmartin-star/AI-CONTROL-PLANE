@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-08-19T13:06:57.001287+00:00",
-  "code_under_test_sha": "a397b2ed2c6e1b74a1bf5bb83e978c63755611b1",
-  "certification_source_sha": "a397b2ed2c6e1b74a1bf5bb83e978c63755611b1",
-  "certification_artifact_ancestor_sha": "aaca6427b98bf965d0b0959161e1acdbbd5d0910",
-  "actual_provenance_parent_sha": "aaca6427b98bf965d0b0959161e1acdbbd5d0910",
+  "timestamp": "2026-08-19T14:15:59.170342+00:00",
+  "code_under_test_sha": "003c45e2e7af4a60490a0ebc2749212e40f2860d",
+  "certification_source_sha": "003c45e2e7af4a60490a0ebc2749212e40f2860d",
+  "certification_artifact_ancestor_sha": "9eee90a5ea814fdc7adf7696b0217a6c63e07440",
+  "actual_provenance_parent_sha": "7a1c056fb71fc3be8abe4335a7cf261358c77e1c",
   "ancestry_verified": true
 }
