@@ -25,6 +25,7 @@ if str(ROOT_DIR) not in sys.path:
 from config import settings
 from src.directive.scanner import scan_authentication_bypasses
 from src.directive.signer_validator import validate_production_signers
+from src.directive.reconciler import reconcile_execution_evidence
 from src.observer.process_observer import ProcessObserver
 
 
@@ -111,66 +112,7 @@ def verify_git_ancestor(ancestor_sha: str, descendant_sha: str, repo_path: Path 
         return False
 
 
-def reconcile_execution_evidence(root_dir: Path = None) -> dict:
-    if root_dir is None:
-        root_dir = ROOT_DIR
 
-    runtime_dir = root_dir / "directives" / "runtime"
-    acks_dir = root_dir / "directives" / "ack"
-
-    queue_file = runtime_dir / "execution_queue.jsonl"
-    consumed_file = runtime_dir / "consumed_directives.jsonl"
-
-    available = True
-    complete = True
-    consistent = True
-    source_count = 0
-    executed_ids = set()
-    mutating_count = 0
-
-    if queue_file.exists():
-        source_count += 1
-        try:
-            with open(queue_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        item = json.loads(line)
-                        did = item.get("directive_id")
-                        if did:
-                            executed_ids.add(did)
-                        payload = item.get("directive_payload", {})
-                        if payload.get("action_type") in ("MUTATE", "TARGET_MUTATION") or item.get("mutating") is True:
-                            mutating_count += 1
-        except Exception:
-            complete = False
-
-    if consumed_file.exists():
-        source_count += 1
-        try:
-            with open(consumed_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        item = json.loads(line)
-                        did = item.get("directive_id")
-                        if did:
-                            executed_ids.add(did)
-                        if item.get("mutating") is True:
-                            mutating_count += 1
-        except Exception:
-            complete = False
-
-    if acks_dir.exists():
-        source_count += 1
-
-    return {
-        "available": available,
-        "complete": complete,
-        "consistent": consistent,
-        "source_count": source_count,
-        "executed_directive_count": len(executed_ids),
-        "executed_directive_ids": sorted(list(executed_ids)),
-        "mutating_directives_executed": mutating_count
-    }
 
 
 def generate_certification(
@@ -424,8 +366,10 @@ def generate_certification(
         crypto_evidence_run_id_match is True and
         real_git_verify_commit_success_count >= 2 and
         real_git_verify_commit_failure_count >= 2 and
-        test_production_key_intersection_count == 0 and
-        test_keys_isolated_from_production is True and
+        execution_evidence_available is True and
+        execution_evidence_complete is True and
+        execution_ledger_consistent is True and
+        execution_evidence_source_count >= 3 and
         mutating_directives_executed == 0 and
         oracle_worktree_clean is True and
         micro_worktree_clean is True and

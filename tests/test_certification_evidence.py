@@ -1,8 +1,8 @@
 """
-Certification Evidence & Integrity Test Suite (Tests A-M): CONTROL-02.5
+Certification Evidence & Integrity Test Suite (Tests A-M): CONTROL-02.5 Block 1
 
 Verifies non-circular evidence derivation, production signer manifest validation,
-stale evidence rejection, run ID mismatch detection, execution evidence reconciliation,
+stale evidence rejection, run ID mismatch detection, execution evidence reconciliation (calling production reconciler),
 and AST self-auditing scanner rules.
 """
 
@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from config import settings
 from src.directive.scanner import scan_authentication_bypasses
 from src.directive.signer_validator import validate_production_signers, compute_ssh_public_key_fingerprint
+from src.directive.reconciler import reconcile_execution_evidence
 
 
 # A. TEST_INJECTED_SHA_BYPASS_DETECTED
@@ -45,12 +46,11 @@ def test_fake_production_fingerprint_fails(monkeypatch):
     assert res["production_invalid_signer_count"] > 0
 
 
-# D. TEST_TEST_KEY_LEAK_TO_PRODUCTION_FAILS(monkeypatch)
+# D. TEST_TEST_KEY_LEAK_TO_PRODUCTION_FAILS
 def test_test_key_leak_to_production_fails():
     ephemeral_test_fingerprint = "SHA256:EPHEMERAL_TEST_KEY_FINGERPRINT_999"
     prod_allowlist = {"SHA256:zYZi3+VxKz9ve+PJgTS2o8q+dvXSmzCwPZ2G3NYh41A"}
 
-    # Simulate key leakage
     leaked_allowlist = set(prod_allowlist)
     leaked_allowlist.add(ephemeral_test_fingerprint)
 
@@ -60,68 +60,181 @@ def test_test_key_leak_to_production_fails():
     assert len(intersection) > 0, "Leakage detection failed to detect test key in allowlist"
 
 
-# E. TEST_MISSING_EXECUTION_SOURCE_NOT_ZERO
-def test_missing_execution_source_not_zero(tmp_path):
-    missing_dir = tmp_path / "non_existent_runtime"
-    execution_sources_available = (
-        (missing_dir / "execution_queue.jsonl").exists() and
-        (missing_dir / "consumed_directives.jsonl").exists()
-    )
-    assert execution_sources_available is False
+# RECONCILIATION BLOCK 1 TESTS (A - J) calling production reconcile_execution_evidence()
+
+def test_reconcile_missing_execution_queue_fail_closed(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "consumed_directives.jsonl").write_text("", encoding="utf-8")
+    (acks_dir / "ack-001.json").write_text("{}", encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is False
+    assert res["complete"] is False
+    assert res["mutating_directives_executed"] is None
+    assert res["error"] == "EXECUTION_EVIDENCE_INCOMPLETE"
+    assert "directives/runtime/execution_queue.jsonl" in res["missing_sources"]
 
 
-# F. TEST_CORRUPTED_EXECUTION_LEDGER_FAILS(tmp_path)
-def test_corrupted_execution_ledger_fails(tmp_path):
-    corrupt_file = tmp_path / "consumed_directives.jsonl"
-    corrupt_file.write_text('{"directive_id": "ok"}\nCORRUPTED INVALID JSON LINE\n', encoding="utf-8")
+def test_reconcile_missing_consumed_ledger_fail_closed(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
 
-    corrupt = False
-    with open(corrupt_file, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                try:
-                    json.loads(line)
-                except Exception:
-                    corrupt = True
+    (runtime_dir / "execution_queue.jsonl").write_text("", encoding="utf-8")
+    (acks_dir / "ack-001.json").write_text("{}", encoding="utf-8")
 
-    assert corrupt is True
-
-
-# G. TEST_REAL_EXECUTION_COUNT_RECONSTRUCTED(tmp_path)
-def test_real_execution_count_reconstructed(tmp_path):
-    queue_file = tmp_path / "execution_queue.jsonl"
-    consumed_file = tmp_path / "consumed_directives.jsonl"
-
-    queue_file.write_text(
-        json.dumps({"directive_id": "d1", "directive_payload": {"action_type": "STATUS_REQUEST"}}) + "\n" +
-        json.dumps({"directive_id": "d2", "directive_payload": {"action_type": "READ_ONLY_ANALYSIS"}}) + "\n",
-        encoding="utf-8"
-    )
-
-    consumed_file.write_text(
-        json.dumps({"directive_id": "d1", "action_type": "STATUS_REQUEST", "mutating": False}) + "\n",
-        encoding="utf-8"
-    )
-
-    executed_ids = set()
-    mutating_count = 0
-
-    for fpath in [queue_file, consumed_file]:
-        with open(fpath, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    item = json.loads(line)
-                    did = item.get("directive_id")
-                    if did:
-                        executed_ids.add(did)
-                    if item.get("mutating") is True:
-                        mutating_count += 1
-
-    assert len(executed_ids) == 2
-    assert mutating_count == 0
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is False
+    assert res["complete"] is False
+    assert res["mutating_directives_executed"] is None
+    assert res["error"] == "EXECUTION_EVIDENCE_INCOMPLETE"
+    assert "directives/runtime/consumed_directives.jsonl" in res["missing_sources"]
 
 
-# H. TEST_CRITICAL_EVIDENCE_UNAVAILABLE_CANNOT_PASS(tmp_path)
+def test_reconcile_missing_ack_source_fail_closed(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    runtime_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text("", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text("", encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is False
+    assert res["complete"] is False
+    assert res["mutating_directives_executed"] is None
+    assert res["error"] == "EXECUTION_EVIDENCE_INCOMPLETE"
+    assert "directives/ack/*.json" in res["missing_sources"]
+
+
+def test_reconcile_corrupted_execution_queue_fail_closed(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text("CORRUPTED INVALID JSON LINE\n", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text("", encoding="utf-8")
+    (acks_dir / "ack-001.json").write_text("{}", encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is False
+    assert res["complete"] is False
+    assert res["error"] == "EXECUTION_EVIDENCE_CORRUPT"
+
+
+def test_reconcile_corrupted_consumed_ledger_fail_closed(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text("", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text("INVALID CORRUPT DATA\n", encoding="utf-8")
+    (acks_dir / "ack-001.json").write_text("{}", encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is False
+    assert res["complete"] is False
+    assert res["error"] == "EXECUTION_EVIDENCE_CORRUPT"
+
+
+def test_reconcile_complete_consistent_fixture(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text(json.dumps({"directive_id": "q1", "status": "QUEUED"}) + "\n", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text(json.dumps({"directive_id": "c1", "executed": True, "action_type": "STATUS_REQUEST"}) + "\n", encoding="utf-8")
+    (acks_dir / "ack-001.json").write_text(json.dumps({"directive_id": "c1", "executed": True, "action_type": "STATUS_REQUEST"}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["consistent"] is True
+    assert res["source_count"] == 3
+    assert res["required_source_count"] == 3
+    assert res["executed_directive_count"] == 1
+    assert res["executed_directive_ids"] == ["c1"]
+    assert res["mutating_directives_executed"] == 0
+
+
+def test_reconcile_queued_not_counted_as_executed(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text(json.dumps({"directive_id": "queued-001", "status": "QUEUED"}) + "\n", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text("", encoding="utf-8")
+    (acks_dir / "ack-001.json").write_text(json.dumps({"directive_id": "queued-001", "status": "QUEUED"}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["executed_directive_count"] == 0
+    assert res["executed_directive_ids"] == []
+
+
+def test_reconcile_rejected_not_counted_as_executed(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text("", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text(json.dumps({"directive_id": "rej-001", "decision": "REJECTED"}) + "\n", encoding="utf-8")
+    (acks_dir / "ack-001.json").write_text(json.dumps({"directive_id": "rej-001", "decision": "REJECTED"}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["executed_directive_count"] == 0
+    assert res["executed_directive_ids"] == []
+
+
+def test_reconcile_explicitly_executed_read_only(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text("", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text(json.dumps({"directive_id": "ro-001", "executed": True, "action_type": "READ_ONLY_ANALYSIS"}) + "\n", encoding="utf-8")
+    (acks_dir / "ack-001.json").write_text(json.dumps({"directive_id": "ro-001", "executed": True, "action_type": "READ_ONLY_ANALYSIS"}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["executed_directive_count"] == 1
+    assert res["executed_directive_ids"] == ["ro-001"]
+    assert res["mutating_directives_executed"] == 0
+
+
+def test_reconcile_explicitly_executed_mutating(tmp_path):
+    runtime_dir = tmp_path / "directives" / "runtime"
+    acks_dir = tmp_path / "directives" / "ack"
+    runtime_dir.mkdir(parents=True)
+    acks_dir.mkdir(parents=True)
+
+    (runtime_dir / "execution_queue.jsonl").write_text("", encoding="utf-8")
+    (runtime_dir / "consumed_directives.jsonl").write_text(json.dumps({"directive_id": "mut-001", "executed": True, "mutating": True}) + "\n", encoding="utf-8")
+    (acks_dir / "ack-001.json").write_text(json.dumps({"directive_id": "mut-001", "executed": True, "mutating": True}), encoding="utf-8")
+
+    res = reconcile_execution_evidence(root_dir=tmp_path)
+    assert res["available"] is True
+    assert res["complete"] is True
+    assert res["executed_directive_count"] == 1
+    assert res["executed_directive_ids"] == ["mut-001"]
+    assert res["mutating_directives_executed"] == 1
+
+
+# H. TEST_CRITICAL_EVIDENCE_UNAVAILABLE_CANNOT_PASS
 def test_critical_evidence_unavailable_cannot_pass(tmp_path):
     crypto_evidence = tmp_path / "crypto_test_evidence.json"
     evidence_available = crypto_evidence.exists()
@@ -146,7 +259,7 @@ def test_certification_run_id_mismatch_rejected():
     assert matches is False
 
 
-# K. TEST_EMPTY_PRODUCTION_ALLOWLIST_REJECTED(monkeypatch)
+# K. TEST_EMPTY_PRODUCTION_ALLOWLIST_REJECTED
 def test_empty_production_allowlist_rejected(monkeypatch):
     monkeypatch.setattr(settings, "PRODUCTION_TRUSTED_SIGNER_ALLOWLIST", set())
     res = validate_production_signers(root_dir=settings.CONTROL_PLANE_ROOT)
