@@ -22,7 +22,7 @@ CONTROL_PLANE_QUEUE_DIRECTIVES: bool = True
 CONTROL_PLANE_EXECUTE_MUTATING_DIRECTIVES: bool = False
 
 # Read-Only Git Command Allowlist for Monitored Repos
-ALLOWED_GIT_COMMANDS: List[str] = ["rev-parse", "branch", "status", "ls-remote"]
+ALLOWED_GIT_COMMANDS: List[str] = ["rev-parse", "branch", "status", "ls-remote", "show", "cat-file", "verify-commit", "merge-base"]
 DISALLOWED_GIT_COMMANDS: List[str] = [
     "fetch", "pull", "checkout", "reset", "clean",
     "add", "commit", "gc", "maintenance"
@@ -47,6 +47,16 @@ CONTROL_PLANE_ROOT = WORKSPACE_ROOT / "AI-CONTROL-PLANE"
 # Directive Channel Source & Action Rules
 APPROVED_SOURCE_REPOSITORY: str = "AI-CONTROL-PLANE"
 APPROVED_SOURCE_BRANCH: str = "main"
+
+# Cryptographic Commit Signer Allowlist
+TRUSTED_SIGNER_ALLOWLIST: Set[str] = {
+    "marcelodiazsanmartin-star",
+    "CHATGPT",
+    "CHATGPT_TRUSTED_SIGNER",
+    "antigravity-bot@google.com",
+    "marcelo.diaz.sanmartin@gmail.com"
+}
+REQUIRE_COMMIT_SIGNATURE_VERIFICATION: bool = True
 
 ALLOWED_ACTION_CLASSES: Set[str] = {
     "STATUS_REQUEST",

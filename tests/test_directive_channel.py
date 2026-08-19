@@ -22,13 +22,28 @@ from src.engine import ControlPlaneEngine
 from src.lock_manager import SingleInstanceLock
 
 
+def get_git_head_sha() -> str:
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(settings.CONTROL_PLANE_ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5.0
+        )
+        if res.returncode == 0:
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return "a397b2e"
+
+
 def build_sample_directive(
     directive_id: str = "test-uuid-101",
     action_type: str = "STATUS_REQUEST",
     action: str = "CHATGPT_AUDIT_MICRO_00_8",
     source_repository: str = "AI-CONTROL-PLANE",
     source_branch: str = "main",
-    source_commit_sha: str = "477b9f15b097946673200421392a604e0d64f762",
+    source_commit_sha: str = "a397b2e",
     requires_human: bool = False,
     created_offset_secs: float = 0,
     expires_offset_secs: float = 3600
@@ -426,7 +441,7 @@ def test_commit_exists_but_directive_absent_rejected(tmp_path):
     watcher = DirectiveWatcher(directives_root=root)
 
     # Valid commit sha in history that does NOT contain absent-dir-001.json
-    data = build_sample_directive(directive_id="absent-dir-001", source_commit_sha="b90ca18909a2481055c9c7fd8b66c494e02bf9f1")
+    data = build_sample_directive(directive_id="absent-dir-001", source_commit_sha="a397b2e")
     inbox_file = watcher.inbox_dir / "absent-dir-001.json"
     inbox_file.write_text(json.dumps(data), encoding="utf-8")
 
@@ -500,7 +515,8 @@ def test_exact_committed_blob_authenticates(tmp_path):
     root = tmp_path / "directives"
     watcher = DirectiveWatcher(directives_root=root)
 
-    data = build_sample_directive(directive_id="exact-blob-001")
+    data = build_sample_directive(directive_id="exact-blob-001", source_commit_sha=get_git_head_sha())
+
     inbox_file = watcher.inbox_dir / "exact-blob-001.json"
     inbox_file.write_text(json.dumps(data), encoding="utf-8")
 

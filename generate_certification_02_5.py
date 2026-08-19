@@ -1,8 +1,8 @@
 """
-Certification Evidence Generator for CONTROL-02.5
+Certification Evidence Generator for CONTROL-02.5 (Hardened Edition)
 
 Executes pytest suite, inspects directive channel outputs, verifies non-mutation invariants,
-and generates reports/CONTROL_02_5_CERTIFICATION.json dynamically.
+critical security gates, and generates reports/CONTROL_02_5_CERTIFICATION.json dynamically.
 """
 
 import sys
@@ -78,19 +78,20 @@ def generate_certification(code_under_test_sha: str) -> dict:
         except Exception as e:
             print(f"XML parse error: {e}")
 
-    # Certified test assertions
-    real_source_authentication = "test_exact_committed_blob_authenticates" in passed_test_names
-    branch_reachability = "test_directive_commit_not_reachable_from_main_rejected" in passed_test_names
-    committed_blob_match = "test_real_committed_content_mismatch_rejected" in passed_test_names
-
-    waiting_human_multi_poll = "test_waiting_human_survives_second_poll" in passed_test_names
-    waiting_human_restart_safe = "test_waiting_human_survives_restart" in passed_test_names
-
-    durable_queue = "test_accepted_queue_survives_restart" in passed_test_names
-    queue_restart_recovery = "test_accepted_item_not_lost_after_restart" in passed_test_names
-    channel_status_reconstruction = "test_channel_status_reconstructed_after_restart" in passed_test_names
-
-    replay_protection = "test_replay_directive_rejected" in passed_test_names and "test_replay_survives_restart" in passed_test_names
+    # Certified Critical Security Gates
+    cg_provenance_integrity = "test_provenance_fields_present" in passed_test_names
+    cg_remote_ancestry = "test_non_reachable_commit_rejected" in passed_test_names
+    cg_commit_signature = "test_unsigned_commit_rejected" in passed_test_names and "test_invalid_signature_rejected" in passed_test_names
+    cg_trusted_signer = "test_valid_signature_unauthorized_signer_rejected" in passed_test_names
+    cg_payload_integrity = "test_tampered_payload_rejected" in passed_test_names and "test_wrong_sha256_rejected" in passed_test_names
+    cg_queue_durability = "test_ack_before_durability_impossible" in passed_test_names and "test_corrupted_queue_fail_closed" in passed_test_names
+    cg_ledger_integrity = "test_directive_ack_generated" in passed_test_names
+    cg_state_consistency = "test_directive_id_collision_state_conflict" in passed_test_names
+    cg_idempotency = "test_duplicate_directive_no_repeat_mutation" in passed_test_names
+    cg_restart_recovery = "test_restart_reconstructs_exact_state" in passed_test_names
+    cg_waiting_human = "test_waiting_human_restart_persistence" in passed_test_names
+    cg_toctou_revalidation = "test_toctou_attack_revalidation_blocks_execution" in passed_test_names
+    cg_no_unauthorized_execution = "test_directive_never_executes_target_mutation" in passed_test_names
 
     # Check empirical OS process count for AI-CONTROL-PLANE main.py
     proc_observer = ProcessObserver()
@@ -117,21 +118,29 @@ def generate_certification(code_under_test_sha: str) -> dict:
     oracle_process_interrupted = not monitored_processes_never_terminated_test
     micro_process_interrupted = not monitored_processes_never_terminated_test
 
+    critical_gate_failure = not (
+        cg_provenance_integrity and
+        cg_remote_ancestry and
+        cg_commit_signature and
+        cg_trusted_signer and
+        cg_payload_integrity and
+        cg_queue_durability and
+        cg_ledger_integrity and
+        cg_state_consistency and
+        cg_idempotency and
+        cg_restart_recovery and
+        cg_waiting_human and
+        cg_toctou_revalidation and
+        cg_no_unauthorized_execution
+    )
+
     # Strict overall result logic
     strict_pass = (
         tests_collected > 0 and
         tests_passed == tests_collected and
         tests_failed == 0 and
         control_plane_instance_count == 1 and
-        real_source_authentication is True and
-        branch_reachability is True and
-        committed_blob_match is True and
-        waiting_human_multi_poll is True and
-        waiting_human_restart_safe is True and
-        durable_queue is True and
-        queue_restart_recovery is True and
-        channel_status_reconstruction is True and
-        replay_protection is True and
+        critical_gate_failure is False and
         mutating_directives_executed == 0 and
         oracle_modified is False and
         micro_modified is False and
@@ -152,15 +161,20 @@ def generate_certification(code_under_test_sha: str) -> dict:
         "tests_failed": tests_failed,
         "control_plane_instance_count": control_plane_instance_count,
         "active_control_plane_pids": active_pids,
-        "real_source_authentication": real_source_authentication,
-        "branch_reachability": branch_reachability,
-        "committed_blob_match": committed_blob_match,
-        "waiting_human_multi_poll": waiting_human_multi_poll,
-        "waiting_human_restart_safe": waiting_human_restart_safe,
-        "durable_queue": durable_queue,
-        "queue_restart_recovery": queue_restart_recovery,
-        "channel_status_reconstruction": channel_status_reconstruction,
-        "replay_protection": replay_protection,
+        "cg_provenance_integrity": cg_provenance_integrity,
+        "cg_remote_ancestry": cg_remote_ancestry,
+        "cg_commit_signature": cg_commit_signature,
+        "cg_trusted_signer": cg_trusted_signer,
+        "cg_payload_integrity": cg_payload_integrity,
+        "cg_queue_durability": cg_queue_durability,
+        "cg_ledger_integrity": cg_ledger_integrity,
+        "cg_state_consistency": cg_state_consistency,
+        "cg_idempotency": cg_idempotency,
+        "cg_restart_recovery": cg_restart_recovery,
+        "cg_waiting_human": cg_waiting_human,
+        "cg_toctou_revalidation": cg_toctou_revalidation,
+        "cg_no_unauthorized_execution": cg_no_unauthorized_execution,
+        "critical_gate_failure": critical_gate_failure,
         "mutating_directives_executed": mutating_directives_executed,
         "oracle_modified": oracle_modified,
         "micro_modified": micro_modified,

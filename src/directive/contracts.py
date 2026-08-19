@@ -1,5 +1,8 @@
 """
-Directive Channel Contracts, States, and Data Structures
+Directive Channel Contracts, States, Envelopes, and Data Structures
+
+Implements strict separation between DIRECTIVE PAYLOAD (immutable execution logic)
+and DIRECTIVE ENVELOPE (external security & cryptographic provenance).
 """
 
 from enum import Enum
@@ -32,10 +35,23 @@ class ValidationStatus(str, Enum):
     SCHEMA_INVALID = "SCHEMA_INVALID"
     ACTION_NOT_ALLOWED = "ACTION_NOT_ALLOWED"
     FAIL_CLOSED_GITHUB_UNAVAILABLE = "FAIL_CLOSED_GITHUB_UNAVAILABLE"
+    COMMIT_SIGNATURE_MISSING = "COMMIT_SIGNATURE_MISSING"
+    COMMIT_SIGNATURE_INVALID = "COMMIT_SIGNATURE_INVALID"
+    UNTRUSTED_COMMIT_SIGNER = "UNTRUSTED_COMMIT_SIGNER"
+    PAYLOAD_COMMIT_NOT_REACHABLE = "PAYLOAD_COMMIT_NOT_REACHABLE"
+    REMOTE_BRANCH_UNAVAILABLE = "REMOTE_BRANCH_UNAVAILABLE"
+    STATE_CONFLICT = "STATE_CONFLICT"
+    QUEUE_CORRUPTION = "QUEUE_CORRUPTION"
+    QUEUE_PERSISTENCE_FAILURE = "QUEUE_PERSISTENCE_FAILURE"
+    QUEUE_RECORD_MISMATCH = "QUEUE_RECORD_MISMATCH"
+    TOCTOU_REVALIDATION_FAILED = "TOCTOU_REVALIDATION_FAILED"
 
 
 @dataclass
-class Directive:
+class DirectivePayload:
+    """
+    Immutable execution payload without self-referential git metadata.
+    """
     directive_version: str
     directive_id: str
     project: str
@@ -46,9 +62,6 @@ class Directive:
     created_at: str
     expires_at: str
     issued_by: str
-    source_repository: str
-    source_branch: str
-    source_commit_sha: str
     requires_human_approval: bool
     allowed_scope: List[str]
     preconditions: Dict[str, Any]
@@ -61,7 +74,7 @@ class Directive:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Directive":
+    def from_dict(cls, d: Dict[str, Any]) -> "DirectivePayload":
         return cls(
             directive_version=str(d.get("directive_version", "")),
             directive_id=str(d.get("directive_id", "")),
@@ -73,9 +86,6 @@ class Directive:
             created_at=str(d.get("created_at", "")),
             expires_at=str(d.get("expires_at", "")),
             issued_by=str(d.get("issued_by", "")),
-            source_repository=str(d.get("source_repository", "")),
-            source_branch=str(d.get("source_branch", "")),
-            source_commit_sha=str(d.get("source_commit_sha", "")),
             requires_human_approval=bool(d.get("requires_human_approval", False)),
             allowed_scope=list(d.get("allowed_scope", [])),
             preconditions=dict(d.get("preconditions", {})),
@@ -83,6 +93,47 @@ class Directive:
             failure_policy=str(d.get("failure_policy", "")),
             rollback_policy=str(d.get("rollback_policy", "")),
             payload=dict(d.get("payload", {}))
+        )
+
+
+# Backward compatibility alias
+Directive = DirectivePayload
+
+
+@dataclass
+class DirectiveEnvelope:
+    """
+    Separate security metadata envelope referencing the payload.
+    """
+    directive_id: str
+    payload_commit_sha: str
+    payload_blob_sha: str
+    payload_sha256: str
+    trusted_remote: str
+    trusted_branch: str
+    authentication_version: str = "2.0"
+    signature_present: bool = False
+    signature_valid: bool = False
+    signer_identity: str = ""
+    signer_allowed: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "DirectiveEnvelope":
+        return cls(
+            directive_id=str(d.get("directive_id", "")),
+            payload_commit_sha=str(d.get("payload_commit_sha", d.get("source_commit_sha", ""))),
+            payload_blob_sha=str(d.get("payload_blob_sha", "")),
+            payload_sha256=str(d.get("payload_sha256", "")),
+            trusted_remote=str(d.get("trusted_remote", d.get("source_repository", ""))),
+            trusted_branch=str(d.get("trusted_branch", d.get("source_branch", ""))),
+            authentication_version=str(d.get("authentication_version", "2.0")),
+            signature_present=bool(d.get("signature_present", False)),
+            signature_valid=bool(d.get("signature_valid", False)),
+            signer_identity=str(d.get("signer_identity", "")),
+            signer_allowed=bool(d.get("signer_allowed", False))
         )
 
 
@@ -98,7 +149,8 @@ class DirectiveAck:
     queued: bool
     executed: bool
     control_plane_commit_sha: str
-    observer_version: str = "1.0.0"
+    readback_verified: bool = True
+    observer_version: str = "2.0"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -112,6 +164,8 @@ class ConsumedRecord:
     decision: str
     decision_reason: str
     processed_at: str
+    idempotency_key: str = ""
+    payload_sha256: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -122,6 +176,7 @@ class QueuedDirectiveItem:
     directive_id: str
     directive_source_sha: str
     directive_blob_sha: str
+    directive_payload_sha256: str
     accepted_at: str
     queue_state: str = "READY_FOR_FUTURE_EXECUTOR"
     target_project: str = ""
@@ -129,6 +184,9 @@ class QueuedDirectiveItem:
     requires_human_approval: bool = False
     executed: bool = False
     execution_attempts: int = 0
+    readback_verified: bool = False
+    idempotency_key: str = ""
+    signer_identity: str = ""
     directive_payload: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -149,8 +207,10 @@ class DirectiveChannelStatus:
     schema_rejections: int = 0
     auth_rejections: int = 0
     github_errors: int = 0
+    state_conflicts: int = 0
+    toctou_failures: int = 0
     last_error: Optional[str] = None
-    channel_version: str = "1.0.0"
+    channel_version: str = "2.0.0"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
