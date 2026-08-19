@@ -1,9 +1,9 @@
 {
   "timestamp": "2026-08-19T16:04:47.236518+00:00",
-  "code_under_test_sha": "c52f243f6105542b04ac758f72ef9b14e714967e",
-  "certification_source_sha": "c52f243f6105542b04ac758f72ef9b14e714967e",
-  "evidence_commit_sha": null,
-  "evidence_commit_status": "PENDING_COMMIT",
+  "code_under_test_sha": "154688bc1c29c6822dc1a4edfddc474f97a3d610",
+  "certification_source_sha": "154688bc1c29c6822dc1a4edfddc474f97a3d610",
+  "evidence_commit_sha": "6be7d49f4f812082a649bfdfad8ad194032a4e24",
+  "evidence_commit_status": "COMMITTED",
   "tests_collected": 77,
   "tests_passed": 77,
   "tests_failed": 0,
