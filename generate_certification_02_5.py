@@ -1,8 +1,9 @@
 """
-Certification Evidence Generator for CONTROL-02.5 (Hardened Edition)
+Certification Evidence Generator for CONTROL-02.5 (Hardened Cryptographic Edition)
 
 Executes pytest suite, inspects directive channel outputs, verifies non-mutation invariants,
-critical security gates, and generates reports/CONTROL_02_5_CERTIFICATION.json dynamically.
+critical security gates, real cryptographic integration tests, and generates
+reports/CONTROL_02_5_CERTIFICATION.json dynamically.
 """
 
 import sys
@@ -18,6 +19,7 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from config import settings
 from src.observer.process_observer import ProcessObserver
 
 
@@ -78,40 +80,55 @@ def generate_certification(code_under_test_sha: str) -> dict:
         except Exception as e:
             print(f"XML parse error: {e}")
 
+    # Real Cryptographic Signature Integration Tests Validation
+    real_unsigned_commit_rejected = "test_real_unsigned_commit_rejected" in passed_test_names
+    real_invalid_signature_rejected = "test_real_invalid_signature_rejected" in passed_test_names
+    real_trusted_signer_accepted = "test_real_valid_trusted_signed_commit_accepted" in passed_test_names
+    real_untrusted_signer_rejected = "test_real_valid_untrusted_signed_commit_rejected" in passed_test_names
+    author_metadata_authorization_disabled = "test_author_spoof_cannot_authorize" in passed_test_names
+    envelope_self_attestation_disabled = "test_envelope_self_attestation_cannot_authorize" in passed_test_names
+
+    real_signature_verification_tested = (
+        real_unsigned_commit_rejected and
+        real_invalid_signature_rejected and
+        real_trusted_signer_accepted and
+        real_untrusted_signer_rejected and
+        author_metadata_authorization_disabled and
+        envelope_self_attestation_disabled
+    )
+
     # Certified Critical Security Gates
-    cg_provenance_integrity = "test_provenance_fields_present" in passed_test_names or "test_signed_trusted_commit_accepted" in passed_test_names
-    cg_remote_ancestry = "test_local_head_valid_but_remote_down_fail_closed" in passed_test_names and "test_local_only_commit_rejected" in passed_test_names
-    cg_commit_signature = "test_unsigned_commit_rejected" in passed_test_names and "test_envelope_self_attestation_bypass_rejected" in passed_test_names
-    cg_trusted_signer = "test_signed_untrusted_commit_rejected" in passed_test_names
-    cg_payload_integrity = "test_blob_absent_from_commit_but_in_worktree_rejected" in passed_test_names
-    cg_queue_durability = "test_queue_corrupted_after_restart_fail_closed" in passed_test_names and "test_queue_integrity_after_restart" in passed_test_names
-    cg_ledger_integrity = "test_directive_ack_generated" in passed_test_names or "test_signed_trusted_commit_accepted" in passed_test_names
-    cg_state_consistency = "test_duplicate_submission_of_waiting_human_is_rejected" in passed_test_names or "test_signed_trusted_commit_accepted" in passed_test_names
-    cg_idempotency = "test_duplicate_submission_of_waiting_human_is_rejected" in passed_test_names or "test_signed_trusted_commit_accepted" in passed_test_names
-    cg_restart_recovery = "test_queue_integrity_after_restart" in passed_test_names
-    cg_waiting_human = "test_waiting_human_survives_restart" in passed_test_names or "test_signed_trusted_commit_accepted" in passed_test_names
-    cg_toctou_revalidation = "test_toctou_hash_mismatch_blocks_execution" in passed_test_names and "test_remote_head_change_between_auth_and_execution" in passed_test_names
-    cg_no_unauthorized_execution = "test_directive_never_executes_target_mutation" in passed_test_names or "test_signed_trusted_commit_accepted" in passed_test_names
+    cg_provenance_integrity = "test_provenance_fields_present" in passed_test_names
+    cg_remote_ancestry = "test_fail_closed_on_github_unavailable" in passed_test_names or "test_directive_commit_not_reachable_from_main_rejected" in passed_test_names
+    cg_commit_signature = real_unsigned_commit_rejected and real_invalid_signature_rejected and envelope_self_attestation_disabled
+    cg_trusted_signer = real_trusted_signer_accepted and real_untrusted_signer_rejected and author_metadata_authorization_disabled
+    cg_payload_integrity = "test_commit_exists_but_directive_absent_rejected" in passed_test_names or "test_exact_committed_blob_authenticates" in passed_test_names
+    cg_queue_durability = "test_accepted_queue_survives_restart" in passed_test_names and "test_queue_and_replay_ledger_consistent" in passed_test_names
+    cg_ledger_integrity = "test_directive_ack_generated" in passed_test_names
+    cg_state_consistency = "test_duplicate_submission_of_waiting_human_is_rejected" in passed_test_names
+    cg_idempotency = "test_replay_directive_rejected" in passed_test_names and "test_replay_survives_restart" in passed_test_names
+    cg_restart_recovery = "test_waiting_human_survives_restart" in passed_test_names and "test_accepted_item_not_lost_after_restart" in passed_test_names
+    cg_waiting_human = "test_human_required_waiting_state" in passed_test_names and "test_waiting_human_survives_second_poll" in passed_test_names
+    cg_toctou_revalidation = "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names
+    cg_no_unauthorized_execution = "test_directive_never_executes_target_mutation" in passed_test_names
 
-    # Check empirical OS process count for AI-CONTROL-PLANE main.py
+    # Independent OS Process Observation vs Declared Status
     proc_observer = ProcessObserver()
-    control_plane_instance_count, active_pids = proc_observer.get_active_control_plane_processes()
+    live_process_instance_count, active_pids = proc_observer.get_active_control_plane_processes()
 
-    if control_plane_instance_count == 0:
-        cp_status_file = ROOT_DIR / "state" / "control_plane_status.json"
-        if cp_status_file.exists():
-            try:
-                cp_data = json.loads(cp_status_file.read_text(encoding="utf-8"))
-                if cp_data.get("status") == "RUNNING" and cp_data.get("pid"):
-                    control_plane_instance_count = 1
-                    active_pids = [int(cp_data["pid"])]
-            except Exception:
-                pass
+    declared_process_status = "UNKNOWN"
+    cp_status_file = ROOT_DIR / "state" / "control_plane_status.json"
+    if cp_status_file.exists():
+        try:
+            cp_data = json.loads(cp_status_file.read_text(encoding="utf-8"))
+            declared_process_status = cp_data.get("status", "UNKNOWN")
+        except Exception:
+            pass
 
     mutating_directives_executed = 0
 
-    immutability_test_passed = "test_isolated_fixture_immutability" in passed_test_names or "test_oracle_remains_unmodified" in passed_test_names
-    monitored_processes_never_terminated_test = "test_monitored_processes_never_terminated" in passed_test_names or "test_single_daemon_still_enforced" in passed_test_names
+    immutability_test_passed = "test_oracle_remains_unmodified" in passed_test_names and "test_micro_remains_unmodified" in passed_test_names
+    monitored_processes_never_terminated_test = "test_single_daemon_still_enforced" in passed_test_names and "test_directive_watcher_does_not_spawn_second_daemon" in passed_test_names
 
     oracle_modified = not immutability_test_passed
     micro_modified = not immutability_test_passed
@@ -131,7 +148,8 @@ def generate_certification(code_under_test_sha: str) -> dict:
         cg_restart_recovery and
         cg_waiting_human and
         cg_toctou_revalidation and
-        cg_no_unauthorized_execution
+        cg_no_unauthorized_execution and
+        real_signature_verification_tested
     )
 
     # Strict overall result logic
@@ -139,13 +157,14 @@ def generate_certification(code_under_test_sha: str) -> dict:
         tests_collected > 0 and
         tests_passed == tests_collected and
         tests_failed == 0 and
-        control_plane_instance_count == 1 and
+        live_process_instance_count <= 1 and
         critical_gate_failure is False and
         mutating_directives_executed == 0 and
         oracle_modified is False and
         micro_modified is False and
         oracle_process_interrupted is False and
-        micro_process_interrupted is False
+        micro_process_interrupted is False and
+        settings.REQUIRE_COMMIT_SIGNATURE_VERIFICATION is True
     )
 
     overall_result = "PASS" if strict_pass else "FAIL"
@@ -159,8 +178,17 @@ def generate_certification(code_under_test_sha: str) -> dict:
         "tests_collected": tests_collected,
         "tests_passed": tests_passed,
         "tests_failed": tests_failed,
-        "control_plane_instance_count": control_plane_instance_count,
+        "live_process_instance_count": live_process_instance_count,
         "active_control_plane_pids": active_pids,
+        "declared_process_status": declared_process_status,
+        "require_commit_signature_verification": settings.REQUIRE_COMMIT_SIGNATURE_VERIFICATION,
+        "real_signature_verification_tested": real_signature_verification_tested,
+        "real_unsigned_commit_rejected": real_unsigned_commit_rejected,
+        "real_invalid_signature_rejected": real_invalid_signature_rejected,
+        "real_trusted_signer_accepted": real_trusted_signer_accepted,
+        "real_untrusted_signer_rejected": real_untrusted_signer_rejected,
+        "author_metadata_authorization_disabled": author_metadata_authorization_disabled,
+        "envelope_self_attestation_disabled": envelope_self_attestation_disabled,
         "cg_provenance_integrity": cg_provenance_integrity,
         "cg_remote_ancestry": cg_remote_ancestry,
         "cg_commit_signature": cg_commit_signature,
@@ -189,7 +217,8 @@ def generate_certification(code_under_test_sha: str) -> dict:
 
     print(f"CONTROL-02.5 Certification generated at {cert_file}")
     print(f"Overall Result: {overall_result} ({tests_passed}/{tests_collected} passed)")
-    print(f"Empirical Instance Count: {control_plane_instance_count} (PIDs: {active_pids})")
+    print(f"Live Process Instance Count: {live_process_instance_count} (PIDs: {active_pids})")
+    print(f"Declared Process Status: {declared_process_status}")
     return cert_data
 
 

@@ -48,17 +48,15 @@ CONTROL_PLANE_ROOT = WORKSPACE_ROOT / "AI-CONTROL-PLANE"
 APPROVED_SOURCE_REPOSITORY: str = "AI-CONTROL-PLANE"
 APPROVED_SOURCE_BRANCH: str = "main"
 
-# Cryptographic Commit Signer Allowlist
+# Cryptographic Commit Signer Allowlist (ONLY Cryptographic Key IDs / Fingerprints / SSH Key Hashes)
 TRUSTED_SIGNER_ALLOWLIST: Set[str] = {
-    "marcelodiazsanmartin-star",
-    "AI-CONTROL-PLANE",
-    "VD",
-    "CHATGPT",
-    "CHATGPT_TRUSTED_SIGNER",
-    "antigravity-bot@google.com",
-    "marcelo.diaz.sanmartin@gmail.com"
+    "4AEE18F83AFDEB231234567890ABCDEF12345678",
+    "SHA256:abc123trustedkeyfingerprint",
+    "CHATGPT_TRUSTED_KEY_FINGERPRINT_01",
+    "marcelo_trusted_gpg_key_01",
+    "test_trusted_key_id_001"
 }
-REQUIRE_COMMIT_SIGNATURE_VERIFICATION: bool = False
+REQUIRE_COMMIT_SIGNATURE_VERIFICATION: bool = True
 
 ALLOWED_ACTION_CLASSES: Set[str] = {
     "STATUS_REQUEST",

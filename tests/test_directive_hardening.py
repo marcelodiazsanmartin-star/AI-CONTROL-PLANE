@@ -137,7 +137,8 @@ def test_signed_trusted_commit_accepted():
         trusted_branch="main"
     )
 
-    auth.verify_commit_signature = lambda path, sha: (True, True, "marcelodiazsanmartin-star", True)
+    trusted_key = list(settings.TRUSTED_SIGNER_ALLOWLIST)[0]
+    auth.verify_commit_signature = lambda path, sha: (True, True, trusted_key, True)
 
     status, reason, req_human, meta = auth.authenticate(
         payload, envelope, settings.CONTROL_PLANE_ROOT / "directives" / "inbox" / "valid-001.json"
@@ -212,7 +213,8 @@ def test_blob_absent_from_commit_but_in_worktree_rejected(tmp_path):
         trusted_branch="main"
     )
 
-    auth.verify_commit_signature = lambda path, sha: (True, True, "marcelodiazsanmartin-star", True)
+    trusted_key = list(settings.TRUSTED_SIGNER_ALLOWLIST)[0]
+    auth.verify_commit_signature = lambda path, sha: (True, True, trusted_key, True)
 
     status, reason, req_human, meta = auth.authenticate(payload, envelope, worktree_file)
     assert status == ValidationStatus.COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT
@@ -383,7 +385,8 @@ def test_invalid_signature_rejected():
         trusted_branch="main"
     )
 
-    auth.verify_commit_signature = lambda path, sha: (True, False, "marcelodiazsanmartin-star", True)
+    trusted_key = list(settings.TRUSTED_SIGNER_ALLOWLIST)[0]
+    auth.verify_commit_signature = lambda path, sha: (True, False, trusted_key, False)
 
     status, reason, req_human, meta = auth.authenticate(payload, envelope)
     assert status == ValidationStatus.COMMIT_SIGNATURE_INVALID
