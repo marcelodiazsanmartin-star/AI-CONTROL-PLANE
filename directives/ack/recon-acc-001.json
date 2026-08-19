@@ -1,14 +1,14 @@
 {
   "directive_id": "recon-acc-001",
-  "received_at": "2026-08-19T15:51:37.006993+00:00",
-  "source_commit_sha": "1a0634be1fa0867ebef06a0cf7b99ab23880ba78",
+  "received_at": "2026-08-19T16:35:51.727393+00:00",
+  "source_commit_sha": "80eafe427865f188f8026b716d99632f49352ffb",
   "validation_status": "STATE_CONFLICT",
   "decision": "REJECTED",
-  "decision_reason": "STATE_CONFLICT: directive_id recon-acc-001 resubmitted with different payload commit 1a0634b",
+  "decision_reason": "STATE_CONFLICT: directive_id recon-acc-001 resubmitted with different payload commit 80eafe4",
   "human_required": false,
   "queued": false,
   "executed": false,
-  "control_plane_commit_sha": "0ecdcb33576e83a509242bf889e797e5eb578cac",
+  "control_plane_commit_sha": "16e06eec724daac2faa9b1f449d47a1b7648ba51",
   "readback_verified": true,
   "observer_version": "2.0"
 }
