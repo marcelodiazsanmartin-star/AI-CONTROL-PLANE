@@ -25,7 +25,7 @@
       "gc",
       "maintenance"
     ],
-    "observed_at": "2026-08-19T03:45:42.492054+00:00",
+    "observed_at": "2026-08-19T03:50:48.914751+00:00",
     "total_projects_monitored": 2,
     "overall_health": "DEGRADED_STALE"
   },
@@ -61,14 +61,14 @@
       "human_decision_required": false,
       "next_action": null,
       "evidence_freshness": {
-        "sprints/AGENT_STATUS.json": 366106.423036,
-        "sprints/ACTIVE_SPRINT.md": 560364.311029,
-        "environment_validation_report.md": 983894.071317
+        "sprints/AGENT_STATUS.json": 366412.866664,
+        "sprints/ACTIVE_SPRINT.md": 560670.754781,
+        "environment_validation_report.md": 984200.515164
       },
       "status": "STALE",
-      "reason": "Heartbeat age (380564.9s) exceeds project threshold (3600.0s)",
-      "observed_at": "2026-08-19T03:45:44.890816+00:00",
-      "heartbeat_age_seconds": 380564.890816,
+      "reason": "Heartbeat age (380871.3s) exceeds project threshold (3600.0s)",
+      "observed_at": "2026-08-19T03:50:51.334760+00:00",
+      "heartbeat_age_seconds": 380871.33476,
       "last_known_good": "2026-08-14T18:03:00Z",
       "retry_count": 0,
       "human_required": false,
@@ -88,7 +88,7 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "2_RUNTIME_HEARTBEAT",
-      "status_age_seconds": 380564.890816,
+      "status_age_seconds": 380871.33476,
       "observer_errors": [],
       "external_project_activity_detected": false,
       "verified_stage": {
@@ -149,14 +149,14 @@
       "human_decision_required": false,
       "next_action": "CHATGPT_AUDIT_MICRO_00_8",
       "evidence_freshness": {
-        "control/CURRENT_STAGE.json": 53885.705937,
-        "control/PROJECT_STATE.json": 32581.392073,
-        "control/WATCHER_STATE.json": 32947.808704
+        "control/CURRENT_STAGE.json": 54191.958532,
+        "control/PROJECT_STATE.json": 32887.644237,
+        "control/WATCHER_STATE.json": 33254.060473
       },
       "status": "RUNNING",
       "reason": "Active expected process running (watcher)",
-      "observed_at": "2026-08-19T03:45:47.458648+00:00",
-      "heartbeat_age_seconds": 32581.393536,
+      "observed_at": "2026-08-19T03:50:53.710209+00:00",
+      "heartbeat_age_seconds": 32887.645097,
       "last_known_good": "2026-08-18T18:42:46.065112+00:00",
       "retry_count": 0,
       "human_required": false,
@@ -180,7 +180,7 @@
         "5_STATIC_DECLARED_STATUS"
       ],
       "status_source": "1_LOCAL_PROCESS_OBSERVATION",
-      "status_age_seconds": 32581.393536,
+      "status_age_seconds": 32887.645097,
       "observer_errors": [],
       "external_project_activity_detected": true,
       "verified_stage": {
