@@ -75,6 +75,8 @@ class DirectivePayload:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "DirectivePayload":
+        if "payload_object" in d and isinstance(d["payload_object"], dict):
+            d = d["payload_object"]
         return cls(
             directive_version=str(d.get("directive_version", "")),
             directive_id=str(d.get("directive_id", "")),
@@ -96,7 +98,6 @@ class DirectivePayload:
         )
 
 
-# Backward compatibility alias
 Directive = DirectivePayload
 
 
@@ -122,6 +123,8 @@ class DirectiveEnvelope:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "DirectiveEnvelope":
+        if "envelope" in d and isinstance(d["envelope"], dict):
+            d = d["envelope"]
         return cls(
             directive_id=str(d.get("directive_id", "")),
             payload_commit_sha=str(d.get("payload_commit_sha", d.get("source_commit_sha", ""))),

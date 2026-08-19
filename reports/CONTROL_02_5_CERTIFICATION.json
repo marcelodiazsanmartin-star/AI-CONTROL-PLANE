@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-08-19T14:11:07.833157+00:00",
-  "code_under_test_sha": "44d5f9cca532acb94ad2db76cd0e3080c59115cb",
-  "certification_source_sha": "44d5f9cca532acb94ad2db76cd0e3080c59115cb",
+  "timestamp": "2026-08-19T14:14:18.073707+00:00",
+  "code_under_test_sha": "003c45e2e7af4a60490a0ebc2749212e40f2860d",
+  "certification_source_sha": "003c45e2e7af4a60490a0ebc2749212e40f2860d",
   "evidence_commit_sha": null,
   "evidence_commit_status": "PENDING_COMMIT",
   "tests_collected": 82,
-  "tests_passed": 81,
-  "tests_failed": 1,
+  "tests_passed": 82,
+  "tests_failed": 0,
   "control_plane_instance_count": 1,
   "active_control_plane_pids": [
     12264
@@ -30,5 +30,5 @@
   "micro_modified": false,
   "oracle_process_interrupted": false,
   "micro_process_interrupted": false,
-  "overall_result": "FAIL"
+  "overall_result": "PASS"
 }

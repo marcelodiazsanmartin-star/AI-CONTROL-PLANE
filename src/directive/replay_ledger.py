@@ -18,10 +18,12 @@ class ReplayLedger:
         self.ledger_file = ledger_file_path or (settings.CONTROL_PLANE_ROOT / "directives" / "runtime" / "consumed_directives.jsonl")
         self.ledger_file.parent.mkdir(parents=True, exist_ok=True)
         self.consumed_ids: Set[str] = set()
+        self.consumed_records: Dict[str, ConsumedRecord] = {}
         self._load_ledger()
 
     def _load_ledger(self):
         self.consumed_ids.clear()
+        self.consumed_records.clear()
         if self.ledger_file.exists():
             try:
                 with open(self.ledger_file, "r", encoding="utf-8") as f:
@@ -29,10 +31,19 @@ class ReplayLedger:
                         line_str = line.strip()
                         if line_str:
                             try:
-                                record = json.loads(line_str)
-                                d_id = record.get("directive_id")
+                                record_data = json.loads(line_str)
+                                d_id = record_data.get("directive_id")
                                 if d_id:
+                                    rec = ConsumedRecord(
+                                        directive_id=d_id,
+                                        source_commit_sha=record_data.get("source_commit_sha", ""),
+                                        first_seen_at=record_data.get("first_seen_at", ""),
+                                        decision=record_data.get("decision", ""),
+                                        decision_reason=record_data.get("decision_reason", ""),
+                                        processed_at=record_data.get("processed_at", "")
+                                    )
                                     self.consumed_ids.add(d_id)
+                                    self.consumed_records[d_id] = rec
                             except Exception:
                                 pass
             except Exception:
@@ -40,6 +51,9 @@ class ReplayLedger:
 
     def is_consumed(self, directive_id: str) -> bool:
         return directive_id in self.consumed_ids
+
+    def get_consumed_record(self, directive_id: str) -> Optional[ConsumedRecord]:
+        return self.consumed_records.get(directive_id)
 
     def record_consumption(
         self,
@@ -59,6 +73,7 @@ class ReplayLedger:
         )
 
         self.consumed_ids.add(directive_id)
+        self.consumed_records[directive_id] = record
 
         try:
             with open(self.ledger_file, "a", encoding="utf-8") as f:

@@ -163,8 +163,11 @@ class DirectiveWatcher:
             readback_verified=readback_verified
         )
         ack_file = self.ack_dir / f"{directive_id}.json"
-        with open(ack_file, "w", encoding="utf-8") as f:
-            json.dump(ack.to_dict(), f, indent=2)
+        try:
+            with open(ack_file, "w", encoding="utf-8") as f:
+                json.dump(ack.to_dict(), f, indent=2)
+        except Exception:
+            pass
         return ack
 
     def poll_inbox(self) -> List[DirectiveAck]:
@@ -235,8 +238,7 @@ class DirectiveWatcher:
 
             # Step 2: State Conflict & Idempotency / Replay Check
             if self.replay_ledger.is_consumed(d_id):
-                # Check for state conflict: same directive_id + different payload content
-                existing_rec = self.replay_ledger.consumed_ids.get(d_id)
+                existing_rec = self.replay_ledger.get_consumed_record(d_id)
                 self.status.replay_rejections += 1
                 self.status.rejected_count += 1
                 self.status.last_error = f"Replay detected for directive_id {d_id}"

@@ -51,7 +51,7 @@ class PreExecutionRevalidator:
         val_status, val_reason, req_human, auth_meta = self.authenticator.authenticate(payload, envelope)
 
         if val_status != ValidationStatus.AUTHENTIC and not req_human:
-            return False, ValidationStatus.TOCTOU_REVALIDATION_FAILED, f"TOCTOU_REVALIDATION_FAILED: {val_reason}", auth_metadata
+            return False, ValidationStatus.TOCTOU_REVALIDATION_FAILED, f"TOCTOU_REVALIDATION_FAILED: {val_reason}", auth_meta
 
         # 4. Verify exact blob sha256 equality against queued sha256
         live_sha256 = auth_meta.get("payload_sha256", "")
