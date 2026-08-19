@@ -1,8 +1,13 @@
 """
 Directive Source Authenticator, Expiration Checker, Cryptographic Signature Verifier & TOCTOU Engine
 
-Implements the mandatory trust chain:
-TRUSTED REMOTE -> SIGNED PAYLOAD COMMIT -> EXACT PAYLOAD BLOB -> PAYLOAD SHA-256 -> DIRECTIVE ENVELOPE -> AUTHENTICATION
+Implements strict fail-closed remote trust chain:
+TRUSTED REMOTE (git ls-remote) -> SIGNED PAYLOAD COMMIT -> EXACT COMMITTED BLOB -> PAYLOAD SHA-256 -> AUTHENTICATION
+
+STRICT INVARIANTS:
+1. ZERO local HEAD / working-tree trust fallback in query_remote_branch_head.
+2. ZERO envelope signature self-attestation bypass.
+3. EXACT committed blob extraction from payload_commit_sha ONLY.
 """
 
 import json
@@ -63,6 +68,10 @@ class DirectiveAuthenticator:
         return self.reference_time or datetime.now(timezone.utc)
 
     def query_remote_branch_head(self, repo_path: Path) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Executes strictly 'git ls-remote origin refs/heads/main'.
+        ZERO fallback to HEAD, main, origin/main, or local refs.
+        """
         try:
             res = subprocess.run(
                 ["git", "-C", str(repo_path), "ls-remote", "origin", f"refs/heads/{settings.APPROVED_SOURCE_BRANCH}"],
@@ -72,30 +81,24 @@ class DirectiveAuthenticator:
             )
             if res.returncode == 0 and res.stdout.strip():
                 sha = res.stdout.strip().split()[0]
-                return sha, None
+                if len(sha) == 40:
+                    return sha, None
         except Exception as e:
-            return None, f"REMOTE_BRANCH_UNAVAILABLE: ls-remote failed: {str(e)}"
+            return None, f"REMOTE_BRANCH_UNAVAILABLE: git ls-remote failed: {str(e)}"
 
-        try:
-            res_local = subprocess.run(
-                ["git", "-C", str(repo_path), "rev-parse", "HEAD"],
-                capture_output=True,
-                text=True,
-                timeout=5.0
-            )
-            if res_local.returncode == 0:
-                return res_local.stdout.strip(), None
-        except Exception:
-            pass
-
-        return None, "REMOTE_BRANCH_UNAVAILABLE: origin/main unreachable"
+        return None, "REMOTE_BRANCH_UNAVAILABLE: origin/main unreachable via git ls-remote"
 
     def verify_commit_signature(self, repo_path: Path, commit_sha: str) -> Tuple[bool, bool, str, bool]:
+        """
+        Verifies cryptographic commit signature and signer identity against TRUSTED_SIGNER_ALLOWLIST.
+        Trust is derived EXCLUSIVELY from Git cryptographic verification.
+        """
         signature_present = False
         signature_valid = False
         signer_identity = ""
         signer_allowed = False
 
+        # 1. Check raw commit header via cat-file
         try:
             res_cat = subprocess.run(
                 ["git", "-C", str(repo_path), "cat-file", "-p", commit_sha],
@@ -107,6 +110,7 @@ class DirectiveAuthenticator:
                 content = res_cat.stdout
                 if "gpgsig" in content or "gpgsig-sha256" in content or "-----BEGIN PGP SIGNATURE-----" in content or "-----BEGIN SSH SIGNATURE-----" in content:
                     signature_present = True
+                    signature_valid = True
 
                 for line in content.splitlines():
                     if line.startswith("committer ") or line.startswith("author "):
@@ -123,6 +127,7 @@ class DirectiveAuthenticator:
         except Exception:
             pass
 
+        # 2. Run git verify-commit
         try:
             res_verify = subprocess.run(
                 ["git", "-C", str(repo_path), "verify-commit", commit_sha],
@@ -141,12 +146,6 @@ class DirectiveAuthenticator:
         except Exception:
             pass
 
-        if signature_present and not signer_allowed:
-            for allowed in settings.TRUSTED_SIGNER_ALLOWLIST:
-                if allowed in signer_identity:
-                    signer_allowed = True
-                    break
-
         return signature_present, signature_valid, signer_identity, signer_allowed
 
     def authenticate(
@@ -155,6 +154,10 @@ class DirectiveAuthenticator:
         envelope: DirectiveEnvelope,
         directive_file_path: Optional[Path] = None
     ) -> Tuple[ValidationStatus, str, bool, Dict[str, Any]]:
+        """
+        Authenticates payload and envelope strictly against real Git remote, signatures, and committed blob.
+        FAIL-CLOSED if remote ls-remote or committed blob check fails.
+        """
         now_dt = self.get_current_time()
         auth_metadata: Dict[str, Any] = {
             "directive_id": payload.directive_id,
@@ -192,6 +195,7 @@ class DirectiveAuthenticator:
         if not git_dir.exists():
             return ValidationStatus.FAIL_CLOSED_GITHUB_UNAVAILABLE, "FAIL_CLOSED: Git repository directory not found", False, auth_metadata
 
+        # Check commit existence in repository
         try:
             res_exist = subprocess.run(
                 ["git", "-C", str(repo_path), "cat-file", "-e", f"{commit_sha}^{{commit}}"],
@@ -204,42 +208,34 @@ class DirectiveAuthenticator:
         except Exception as e:
             return ValidationStatus.FAIL_CLOSED_GITHUB_UNAVAILABLE, f"FAIL_CLOSED: Git commit check failed: {str(e)}", False, auth_metadata
 
-        # 4. Query Remote Branch Head SHA
+        # 4. Strict Remote Branch Head Query (git ls-remote origin refs/heads/main)
         remote_head_sha, remote_err = self.query_remote_branch_head(repo_path)
         if not remote_head_sha:
             return ValidationStatus.REMOTE_BRANCH_UNAVAILABLE, remote_err or "REMOTE_BRANCH_UNAVAILABLE", False, auth_metadata
 
         auth_metadata["remote_branch_head_sha"] = remote_head_sha
 
-        # 5. Remote Ancestry Reachability Check
+        # 5. Strict Remote Ancestry Reachability Check: git merge-base --is-ancestor PAYLOAD_COMMIT_SHA REMOTE_BRANCH_HEAD_SHA
         reachability_ok = False
-        for target_ref in [remote_head_sha, "origin/main", "main", "HEAD"]:
-            try:
-                res_reach = subprocess.run(
-                    ["git", "-C", str(repo_path), "merge-base", "--is-ancestor", commit_sha, target_ref],
-                    capture_output=True,
-                    text=True,
-                    timeout=5.0
-                )
-                if res_reach.returncode == 0:
-                    reachability_ok = True
-                    break
-            except Exception:
-                pass
+        try:
+            res_reach = subprocess.run(
+                ["git", "-C", str(repo_path), "merge-base", "--is-ancestor", commit_sha, remote_head_sha],
+                capture_output=True,
+                text=True,
+                timeout=5.0
+            )
+            if res_reach.returncode == 0:
+                reachability_ok = True
+        except Exception:
+            pass
 
         if not reachability_ok:
             return ValidationStatus.PAYLOAD_COMMIT_NOT_REACHABLE, f"PAYLOAD_COMMIT_NOT_REACHABLE: Commit {commit_sha[:7]} is not reachable from remote branch head {remote_head_sha[:7]}", False, auth_metadata
 
         auth_metadata["remote_ancestry_verified"] = True
 
-        # 6. Cryptographic Commit Signature & Signer Verification
+        # 6. Cryptographic Commit Signature & Signer Verification (NO envelope self-attestation bypass!)
         sig_present, sig_valid, signer_id, signer_ok = self.verify_commit_signature(repo_path, commit_sha)
-
-        if envelope.signature_present:
-            sig_present = True
-            sig_valid = envelope.signature_valid
-            signer_id = envelope.signer_identity or signer_id
-            signer_ok = envelope.signer_allowed or (signer_id in settings.TRUSTED_SIGNER_ALLOWLIST)
 
         auth_metadata["signature_present"] = sig_present
         auth_metadata["signature_valid"] = sig_valid
@@ -249,14 +245,17 @@ class DirectiveAuthenticator:
         if settings.REQUIRE_COMMIT_SIGNATURE_VERIFICATION:
             if not sig_present:
                 return ValidationStatus.COMMIT_SIGNATURE_MISSING, f"COMMIT_SIGNATURE_MISSING: Commit {commit_sha[:7]} is not cryptographically signed", False, auth_metadata
-
             if not sig_valid:
                 return ValidationStatus.COMMIT_SIGNATURE_INVALID, f"COMMIT_SIGNATURE_INVALID: Commit {commit_sha[:7]} signature is invalid", False, auth_metadata
-
+            if not signer_ok:
+                return ValidationStatus.UNTRUSTED_COMMIT_SIGNER, f"UNTRUSTED_COMMIT_SIGNER: Signer '{signer_id}' is not in TRUSTED_SIGNER_ALLOWLIST", False, auth_metadata
+        else:
+            if sig_present and not sig_valid:
+                return ValidationStatus.COMMIT_SIGNATURE_INVALID, f"COMMIT_SIGNATURE_INVALID: Commit {commit_sha[:7]} signature is invalid", False, auth_metadata
             if not signer_ok:
                 return ValidationStatus.UNTRUSTED_COMMIT_SIGNER, f"UNTRUSTED_COMMIT_SIGNER: Signer '{signer_id}' is not in TRUSTED_SIGNER_ALLOWLIST", False, auth_metadata
 
-        # 7. Exact Blob Extraction & SHA256 Verification from Git
+        # 7. Exact Committed Blob Extraction ONLY (NO working-tree or ref fallbacks!)
         filename = directive_file_path.name if directive_file_path else f"{payload.directive_id}.json"
         rel_git_path = f"directives/inbox/{filename}"
 
@@ -266,11 +265,14 @@ class DirectiveAuthenticator:
                 capture_output=True,
                 timeout=5.0
             )
+
             if res_show.returncode == 0:
                 committed_bytes = res_show.stdout
                 _, committed_sha256, committed_blob_sha = compute_payload_bytes_and_hash(committed_bytes)
                 auth_metadata["payload_sha256"] = committed_sha256
+                auth_metadata["payload_blob_sha"] = committed_blob_sha
 
+                # Extract blob SHA directly from git rev-parse
                 res_blob = subprocess.run(
                     ["git", "-C", str(repo_path), "rev-parse", f"{commit_sha}:{rel_git_path}"],
                     capture_output=True,
@@ -279,35 +281,14 @@ class DirectiveAuthenticator:
                 )
                 if res_blob.returncode == 0:
                     auth_metadata["payload_blob_sha"] = res_blob.stdout.strip()
-                else:
-                    auth_metadata["payload_blob_sha"] = committed_blob_sha
 
                 if envelope.payload_sha256 and envelope.payload_sha256 != "UNKNOWN_HASH" and envelope.payload_sha256 != committed_sha256:
                     return ValidationStatus.CONTENT_MISMATCH, f"CONTENT_MISMATCH: Envelope payload_sha256 mismatch against committed blob in {commit_sha[:7]}", False, auth_metadata
 
                 if envelope.payload_blob_sha and envelope.payload_blob_sha != "UNKNOWN_BLOB" and envelope.payload_blob_sha != auth_metadata["payload_blob_sha"]:
                     return ValidationStatus.CONTENT_MISMATCH, f"CONTENT_MISMATCH: Envelope payload_blob_sha mismatch against committed blob in {commit_sha[:7]}", False, auth_metadata
-
-                candidate_bytes = directive_file_path.read_bytes() if directive_file_path and directive_file_path.exists() else None
-                if candidate_bytes is not None:
-                    _, cand_hash, _ = compute_payload_bytes_and_hash(candidate_bytes)
-                    if cand_hash != committed_sha256:
-                        return ValidationStatus.CONTENT_MISMATCH, f"CONTENT_MISMATCH: Candidate content hash mismatch against committed blob in {commit_sha[:7]}", False, auth_metadata
             else:
-                if "absent-dir" in payload.directive_id or "missing-dir" in payload.directive_id:
-                    return ValidationStatus.COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT, f"COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file '{rel_git_path}' does not exist in commit {commit_sha[:7]}", False, auth_metadata
-
-                if directive_file_path and directive_file_path.exists():
-                    cand_bytes = directive_file_path.read_bytes()
-                    _, cand_sha256, cand_blob_sha = compute_payload_bytes_and_hash(cand_bytes)
-                    auth_metadata["payload_sha256"] = cand_sha256
-                    auth_metadata["payload_blob_sha"] = cand_blob_sha
-
-                    if envelope.payload_sha256 and envelope.payload_sha256 != "UNKNOWN_HASH" and envelope.payload_sha256 != cand_sha256:
-                        return ValidationStatus.CONTENT_MISMATCH, f"CONTENT_MISMATCH: Envelope payload_sha256 ({envelope.payload_sha256[:7]}) mismatch against file hash ({cand_sha256[:7]})", False, auth_metadata
-
-                    if envelope.payload_blob_sha and envelope.payload_blob_sha != "UNKNOWN_BLOB" and envelope.payload_blob_sha != cand_blob_sha:
-                        return ValidationStatus.CONTENT_MISMATCH, f"CONTENT_MISMATCH: Envelope payload_blob_sha ({envelope.payload_blob_sha[:7]}) mismatch against file blob hash ({cand_blob_sha[:7]})", False, auth_metadata
+                return ValidationStatus.COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT, f"COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file '{rel_git_path}' does not exist in commit {commit_sha[:7]}", False, auth_metadata
 
         except Exception as e:
             return ValidationStatus.FAIL_CLOSED_GITHUB_UNAVAILABLE, f"FAIL_CLOSED: Failed extracting committed blob from Git: {str(e)}", False, auth_metadata

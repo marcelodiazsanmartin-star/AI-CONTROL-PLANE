@@ -56,7 +56,7 @@ class PreExecutionRevalidator:
         # 4. Verify exact blob sha256 equality against queued sha256
         live_sha256 = auth_meta.get("payload_sha256", "")
         if live_sha256 and queued_item.directive_payload_sha256 and live_sha256 != queued_item.directive_payload_sha256:
-            return False, ValidationStatus.TOCTOU_REVALIDATION_FAILED, f"TOCTOU_REVALIDATION_FAILED: Live blob SHA256 ({live_sha256[:7]}) mismatch against queued record ({queued_item.directive_payload_sha256[:7]})", auth_metadata
+            return False, ValidationStatus.TOCTOU_REVALIDATION_FAILED, f"TOCTOU_REVALIDATION_FAILED: Live blob SHA256 ({live_sha256[:7]}) mismatch against queued record ({queued_item.directive_payload_sha256[:7]})", auth_meta
 
         # 5. Check Safety Enforcement Settings
         if not settings.CONTROL_PLANE_EXECUTE_MUTATING_DIRECTIVES:
