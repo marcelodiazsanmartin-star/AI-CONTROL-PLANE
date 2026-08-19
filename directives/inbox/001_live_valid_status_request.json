@@ -11,7 +11,7 @@
   "issued_by": "CHATGPT",
   "source_repository": "AI-CONTROL-PLANE",
   "source_branch": "main",
-  "source_commit_sha": "PENDING_COMMIT_SHA",
+  "source_commit_sha": "12a4850937a075306acacae3be18fa2fdd728cc5",
   "requires_human_approval": false,
   "allowed_scope": [
     "READ",
