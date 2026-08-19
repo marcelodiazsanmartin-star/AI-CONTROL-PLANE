@@ -1,13 +1,13 @@
 {
   "directive_id": "live-malicious-real-money-002",
-  "received_at": "2026-08-19T12:48:27.338537+00:00",
-  "source_commit_sha": "12a4850937a075306acacae3be18fa2fdd728cc5",
+  "received_at": "2026-08-19T13:00:22.190435+00:00",
+  "source_commit_sha": "de88e2a7c47302f97e9fba62c7370d88ecf49161",
   "validation_status": "REPLAY_DETECTED",
   "decision": "REJECTED",
   "decision_reason": "REPLAY_DETECTED: Directive live-malicious-real-money-002 has already been processed",
   "human_required": false,
   "queued": false,
   "executed": false,
-  "control_plane_commit_sha": "de88e2a7c47302f97e9fba62c7370d88ecf49161",
+  "control_plane_commit_sha": "a397b2ed2c6e1b74a1bf5bb83e978c63755611b1",
   "observer_version": "1.0.0"
 }

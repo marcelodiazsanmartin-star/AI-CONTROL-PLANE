@@ -11,7 +11,7 @@
   "issued_by": "ATTACKER",
   "source_repository": "AI-CONTROL-PLANE",
   "source_branch": "main",
-  "source_commit_sha": "12a4850937a075306acacae3be18fa2fdd728cc5",
+  "source_commit_sha": "de88e2a7c47302f97e9fba62c7370d88ecf49161",
   "requires_human_approval": false,
   "allowed_scope": [
     "MUTATE",
