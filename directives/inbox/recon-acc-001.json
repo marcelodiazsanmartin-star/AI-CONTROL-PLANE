@@ -11,7 +11,7 @@
   "issued_by": "CHATGPT",
   "source_repository": "AI-CONTROL-PLANE",
   "source_branch": "main",
-  "source_commit_sha": "WILL_BE_UPDATED",
+  "source_commit_sha": "80eafe427865f188f8026b716d99632f49352ffb",
   "requires_human_approval": false,
   "allowed_scope": [
     "READ",
@@ -25,7 +25,7 @@
   "payload": {},
   "envelope": {
     "directive_id": "recon-acc-001",
-    "payload_commit_sha": "WILL_BE_UPDATED",
+    "payload_commit_sha": "80eafe427865f188f8026b716d99632f49352ffb",
     "payload_blob_sha": "UNKNOWN_BLOB",
     "payload_sha256": "UNKNOWN_HASH",
     "trusted_remote": "AI-CONTROL-PLANE",
