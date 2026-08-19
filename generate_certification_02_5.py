@@ -330,8 +330,11 @@ def generate_certification(
     mutating_directives_executed = exec_rec["mutating_directives_executed"]
 
     # Step 8: Direct Monitored Repository Cleanliness Observation
-    oracle_worktree_clean = check_git_worktree_clean(settings.WORKSPACE_ROOT / "ORACLE-AI")
-    micro_worktree_clean = check_git_worktree_clean(settings.WORKSPACE_ROOT / "MICRO-MARKET-ORACLE")
+    oracle_root = settings.REGISTERED_PROJECTS.get("ORACLE-AI", {}).get("root_path", settings.WORKSPACE_ROOT / "Oracle")
+    micro_root = settings.REGISTERED_PROJECTS.get("MICRO-MARKET-ORACLE", {}).get("root_path", settings.WORKSPACE_ROOT / "MICRO-MARKET-ORACLE")
+
+    oracle_worktree_clean = check_git_worktree_clean(oracle_root)
+    micro_worktree_clean = check_git_worktree_clean(micro_root)
 
     # Step 9: Process Observation
     proc_observer = ProcessObserver()
