@@ -1,0 +1,14 @@
+{
+  "directive_id": "sample_directive",
+  "received_at": "2026-08-19T15:08:10.496319+00:00",
+  "source_commit_sha": "5a5e430eaa3ab945b0611f397a27d28973f3483e",
+  "validation_status": "COMMIT_SIGNATURE_MISSING",
+  "decision": "REJECTED",
+  "decision_reason": "COMMIT_SIGNATURE_MISSING: Commit 5a5e430 is not cryptographically signed",
+  "human_required": false,
+  "queued": false,
+  "executed": false,
+  "control_plane_commit_sha": "b14db05ab1eee156cfcb394c3b04068a9c56961f",
+  "readback_verified": true,
+  "observer_version": "2.0"
+}
