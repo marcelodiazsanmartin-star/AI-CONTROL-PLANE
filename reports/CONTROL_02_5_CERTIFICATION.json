@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-08-19T16:40:21.194760+00:00",
-  "code_under_test_sha": "c96f9ccd2b5723317cceaeeef59ce35772d9114d",
-  "certification_source_sha": "c96f9ccd2b5723317cceaeeef59ce35772d9114d",
+  "timestamp": "2026-08-19T16:44:33.655115+00:00",
+  "code_under_test_sha": "e8c2bce85f726480e6bab9eef62fa70f4f1c587a",
+  "certification_source_sha": "e8c2bce85f726480e6bab9eef62fa70f4f1c587a",
   "evidence_commit_sha": null,
   "evidence_commit_status": "PENDING_COMMIT",
   "tests_collected": 83,
-  "tests_passed": 64,
-  "tests_failed": 19,
+  "tests_passed": 56,
+  "tests_failed": 27,
   "control_plane_instance_count": 1,
   "active_control_plane_pids": [
     12264
@@ -18,8 +18,8 @@
   "cg_payload_integrity": true,
   "cg_queue_durability": true,
   "cg_ledger_integrity": false,
-  "cg_state_consistency": true,
-  "cg_idempotency": true,
+  "cg_state_consistency": false,
+  "cg_idempotency": false,
   "cg_restart_recovery": true,
   "cg_waiting_human": false,
   "cg_toctou_revalidation": true,
