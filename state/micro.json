@@ -20,14 +20,14 @@
   "human_decision_required": false,
   "next_action": "CHATGPT_AUDIT_MICRO_00_8",
   "evidence_freshness": {
-    "control/CURRENT_STAGE.json": 96004.450723,
-    "control/PROJECT_STATE.json": 74700.137105,
-    "control/WATCHER_STATE.json": 75066.554031
+    "control/CURRENT_STAGE.json": 96018.927084,
+    "control/PROJECT_STATE.json": 74714.613205,
+    "control/WATCHER_STATE.json": 75081.029913
   },
   "status": "RUNNING",
   "reason": "Active expected process running (watcher)",
-  "observed_at": "2026-08-19T15:27:46.204338+00:00",
-  "heartbeat_age_seconds": 74700.139226,
+  "observed_at": "2026-08-19T15:28:00.679897+00:00",
+  "heartbeat_age_seconds": 74714.614785,
   "last_known_good": "2026-08-18T18:42:46.065112+00:00",
   "retry_count": 0,
   "human_required": false,
@@ -51,7 +51,7 @@
     "5_STATIC_DECLARED_STATUS"
   ],
   "status_source": "1_LOCAL_PROCESS_OBSERVATION",
-  "status_age_seconds": 74700.139226,
+  "status_age_seconds": 74714.614785,
   "observer_errors": [],
   "external_project_activity_detected": true,
   "verified_stage": {
