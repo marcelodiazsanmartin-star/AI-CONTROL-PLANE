@@ -1,0 +1,14 @@
+{
+  "directive_id": "human-restart-001",
+  "received_at": "2026-08-19T15:13:31.830026+00:00",
+  "source_commit_sha": "57f345906dc9bef8f24d20d400c1ce869a727dda",
+  "validation_status": "COMMIT_SIGNATURE_MISSING",
+  "decision": "REJECTED",
+  "decision_reason": "COMMIT_SIGNATURE_MISSING: Commit 57f3459 is not cryptographically signed",
+  "human_required": false,
+  "queued": false,
+  "executed": false,
+  "control_plane_commit_sha": "0272e4891f035cdc446966562fdaee436e266d6a",
+  "readback_verified": true,
+  "observer_version": "2.0"
+}
