@@ -1,14 +1,14 @@
 {
   "directive_id": "destruct-001",
-  "received_at": "2026-08-19T15:13:14.982296+00:00",
-  "source_commit_sha": "57f345906dc9bef8f24d20d400c1ce869a727dda",
-  "validation_status": "COMMIT_SIGNATURE_MISSING",
+  "received_at": "2026-08-19T15:51:35.958626+00:00",
+  "source_commit_sha": "1a0634be1fa0867ebef06a0cf7b99ab23880ba78",
+  "validation_status": "STATE_CONFLICT",
   "decision": "REJECTED",
-  "decision_reason": "COMMIT_SIGNATURE_MISSING: Commit 57f3459 is not cryptographically signed",
+  "decision_reason": "STATE_CONFLICT: directive_id destruct-001 resubmitted with different payload commit 1a0634b",
   "human_required": false,
   "queued": false,
   "executed": false,
-  "control_plane_commit_sha": "0272e4891f035cdc446966562fdaee436e266d6a",
+  "control_plane_commit_sha": "0ecdcb33576e83a509242bf889e797e5eb578cac",
   "readback_verified": true,
   "observer_version": "2.0"
 }
