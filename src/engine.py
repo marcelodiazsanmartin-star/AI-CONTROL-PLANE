@@ -172,7 +172,7 @@ class ControlPlaneEngine:
         try:
             # Stage only control plane state, directives, audit, and reports
             subprocess.run(
-                ["git", "add", "state/", "directives/", "audit/", "reports/"],
+                ["git", "add", "state/", "directives/runtime/", "directives/acks/", "directives/inbox/", "audit/", "reports/"],
                 cwd=str(cp_root),
                 capture_output=True,
                 text=True,
