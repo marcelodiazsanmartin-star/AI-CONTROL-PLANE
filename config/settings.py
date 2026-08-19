@@ -50,8 +50,7 @@ APPROVED_SOURCE_BRANCH: str = "main"
 
 # Cryptographic Commit Signer Allowlist (Production Invariant: ONLY Valid Verified Key Fingerprints / Hashes)
 PRODUCTION_TRUSTED_SIGNER_ALLOWLIST: Set[str] = {
-    "SHA256:7b60e5ef7781b0a8863f68c5b8b0e7740e53a2ef93",
-    "4AEE18F83AFDEB231234567890ABCDEF12345678"
+    "SHA256:zYZi3+VxKz9ve+PJgTS2o8q+dvXSmzCwPZ2G3NYh41A"
 }
 
 # Runtime allowlist (Initialized from production allowlist; test fixtures inject ephemeral test keys via isolated config)

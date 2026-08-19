@@ -1,9 +1,10 @@
 """
-Real Cryptographic Integration Tests for CONTROL-02.5 (Round 2 Hardened)
+Real Cryptographic Integration Tests for CONTROL-02.5 (Round 3 Hardened)
 
 Uses native Git SSH commit signing with ephemeral ED25519 keys generated per test suite.
 ZERO monkeypatching of DirectiveAuthenticator.verify_commit_signature().
 ZERO monkeypatching of subprocess.run() for Git verification.
+Generates fresh reports/crypto_test_evidence.json bound to environment CERTIFICATION_RUN_ID.
 """
 
 import os
@@ -20,6 +21,9 @@ from src.directive.contracts import (
     DirectivePayload, DirectiveEnvelope, ValidationStatus
 )
 from src.directive.authenticator import DirectiveAuthenticator
+
+# Global container for evidence cases
+CRYPTO_EVIDENCE_CASES = {}
 
 
 def get_ssh_keygen_bin() -> str:
@@ -205,6 +209,35 @@ def create_real_signed_directive_commit(
     return repo, final_sha, payload, envelope, directive_file
 
 
+def _record_evidence_case(case_name: str, repo: Path, commit_sha: str, fingerprint: str = None, expected_returncode: int = 0):
+    CRYPTO_EVIDENCE_CASES[case_name] = {
+        "repo_path": str(repo),
+        "commit_sha": commit_sha,
+        "fingerprint": fingerprint,
+        "expected_verify_returncode": expected_returncode
+    }
+    _write_fresh_crypto_evidence_file()
+
+
+def _write_fresh_crypto_evidence_file():
+    reports_dir = settings.CONTROL_PLANE_ROOT / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    evidence_file = reports_dir / "crypto_test_evidence.json"
+
+    run_id = os.environ.get("CERTIFICATION_RUN_ID", "DEV_SESSION_LOCAL_RUN")
+    gen_time = os.environ.get("CERTIFICATION_STARTED_AT", datetime.now(timezone.utc).isoformat())
+
+    evidence_data = {
+        "certification_run_id": run_id,
+        "generated_at": gen_time,
+        "backend": "SSH",
+        "cases": CRYPTO_EVIDENCE_CASES
+    }
+
+    with open(evidence_file, "w", encoding="utf-8") as f:
+        json.dump(evidence_data, f, indent=2)
+
+
 # REQUIRED REAL TEST A: REAL_UNSIGNED_COMMIT_REJECTED
 def test_real_unsigned_commit_rejected(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "REQUIRE_COMMIT_SIGNATURE_VERIFICATION", True)
@@ -212,6 +245,8 @@ def test_real_unsigned_commit_rejected(tmp_path, monkeypatch):
     repo, commit_sha, payload, envelope, directive_file = create_real_signed_directive_commit(
         repo, "unsigned-real-001", signed=False
     )
+
+    _record_evidence_case("unsigned", repo, commit_sha, expected_returncode=1)
 
     auth = DirectiveAuthenticator(repo_root=repo)
     auth.query_remote_branch_head = lambda path: (commit_sha, None)
@@ -233,7 +268,8 @@ def test_real_valid_trusted_signed_commit_accepted(tmp_path, monkeypatch):
         repo, "valid-trusted-001", signed=True, use_key_file=trusted_key
     )
 
-    # Add trusted_fp to isolated runtime allowlist
+    _record_evidence_case("trusted_signed", repo, commit_sha, fingerprint=trusted_fp, expected_returncode=0)
+
     monkeypatch.setattr(settings, "TRUSTED_SIGNER_ALLOWLIST", {trusted_fp, "test@example.com"})
 
     auth = DirectiveAuthenticator(repo_root=repo)
@@ -252,12 +288,12 @@ def test_real_valid_untrusted_signed_commit_rejected(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "REQUIRE_COMMIT_SIGNATURE_VERIFICATION", True)
     repo, trusted_key, untrusted_key, trusted_fp, untrusted_fp = setup_crypto_test_repo(tmp_path)
 
-    # Sign with untrusted_key
     repo, commit_sha, payload, envelope, directive_file = create_real_signed_directive_commit(
         repo, "valid-untrusted-001", signed=True, use_key_file=untrusted_key
     )
 
-    # Set allowlist to ONLY include trusted_fp (untrusted_fp is excluded!)
+    _record_evidence_case("untrusted_signed", repo, commit_sha, fingerprint=untrusted_fp, expected_returncode=0)
+
     monkeypatch.setattr(settings, "TRUSTED_SIGNER_ALLOWLIST", {trusted_fp})
 
     auth = DirectiveAuthenticator(repo_root=repo)
@@ -277,21 +313,20 @@ def test_real_invalid_signature_rejected(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "REQUIRE_COMMIT_SIGNATURE_VERIFICATION", True)
     repo, trusted_key, untrusted_key, trusted_fp, untrusted_fp = setup_crypto_test_repo(tmp_path)
 
-    # Empty out allowed_signers file so git verify-commit fails verification
     allowed_signers_file = repo / "allowed_signers"
     allowed_signers_file.write_text("", encoding="utf-8")
 
-    # Create signed commit with trusted_key
     repo, commit_sha, payload, envelope, directive_file = create_real_signed_directive_commit(
         repo, "invalid-sig-001", signed=True, use_key_file=trusted_key
     )
+
+    _record_evidence_case("invalid_signature", repo, commit_sha, expected_returncode=1)
 
     auth = DirectiveAuthenticator(repo_root=repo)
     auth.query_remote_branch_head = lambda path: (commit_sha, None)
 
     val_status, val_msg, human_wait, meta = auth.authenticate(payload, envelope, directive_file)
 
-    # Native git verify-commit fails on unverifiable signature!
     assert val_status == ValidationStatus.COMMIT_SIGNATURE_INVALID or "COMMIT_SIGNATURE_INVALID" in val_msg or meta["signature_valid"] is False
     assert meta["signature_present"] is True
     assert meta["signature_valid"] is False

@@ -1,0 +1,12 @@
+{
+  "signers": [
+    {
+      "key_type": "ssh-ed25519",
+      "fingerprint": "SHA256:zYZi3+VxKz9ve+PJgTS2o8q+dvXSmzCwPZ2G3NYh41A",
+      "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJYVj0kHKFGqZOx4VohDD2HFJjmGwF7Dsh9YYuIyjJGz control-plane-prod@antigravity.ai",
+      "principal": "control-plane-prod@antigravity.ai",
+      "purpose": "CONTROL_PLANE_DIRECTIVE_SIGNING",
+      "status": "ACTIVE"
+    }
+  ]
+}
