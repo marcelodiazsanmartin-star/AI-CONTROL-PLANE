@@ -1,18 +1,18 @@
 {
   "status": "RUNNING",
-  "last_poll": "2026-08-19T15:32:22.641839+00:00",
+  "last_poll": "2026-08-19T15:36:41.977368+00:00",
   "last_directive_seen": "valid-001.json",
   "last_directive_id": "valid-001",
-  "accepted_count": 1,
-  "rejected_count": 20,
+  "accepted_count": 0,
+  "rejected_count": 1,
   "waiting_human_count": 0,
   "queued_count": 0,
   "replay_rejections": 0,
   "schema_rejections": 0,
-  "auth_rejections": 18,
+  "auth_rejections": 1,
   "github_errors": 0,
   "state_conflicts": 0,
   "toctou_failures": 0,
-  "last_error": null,
+  "last_error": "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT: Directive file 'directives/inbox/valid-001.json' does not exist in commit 125c37e",
   "channel_version": "2.0.0"
 }
