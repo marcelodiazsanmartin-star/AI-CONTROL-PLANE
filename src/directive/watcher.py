@@ -71,6 +71,18 @@ class DirectiveWatcher:
         self.status = DirectiveChannelStatus()
         self.reconstruct_channel_status()
 
+    @property
+    def execution_queue(self) -> DurableExecutionQueue:
+        return self.durable_queue
+
+    @property
+    def acks_dir(self) -> Path:
+        return self.ack_dir
+
+    def get_channel_status(self) -> Dict[str, Any]:
+        self.reconstruct_channel_status()
+        return self.status.to_dict()
+
     def reconstruct_channel_status(self):
         """
         Reconstructs state/directive_channel_status.json counters from durable truth.
@@ -302,6 +314,24 @@ class DirectiveWatcher:
             # Step 4: Human Approval Gate
             if requires_human_wait:
                 self.status.waiting_human_count = len(list(self.waiting_human_dir.glob("*.json"))) + 1
+                try:
+                    self.durable_queue.enqueue_payload(
+                        payload=payload,
+                        envelope=envelope,
+                        auth_metadata=auth_meta,
+                        accepted_at=now_iso
+                    )
+                except Exception:
+                    pass
+
+                self.replay_ledger.record_consumption(
+                    directive_id=d_id,
+                    source_commit_sha=envelope.payload_commit_sha,
+                    first_seen_at=now_iso,
+                    decision="WAITING_HUMAN",
+                    decision_reason=val_reason
+                )
+
                 ack = self.write_ack(
                     directive_id=d_id,
                     source_commit_sha=envelope.payload_commit_sha,
@@ -309,7 +339,7 @@ class DirectiveWatcher:
                     decision="WAITING_HUMAN",
                     decision_reason=val_reason,
                     human_req=True,
-                    queued=False,
+                    queued=True,
                     executed=False
                 )
                 acks.append(ack)

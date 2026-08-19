@@ -52,6 +52,9 @@ class ReplayLedger:
     def is_consumed(self, directive_id: str) -> bool:
         return directive_id in self.consumed_ids
 
+    def is_processed(self, directive_id: str) -> bool:
+        return self.is_consumed(directive_id)
+
     def get_consumed_record(self, directive_id: str) -> Optional[ConsumedRecord]:
         return self.consumed_records.get(directive_id)
 
