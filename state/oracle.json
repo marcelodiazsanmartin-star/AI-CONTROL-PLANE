@@ -29,14 +29,14 @@
   "human_decision_required": false,
   "next_action": null,
   "evidence_freshness": {
-    "sprints/AGENT_STATUS.json": 403281.081765,
-    "sprints/ACTIVE_SPRINT.md": 597538.969793,
-    "environment_validation_report.md": 1021068.730059
+    "sprints/AGENT_STATUS.json": 403461.574093,
+    "sprints/ACTIVE_SPRINT.md": 597719.462233,
+    "environment_validation_report.md": 1021249.22266
   },
   "status": "STALE",
-  "reason": "Heartbeat age (417739.5s) exceeds project threshold (3600.0s)",
-  "observed_at": "2026-08-19T14:05:19.549554+00:00",
-  "heartbeat_age_seconds": 417739.549554,
+  "reason": "Heartbeat age (417920.0s) exceeds project threshold (3600.0s)",
+  "observed_at": "2026-08-19T14:08:20.042257+00:00",
+  "heartbeat_age_seconds": 417920.042257,
   "last_known_good": "2026-08-14T18:03:00Z",
   "retry_count": 0,
   "human_required": false,
@@ -56,7 +56,7 @@
     "5_STATIC_DECLARED_STATUS"
   ],
   "status_source": "2_RUNTIME_HEARTBEAT",
-  "status_age_seconds": 417739.549554,
+  "status_age_seconds": 417920.042257,
   "observer_errors": [],
   "external_project_activity_detected": false,
   "verified_stage": {
