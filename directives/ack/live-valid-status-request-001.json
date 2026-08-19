@@ -1,13 +1,13 @@
 {
   "directive_id": "live-valid-status-request-001",
-  "received_at": "2026-08-18T21:23:00.994742+00:00",
-  "source_commit_sha": "b90ca18909a2481055c9c7fd8b66c494e02bf9f1",
-  "validation_status": "AUTHENTIC",
-  "decision": "ACCEPTED",
-  "decision_reason": "AUTHENTIC: Directive source authenticated and validated successfully",
+  "received_at": "2026-08-19T12:48:27.218492+00:00",
+  "source_commit_sha": "12a4850937a075306acacae3be18fa2fdd728cc5",
+  "validation_status": "REPLAY_DETECTED",
+  "decision": "REJECTED",
+  "decision_reason": "REPLAY_DETECTED: Directive live-valid-status-request-001 has already been processed",
   "human_required": false,
-  "queued": true,
+  "queued": false,
   "executed": false,
-  "control_plane_commit_sha": "bc638c1dc34ceb9a97de70268277588db47d4834",
+  "control_plane_commit_sha": "de88e2a7c47302f97e9fba62c7370d88ecf49161",
   "observer_version": "1.0.0"
 }

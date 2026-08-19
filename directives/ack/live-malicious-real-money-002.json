@@ -1,13 +1,13 @@
 {
   "directive_id": "live-malicious-real-money-002",
-  "received_at": "2026-08-18T21:23:01.165847+00:00",
-  "source_commit_sha": "b90ca18909a2481055c9c7fd8b66c494e02bf9f1",
-  "validation_status": "ACTION_NOT_ALLOWED",
+  "received_at": "2026-08-19T12:48:27.338537+00:00",
+  "source_commit_sha": "12a4850937a075306acacae3be18fa2fdd728cc5",
+  "validation_status": "REPLAY_DETECTED",
   "decision": "REJECTED",
-  "decision_reason": "ACTION_NOT_ALLOWED: Prohibited mutating action 'ENABLE_REAL_MONEY' rejected in CONTROL-02.5",
+  "decision_reason": "REPLAY_DETECTED: Directive live-malicious-real-money-002 has already been processed",
   "human_required": false,
   "queued": false,
   "executed": false,
-  "control_plane_commit_sha": "bc638c1dc34ceb9a97de70268277588db47d4834",
+  "control_plane_commit_sha": "de88e2a7c47302f97e9fba62c7370d88ecf49161",
   "observer_version": "1.0.0"
 }
