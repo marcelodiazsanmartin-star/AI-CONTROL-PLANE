@@ -1,7 +1,8 @@
 """
 Provenance Evidence Generator for CONTROL-02.5
 
-Generates reports/CONTROL_02_5_PROVENANCE.json tracking exact Git commit ancestry.
+Generates reports/CONTROL_02_5_PROVENANCE.json tracking exact Git commit ancestry
+with non-ambiguous provenance semantics.
 """
 
 import sys
@@ -12,6 +13,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent
+
+
+def get_git_head_sha() -> str:
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(ROOT_DIR), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5.0
+        )
+        if res.returncode == 0:
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return "UNKNOWN_SHA"
 
 
 def verify_ancestry(ancestor_sha: str, descendant_sha: str) -> bool:
@@ -27,18 +43,19 @@ def verify_ancestry(ancestor_sha: str, descendant_sha: str) -> bool:
         return False
 
 
-def generate_provenance(code_under_test_sha: str, certification_artifact_commit_sha: str) -> dict:
+def generate_provenance(code_under_test_sha: str, certification_artifact_ancestor_sha: str) -> dict:
     reports_dir = ROOT_DIR / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    ancestry_ok = verify_ancestry(code_under_test_sha, certification_artifact_commit_sha)
+    actual_provenance_parent_sha = get_git_head_sha()
+    ancestry_ok = verify_ancestry(code_under_test_sha, certification_artifact_ancestor_sha) and verify_ancestry(certification_artifact_ancestor_sha, actual_provenance_parent_sha)
 
     prov_data = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "code_under_test_sha": code_under_test_sha,
         "certification_source_sha": code_under_test_sha,
-        "certification_artifact_commit_sha": certification_artifact_commit_sha,
-        "provenance_commit_parent_sha": certification_artifact_commit_sha,
+        "certification_artifact_ancestor_sha": certification_artifact_ancestor_sha,
+        "actual_provenance_parent_sha": actual_provenance_parent_sha,
         "ancestry_verified": ancestry_ok
     }
 
@@ -47,17 +64,17 @@ def generate_provenance(code_under_test_sha: str, certification_artifact_commit_
         json.dump(prov_data, f, indent=2)
 
     print(f"CONTROL-02.5 Provenance generated at {prov_file}")
-    print(f"Ancestry Verified: {ancestry_ok} ({code_under_test_sha[:7]} -> {certification_artifact_commit_sha[:7]})")
+    print(f"Ancestry Verified: {ancestry_ok} ({code_under_test_sha[:7]} -> {certification_artifact_ancestor_sha[:7]} -> {actual_provenance_parent_sha[:7]})")
     return prov_data
 
 
 def main():
     parser = argparse.ArgumentParser(description="Generate CONTROL-02.5 Provenance Evidence")
     parser.add_argument("--code-under-test-sha", type=str, required=True, help="Exact Git commit SHA of code under test")
-    parser.add_argument("--certification-artifact-commit-sha", type=str, required=True, help="Exact Git commit SHA containing certification artifact")
+    parser.add_argument("--certification-artifact-ancestor-sha", type=str, required=True, help="Exact Git commit SHA containing certification artifact")
     args = parser.parse_args()
 
-    generate_provenance(args.code_under_test_sha, args.certification_artifact_commit_sha)
+    generate_provenance(args.code_under_test_sha, args.certification_artifact_ancestor_sha)
 
 
 if __name__ == "__main__":

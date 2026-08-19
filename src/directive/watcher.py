@@ -1,8 +1,10 @@
 """
 Directive Watcher Module
 
-Integrated single-instance watcher scanning directives/inbox/ and executing validation,
-replay protection, human approval gating, acknowledgement generation, and safe queuing.
+Integrated single-instance watcher scanning directives/inbox/ and executing real Git validation,
+replay protection, durable execution queueing, human approval gating, acknowledgement generation,
+and status reconstruction from durable truth.
+
 Guarantees MUTATING_DIRECTIVES_EXECUTED = 0.
 """
 
@@ -11,13 +13,14 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 from config import settings
 from src.directive.contracts import (
     Directive, DirectiveAck, DirectiveState, ValidationStatus, DirectiveChannelStatus
 )
 from src.directive.schema_validator import DirectiveSchemaValidator
 from src.directive.replay_ledger import ReplayLedger
+from src.directive.durable_queue import DurableExecutionQueue
 from src.directive.authenticator import DirectiveAuthenticator
 
 
@@ -42,25 +45,85 @@ class DirectiveWatcher:
         directives_root: Optional[Path] = None,
         schema_validator: Optional[DirectiveSchemaValidator] = None,
         replay_ledger: Optional[ReplayLedger] = None,
+        durable_queue: Optional[DurableExecutionQueue] = None,
         authenticator: Optional[DirectiveAuthenticator] = None
     ):
         self.root = directives_root or (settings.CONTROL_PLANE_ROOT / "directives")
         self.inbox_dir = self.root / "inbox"
         self.accepted_dir = self.root / "accepted"
         self.rejected_dir = self.root / "rejected"
+        self.waiting_human_dir = self.root / "waiting_human"
         self.completed_dir = self.root / "completed"
         self.ack_dir = self.root / "ack"
         self.runtime_dir = self.root / "runtime"
 
-        for d in [self.inbox_dir, self.accepted_dir, self.rejected_dir, self.completed_dir, self.ack_dir, self.runtime_dir]:
+        for d in [self.inbox_dir, self.accepted_dir, self.rejected_dir, self.waiting_human_dir, self.completed_dir, self.ack_dir, self.runtime_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
         self.schema_validator = schema_validator or DirectiveSchemaValidator()
         self.replay_ledger = replay_ledger or ReplayLedger(self.runtime_dir / "consumed_directives.jsonl")
-        self.authenticator = authenticator or DirectiveAuthenticator()
+        self.durable_queue = durable_queue or DurableExecutionQueue(self.runtime_dir / "execution_queue.jsonl")
+        self.authenticator = authenticator or DirectiveAuthenticator(repo_root=self.root.parent)
 
         self.status = DirectiveChannelStatus()
-        self.queued_directives: List[Dict[str, Any]] = []
+        self.reconstruct_channel_status()
+
+    def reconstruct_channel_status(self):
+        """
+        Requirement #4: Reconstructs state/directive_channel_status.json counters from durable truth.
+        """
+        accepted_files = list(self.accepted_dir.glob("*.json"))
+        rejected_files = list(self.rejected_dir.glob("*.json"))
+        waiting_files = list(self.waiting_human_dir.glob("*.json"))
+
+        self.status.accepted_count = len(accepted_files)
+        self.status.rejected_count = len(rejected_files)
+        self.status.waiting_human_count = len(waiting_files)
+        self.status.queued_count = len(self.durable_queue.get_items())
+
+        # Count replay rejections from consumed_directives.jsonl ledger
+        replay_count = 0
+        auth_count = 0
+        schema_count = 0
+
+        ledger_file = self.runtime_dir / "consumed_directives.jsonl"
+        if ledger_file.exists():
+            try:
+                with open(ledger_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line_str = line.strip()
+                        if line_str:
+                            try:
+                                data = json.loads(line_str)
+                                reason = data.get("decision_reason", "")
+                                val_stat = data.get("decision", "")
+                                if "REPLAY_DETECTED" in reason:
+                                    replay_count += 1
+                                if "INVALID_SOURCE" in reason or "NOT_IN_APPROVED_BRANCH" in reason or "COMMIT_NOT_FOUND" in reason:
+                                    auth_count += 1
+                                if "SCHEMA_INVALID" in reason:
+                                    schema_count += 1
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+        self.status.replay_rejections = replay_count
+        self.status.auth_rejections = auth_count
+        self.status.schema_rejections = schema_count
+
+        # Find last directive seen
+        all_ack_files = sorted(list(self.ack_dir.glob("*.json")), key=lambda p: p.stat().st_mtime if p.exists() else 0)
+        if all_ack_files:
+            last_ack = all_ack_files[-1]
+            try:
+                ack_data = json.loads(last_ack.read_text(encoding="utf-8"))
+                self.status.last_directive_id = ack_data.get("directive_id")
+                self.status.last_directive_seen = f"{self.status.last_directive_id}.json"
+            except Exception:
+                pass
+
+        self.update_channel_status()
 
     def update_channel_status(self):
         self.status.last_poll = datetime.now(timezone.utc).isoformat()
@@ -160,7 +223,8 @@ class DirectiveWatcher:
             d_id = directive.directive_id
             self.status.last_directive_id = d_id
 
-            # Step 2: Replay Protection
+            # Step 2: Replay Protection Check
+            # Check if finalized or already in replay ledger
             if self.replay_ledger.is_consumed(d_id):
                 self.status.replay_rejections += 1
                 self.status.rejected_count += 1
@@ -179,11 +243,11 @@ class DirectiveWatcher:
                 shutil.move(str(file_path), str(self.rejected_dir / file_path.name))
                 continue
 
-            # Step 3: Source Authenticity, Expiration & Permission Validation
-            val_status, val_reason, requires_human_wait = self.authenticator.authenticate(directive, file_path)
+            # Step 3: Source Authenticity, Reachability & Permission Validation
+            val_status, val_reason, requires_human_wait, auth_meta = self.authenticator.authenticate(directive, file_path)
 
             if val_status != ValidationStatus.AUTHENTIC:
-                if val_status == ValidationStatus.INVALID_SOURCE or val_status == ValidationStatus.NOT_IN_APPROVED_BRANCH or val_status == ValidationStatus.COMMIT_NOT_FOUND:
+                if val_status in (ValidationStatus.INVALID_SOURCE, ValidationStatus.NOT_IN_APPROVED_BRANCH, ValidationStatus.COMMIT_NOT_FOUND, ValidationStatus.COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT):
                     self.status.auth_rejections += 1
                 else:
                     self.status.schema_rejections += 1
@@ -215,14 +279,8 @@ class DirectiveWatcher:
 
             # Step 4: Human Approval Gate
             if requires_human_wait:
-                self.status.waiting_human_count += 1
-                self.replay_ledger.record_consumption(
-                    directive_id=d_id,
-                    source_commit_sha=directive.source_commit_sha,
-                    first_seen_at=now_iso,
-                    decision="WAITING_HUMAN",
-                    decision_reason=val_reason
-                )
+                # Requirement #2: Move to directives/waiting_human/ so it does NOT trigger false REPLAY_DETECTED on subsequent polls
+                self.status.waiting_human_count = len(list(self.waiting_human_dir.glob("*.json"))) + 1
                 ack = self.write_ack(
                     directive_id=d_id,
                     source_commit_sha=directive.source_commit_sha,
@@ -234,12 +292,18 @@ class DirectiveWatcher:
                     executed=False
                 )
                 acks.append(ack)
-                # Leaves directive file in inbox for human review
+
+                # Move directive file to directives/waiting_human/
+                dest_waiting = self.waiting_human_dir / file_path.name
+                shutil.move(str(file_path), str(dest_waiting))
                 continue
 
-            # Step 5: Accepted -> Queued for execution (READY_FOR_FUTURE_EXECUTOR)
-            self.status.accepted_count += 1
-            self.status.queued_count += 1
+            # Step 5: Accepted -> Queued for execution (DURABLE EXECUTION QUEUE)
+            blob_sha = auth_meta.get("directive_blob_sha", "UNKNOWN_BLOB")
+            queued_item = self.durable_queue.enqueue(directive, blob_sha=blob_sha, accepted_at=now_iso)
+
+            self.status.accepted_count = len(list(self.accepted_dir.glob("*.json"))) + 1
+            self.status.queued_count = len(self.durable_queue.get_items())
 
             self.replay_ledger.record_consumption(
                 directive_id=d_id,
@@ -248,13 +312,6 @@ class DirectiveWatcher:
                 decision="ACCEPTED",
                 decision_reason=val_reason
             )
-
-            queue_entry = {
-                "directive": directive.to_dict(),
-                "status": "READY_FOR_FUTURE_EXECUTOR",
-                "accepted_at": now_iso
-            }
-            self.queued_directives.append(queue_entry)
 
             ack = self.write_ack(
                 directive_id=d_id,

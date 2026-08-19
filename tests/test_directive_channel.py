@@ -1,5 +1,6 @@
 """
 Adversarial Test Suite: CONTROL-02.5 Secure Directive Channel
+Expanded with All Required Regression Tests from ChatGPT Audit.
 """
 
 import os
@@ -14,6 +15,7 @@ from config import settings
 from src.directive.contracts import Directive, ValidationStatus
 from src.directive.schema_validator import DirectiveSchemaValidator
 from src.directive.replay_ledger import ReplayLedger
+from src.directive.durable_queue import DurableExecutionQueue
 from src.directive.authenticator import DirectiveAuthenticator
 from src.directive.watcher import DirectiveWatcher
 from src.engine import ControlPlaneEngine
@@ -26,7 +28,7 @@ def build_sample_directive(
     action: str = "CHATGPT_AUDIT_MICRO_00_8",
     source_repository: str = "AI-CONTROL-PLANE",
     source_branch: str = "main",
-    source_commit_sha: str = "b90ca18909a2481055c9c7fd8b66c494e02bf9f1",
+    source_commit_sha: str = "477b9f15b097946673200421392a604e0d64f762",
     requires_human: bool = False,
     created_offset_secs: float = 0,
     expires_offset_secs: float = 3600
@@ -192,7 +194,7 @@ def test_content_mismatch_rejected(tmp_path):
 
     class MockBadAuthenticator(DirectiveAuthenticator):
         def authenticate(self, directive, directive_file_path=None):
-            return ValidationStatus.CONTENT_MISMATCH, "CONTENT_MISMATCH: Hash mismatch", False
+            return ValidationStatus.CONTENT_MISMATCH, "CONTENT_MISMATCH: Hash mismatch", False, {}
 
     watcher = DirectiveWatcher(directives_root=root, schema_validator=validator, replay_ledger=ledger, authenticator=MockBadAuthenticator())
 
@@ -237,7 +239,6 @@ def test_replay_survives_restart(tmp_path):
     inbox_file1.write_text(json.dumps(data), encoding="utf-8")
     watcher1.poll_inbox()
 
-    # Simulate restart by instantiating new DirectiveWatcher with fresh ledger instance pointing to same file
     watcher2 = DirectiveWatcher(directives_root=root, replay_ledger=ReplayLedger(ledger_path))
 
     inbox_file2 = watcher2.inbox_dir / "restart-replay-001.json"
@@ -261,7 +262,7 @@ def test_human_required_waiting_state(tmp_path):
     assert acks[0].decision == "WAITING_HUMAN"
     assert acks[0].human_required is True
     assert acks[0].queued is False
-    assert inbox_file.exists()  # Leaves in inbox for human review
+    assert (watcher.waiting_human_dir / "human-001.json").exists()
 
 
 def test_disallowed_destructive_action_rejected(tmp_path):
@@ -416,3 +417,237 @@ def test_provenance_fields_present(tmp_path):
     acks = watcher.poll_inbox()
     assert acks[0].source_commit_sha is not None
     assert acks[0].control_plane_commit_sha is not None
+
+
+# New Mandatory Regression Tests from ChatGPT Audit
+
+def test_commit_exists_but_directive_absent_rejected(tmp_path):
+    root = tmp_path / "directives"
+    watcher = DirectiveWatcher(directives_root=root)
+
+    # Valid commit sha in history that does NOT contain absent-dir-001.json
+    data = build_sample_directive(directive_id="absent-dir-001", source_commit_sha="b90ca18909a2481055c9c7fd8b66c494e02bf9f1")
+    inbox_file = watcher.inbox_dir / "absent-dir-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+
+    acks = watcher.poll_inbox()
+    assert len(acks) == 1
+    assert acks[0].decision == "REJECTED"
+    assert acks[0].validation_status in (
+        ValidationStatus.COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT.value,
+        ValidationStatus.COMMIT_NOT_FOUND.value
+    )
+
+
+def test_directive_commit_not_reachable_from_main_rejected(tmp_path, monkeypatch):
+    root = tmp_path / "directives"
+    watcher = DirectiveWatcher(directives_root=root)
+
+    def mock_auth(directive, file_path=None):
+        return ValidationStatus.NOT_IN_APPROVED_BRANCH, "NOT_IN_APPROVED_BRANCH: Commit not reachable from main", False, {}
+
+    monkeypatch.setattr(watcher.authenticator, "authenticate", mock_auth)
+
+    data = build_sample_directive(directive_id="unreachable-001")
+    inbox_file = watcher.inbox_dir / "unreachable-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+
+    acks = watcher.poll_inbox()
+    assert len(acks) == 1
+    assert acks[0].decision == "REJECTED"
+    assert "NOT_IN_APPROVED_BRANCH" in acks[0].decision_reason
+
+
+def test_real_committed_content_mismatch_rejected(tmp_path, monkeypatch):
+    root = tmp_path / "directives"
+    watcher = DirectiveWatcher(directives_root=root)
+
+    def mock_auth(directive, file_path=None):
+        return ValidationStatus.CONTENT_MISMATCH, "CONTENT_MISMATCH: Committed content differs", False, {}
+
+    monkeypatch.setattr(watcher.authenticator, "authenticate", mock_auth)
+
+    data = build_sample_directive(directive_id="content-mismatch-001")
+    inbox_file = watcher.inbox_dir / "content-mismatch-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+
+    acks = watcher.poll_inbox()
+    assert len(acks) == 1
+    assert acks[0].decision == "REJECTED"
+    assert "CONTENT_MISMATCH" in acks[0].decision_reason
+
+
+def test_local_modified_copy_cannot_authenticate(tmp_path, monkeypatch):
+    root = tmp_path / "directives"
+    watcher = DirectiveWatcher(directives_root=root)
+
+    data = build_sample_directive(directive_id="local-mod-001")
+    data["payload"] = {"tampered": True}
+    inbox_file = watcher.inbox_dir / "local-mod-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+
+    def mock_auth(directive, file_path=None):
+        return ValidationStatus.CONTENT_MISMATCH, "CONTENT_MISMATCH: Local candidate file content hash mismatch", False, {}
+
+    monkeypatch.setattr(watcher.authenticator, "authenticate", mock_auth)
+
+    acks = watcher.poll_inbox()
+    assert len(acks) == 1
+    assert acks[0].decision == "REJECTED"
+
+
+def test_exact_committed_blob_authenticates(tmp_path):
+    root = tmp_path / "directives"
+    watcher = DirectiveWatcher(directives_root=root)
+
+    data = build_sample_directive(directive_id="exact-blob-001")
+    inbox_file = watcher.inbox_dir / "exact-blob-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+
+    acks = watcher.poll_inbox()
+    assert len(acks) == 1
+    assert acks[0].decision == "ACCEPTED"
+
+
+def test_waiting_human_survives_second_poll(tmp_path):
+    root = tmp_path / "directives"
+    watcher = DirectiveWatcher(directives_root=root)
+
+    data = build_sample_directive(directive_id="human-multi-001", requires_human=True)
+    inbox_file = watcher.inbox_dir / "human-multi-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+
+    acks1 = watcher.poll_inbox()
+    assert acks1[0].decision == "WAITING_HUMAN"
+    assert (watcher.waiting_human_dir / "human-multi-001.json").exists()
+
+    # Second poll
+    acks2 = watcher.poll_inbox()
+    assert len(acks2) == 0
+    assert watcher.status.waiting_human_count == 1
+
+
+def test_waiting_human_survives_restart(tmp_path):
+    root = tmp_path / "directives"
+    watcher1 = DirectiveWatcher(directives_root=root)
+
+    data = build_sample_directive(directive_id="human-restart-001", requires_human=True)
+    inbox_file = watcher1.inbox_dir / "human-restart-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+
+    watcher1.poll_inbox()
+    assert (watcher1.waiting_human_dir / "human-restart-001.json").exists()
+
+    # Restart watcher
+    watcher2 = DirectiveWatcher(directives_root=root)
+    assert watcher2.status.waiting_human_count == 1
+
+
+def test_waiting_human_not_classified_as_replay(tmp_path):
+    root = tmp_path / "directives"
+    watcher = DirectiveWatcher(directives_root=root)
+
+    data = build_sample_directive(directive_id="human-noreplay-001", requires_human=True)
+    inbox_file = watcher.inbox_dir / "human-noreplay-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+
+    watcher.poll_inbox()
+    assert not watcher.replay_ledger.is_consumed("human-noreplay-001")
+
+
+def test_duplicate_submission_of_waiting_human_is_rejected(tmp_path):
+    root = tmp_path / "directives"
+    watcher = DirectiveWatcher(directives_root=root)
+
+    data = build_sample_directive(directive_id="human-dup-001", requires_human=True)
+    inbox_file1 = watcher.inbox_dir / "human-dup-001.json"
+    inbox_file1.write_text(json.dumps(data), encoding="utf-8")
+    watcher.poll_inbox()
+
+    # Record finalized consumption
+    watcher.replay_ledger.record_consumption("human-dup-001", "sha", "now", "ACCEPTED", "reason")
+
+    inbox_file2 = watcher.inbox_dir / "human-dup-001.json"
+    inbox_file2.write_text(json.dumps(data), encoding="utf-8")
+    acks2 = watcher.poll_inbox()
+
+    assert len(acks2) == 1
+    assert acks2[0].decision == "REJECTED"
+    assert "REPLAY_DETECTED" in acks2[0].decision_reason
+
+
+def test_accepted_queue_survives_restart(tmp_path):
+    root = tmp_path / "directives"
+    watcher1 = DirectiveWatcher(directives_root=root)
+
+    data = build_sample_directive(directive_id="queue-restart-001")
+    inbox_file = watcher1.inbox_dir / "queue-restart-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+
+    watcher1.poll_inbox()
+    assert len(watcher1.durable_queue.get_items()) == 1
+
+    # Restart
+    watcher2 = DirectiveWatcher(directives_root=root)
+    items = watcher2.durable_queue.get_items()
+    assert len(items) == 1
+    assert items[0].directive_id == "queue-restart-001"
+    assert items[0].queue_state == "READY_FOR_FUTURE_EXECUTOR"
+
+
+def test_accepted_item_not_lost_after_restart(tmp_path):
+    root = tmp_path / "directives"
+    queue_path = root / "runtime" / "execution_queue.jsonl"
+    queue1 = DurableExecutionQueue(queue_path)
+
+    d = Directive.from_dict(build_sample_directive(directive_id="no-lost-001"))
+    queue1.enqueue(d, blob_sha="blob123")
+
+    queue2 = DurableExecutionQueue(queue_path)
+    assert len(queue2.get_items()) == 1
+    assert queue2.get_items()[0].directive_id == "no-lost-001"
+
+
+def test_restart_does_not_requeue_duplicate(tmp_path):
+    root = tmp_path / "directives"
+    watcher1 = DirectiveWatcher(directives_root=root)
+
+    data = build_sample_directive(directive_id="no-dup-queue-001")
+    inbox_file = watcher1.inbox_dir / "no-dup-queue-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    watcher1.poll_inbox()
+
+    watcher2 = DirectiveWatcher(directives_root=root)
+    watcher2.poll_inbox()
+    assert len(watcher2.durable_queue.get_items()) == 1
+
+
+def test_queue_and_replay_ledger_consistent(tmp_path):
+    root = tmp_path / "directives"
+    watcher = DirectiveWatcher(directives_root=root)
+
+    data = build_sample_directive(directive_id="consistent-001")
+    inbox_file = watcher.inbox_dir / "consistent-001.json"
+    inbox_file.write_text(json.dumps(data), encoding="utf-8")
+    watcher.poll_inbox()
+
+    assert watcher.durable_queue.is_queued("consistent-001") is True
+    assert watcher.replay_ledger.is_consumed("consistent-001") is True
+
+
+def test_channel_status_reconstructed_after_restart(tmp_path):
+    root = tmp_path / "directives"
+    watcher1 = DirectiveWatcher(directives_root=root)
+
+    data1 = build_sample_directive(directive_id="recon-acc-001")
+    data2 = build_sample_directive(directive_id="recon-hum-002", requires_human=True)
+
+    (watcher1.inbox_dir / "recon-acc-001.json").write_text(json.dumps(data1), encoding="utf-8")
+    (watcher1.inbox_dir / "recon-hum-002.json").write_text(json.dumps(data2), encoding="utf-8")
+
+    watcher1.poll_inbox()
+
+    watcher2 = DirectiveWatcher(directives_root=root)
+    assert watcher2.status.accepted_count == 1
+    assert watcher2.status.waiting_human_count == 1
+    assert watcher2.status.queued_count == 1

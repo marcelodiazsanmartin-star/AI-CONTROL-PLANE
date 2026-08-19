@@ -23,6 +23,7 @@ class ValidationStatus(str, Enum):
     AUTHENTIC = "AUTHENTIC"
     INVALID_SOURCE = "INVALID_SOURCE"
     COMMIT_NOT_FOUND = "COMMIT_NOT_FOUND"
+    COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT = "COMMIT_EXISTS_BUT_DIRECTIVE_ABSENT"
     NOT_IN_APPROVED_BRANCH = "NOT_IN_APPROVED_BRANCH"
     CONTENT_MISMATCH = "CONTENT_MISMATCH"
     REPLAY_DETECTED = "REPLAY_DETECTED"
@@ -111,6 +112,24 @@ class ConsumedRecord:
     decision: str
     decision_reason: str
     processed_at: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class QueuedDirectiveItem:
+    directive_id: str
+    directive_source_sha: str
+    directive_blob_sha: str
+    accepted_at: str
+    queue_state: str = "READY_FOR_FUTURE_EXECUTOR"
+    target_project: str = ""
+    action_type: str = ""
+    requires_human_approval: bool = False
+    executed: bool = False
+    execution_attempts: int = 0
+    directive_payload: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

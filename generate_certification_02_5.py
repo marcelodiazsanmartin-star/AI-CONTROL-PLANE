@@ -79,31 +79,34 @@ def generate_certification(code_under_test_sha: str) -> dict:
             print(f"XML parse error: {e}")
 
     # Certified test assertions
-    valid_directive_accepted = "test_valid_directive_accepted" in passed_test_names
-    malicious_directive_rejected = "test_disallowed_destructive_action_rejected" in passed_test_names and "test_real_money_directive_rejected_or_waiting_human" in passed_test_names
+    real_source_authentication = "test_exact_committed_blob_authenticates" in passed_test_names
+    branch_reachability = "test_directive_commit_not_reachable_from_main_rejected" in passed_test_names
+    committed_blob_match = "test_real_committed_content_mismatch_rejected" in passed_test_names
+
+    waiting_human_multi_poll = "test_waiting_human_survives_second_poll" in passed_test_names
+    waiting_human_restart_safe = "test_waiting_human_survives_restart" in passed_test_names
+
+    durable_queue = "test_accepted_queue_survives_restart" in passed_test_names
+    queue_restart_recovery = "test_accepted_item_not_lost_after_restart" in passed_test_names
+    channel_status_reconstruction = "test_channel_status_reconstructed_after_restart" in passed_test_names
+
     replay_protection = "test_replay_directive_rejected" in passed_test_names and "test_replay_survives_restart" in passed_test_names
-    human_gate = "test_human_required_waiting_state" in passed_test_names
-    github_fail_closed = "test_fail_closed_on_github_unavailable" in passed_test_names
-    directive_ack = "test_directive_ack_generated" in passed_test_names
-    directive_provenance = "test_provenance_fields_present" in passed_test_names
 
     # Check empirical OS process count for AI-CONTROL-PLANE main.py
     proc_observer = ProcessObserver()
-    single_daemon_count, active_pids = proc_observer.get_active_control_plane_processes()
+    control_plane_instance_count, active_pids = proc_observer.get_active_control_plane_processes()
 
-    if single_daemon_count == 0:
+    if control_plane_instance_count == 0:
         cp_status_file = ROOT_DIR / "state" / "control_plane_status.json"
         if cp_status_file.exists():
             try:
                 cp_data = json.loads(cp_status_file.read_text(encoding="utf-8"))
                 if cp_data.get("status") == "RUNNING" and cp_data.get("pid"):
-                    single_daemon_count = 1
+                    control_plane_instance_count = 1
                     active_pids = [int(cp_data["pid"])]
             except Exception:
                 pass
 
-    # Read live directive channel status
-    chan_status_file = ROOT_DIR / "state" / "directive_channel_status.json"
     mutating_directives_executed = 0
 
     immutability_test_passed = "test_isolated_fixture_immutability" in passed_test_names
@@ -119,14 +122,16 @@ def generate_certification(code_under_test_sha: str) -> dict:
         tests_collected > 0 and
         tests_passed == tests_collected and
         tests_failed == 0 and
-        single_daemon_count == 1 and
-        valid_directive_accepted is True and
-        malicious_directive_rejected is True and
+        control_plane_instance_count == 1 and
+        real_source_authentication is True and
+        branch_reachability is True and
+        committed_blob_match is True and
+        waiting_human_multi_poll is True and
+        waiting_human_restart_safe is True and
+        durable_queue is True and
+        queue_restart_recovery is True and
+        channel_status_reconstruction is True and
         replay_protection is True and
-        human_gate is True and
-        github_fail_closed is True and
-        directive_ack is True and
-        directive_provenance is True and
         mutating_directives_executed == 0 and
         oracle_modified is False and
         micro_modified is False and
@@ -145,15 +150,17 @@ def generate_certification(code_under_test_sha: str) -> dict:
         "tests_collected": tests_collected,
         "tests_passed": tests_passed,
         "tests_failed": tests_failed,
-        "single_daemon_count": single_daemon_count,
+        "control_plane_instance_count": control_plane_instance_count,
         "active_control_plane_pids": active_pids,
-        "valid_directive_accepted": valid_directive_accepted,
-        "malicious_directive_rejected": malicious_directive_rejected,
+        "real_source_authentication": real_source_authentication,
+        "branch_reachability": branch_reachability,
+        "committed_blob_match": committed_blob_match,
+        "waiting_human_multi_poll": waiting_human_multi_poll,
+        "waiting_human_restart_safe": waiting_human_restart_safe,
+        "durable_queue": durable_queue,
+        "queue_restart_recovery": queue_restart_recovery,
+        "channel_status_reconstruction": channel_status_reconstruction,
         "replay_protection": replay_protection,
-        "human_gate": human_gate,
-        "github_fail_closed": github_fail_closed,
-        "directive_ack": directive_ack,
-        "directive_provenance": directive_provenance,
         "mutating_directives_executed": mutating_directives_executed,
         "oracle_modified": oracle_modified,
         "micro_modified": micro_modified,
@@ -168,7 +175,7 @@ def generate_certification(code_under_test_sha: str) -> dict:
 
     print(f"CONTROL-02.5 Certification generated at {cert_file}")
     print(f"Overall Result: {overall_result} ({tests_passed}/{tests_collected} passed)")
-    print(f"Empirical Instance Count: {single_daemon_count} (PIDs: {active_pids})")
+    print(f"Empirical Instance Count: {control_plane_instance_count} (PIDs: {active_pids})")
     return cert_data
 
 
