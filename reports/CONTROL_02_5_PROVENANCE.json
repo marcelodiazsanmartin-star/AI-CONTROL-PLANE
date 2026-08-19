@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-08-18T21:34:09.045156+00:00",
-  "code_under_test_sha": "477b9f15b097946673200421392a604e0d64f762",
-  "certification_source_sha": "477b9f15b097946673200421392a604e0d64f762",
-  "certification_artifact_commit_sha": "3b6bd4966598354d2c127e006c08586de3e507cd",
-  "provenance_commit_parent_sha": "3b6bd4966598354d2c127e006c08586de3e507cd",
+  "timestamp": "2026-08-19T13:06:57.001287+00:00",
+  "code_under_test_sha": "a397b2ed2c6e1b74a1bf5bb83e978c63755611b1",
+  "certification_source_sha": "a397b2ed2c6e1b74a1bf5bb83e978c63755611b1",
+  "certification_artifact_ancestor_sha": "aaca6427b98bf965d0b0959161e1acdbbd5d0910",
+  "actual_provenance_parent_sha": "aaca6427b98bf965d0b0959161e1acdbbd5d0910",
   "ancestry_verified": true
 }
