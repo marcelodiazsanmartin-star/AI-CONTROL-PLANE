@@ -1,0 +1,114 @@
+{
+  "critical_field_provenance_map_complete": true,
+  "critical_fields_self_attested": 0,
+  "critical_fields_with_stale_evidence": 0,
+  "critical_fields_without_evidence": 0,
+  "fields": [
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(control_02_5_certified_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "control_02_5_certified_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(control_02_5_security_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "control_02_5_security_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(control_02_5_governance_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "control_02_5_governance_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(control_02_5_queue_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "control_02_5_queue_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(control_02_5_authorization_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "control_02_5_authorization_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(control_02_5_human_approval_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "control_02_5_human_approval_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(control_02_5_watchdog_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "control_02_5_watchdog_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(control_02_5_audit_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "control_02_5_audit_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(control_02_5_e2e_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "control_02_5_e2e_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(strict_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "strict_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(main_protection_effective)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "main_protection_effective",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(trusted_head_signature_valid)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "trusted_head_signature_valid",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    },
+    {
+      "derivation": "COMPUTED_GATE_EVALUATION(no_hardcoded_critical_pass)",
+      "evidence_hash": "3efed92194055c009549525478f69c81e30b0c7ede90a536eb12431d7ce2987d",
+      "field": "no_hardcoded_critical_pass",
+      "freshness": "2026-08-20T19:39:55.869371+00:00",
+      "result": true,
+      "source": "RECONCILED_TEST_AND_REMOTE_EVIDENCE"
+    }
+  ],
+  "generated_at": "2026-08-20T19:39:55.869371+00:00",
+  "total_fields_mapped": 13
+}

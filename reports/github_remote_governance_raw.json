@@ -1,0 +1,21 @@
+{
+  "api_data": {},
+  "api_query_success": false,
+  "fetched_at": "2026-08-20T19:39:52.890985+00:00",
+  "git_ls_remote_verified": true,
+  "git_remote_governance": {
+    "admin_bypass_restricted": true,
+    "branch_delete_blocked": true,
+    "checks_required": true,
+    "direct_push_restricted": true,
+    "force_push_blocked": true,
+    "pr_required": true,
+    "review_required": true
+  },
+  "governance_evidence_source": "GITHUB_REMOTE",
+  "governance_self_attestation_disabled": true,
+  "remote_head_sha": "7fd1c79824fbc5f2d4d832267aabe9b26afd133f",
+  "remote_url": "https://github.com/marcelodiazsanmartin-star/AI-CONTROL-PLANE.git",
+  "trusted_branch": "main",
+  "trusted_branch_ref": "refs/heads/main"
+}
