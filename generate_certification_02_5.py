@@ -17,6 +17,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Set, Dict, Any, List
 
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
@@ -29,33 +30,108 @@ from src.directive.reconciler import reconcile_execution_evidence
 from src.observer.process_observer import ProcessObserver
 
 
-def audit_certification_generator_ast() -> bool:
+CRITICAL_CERTIFICATION_FIELDS = {
+    "hardcoded_signature_bypass_count",
+    "production_placeholder_signer_count",
+    "test_keys_isolated_from_production",
+    "real_crypto_test_backend",
+    "real_signature_verification_tested",
+    "mutating_directives_executed",
+    "queue_fsync_verified",
+    "queue_restart_integrity_verified",
+    "queue_corruption_fail_closed",
+    "queue_record_readback_verified",
+    "remote_fail_closed",
+    "strict_remote_ancestry",
+    "worktree_fallback",
+    "toctou_revalidation_verified",
+    "execution_evidence_available",
+    "execution_evidence_complete",
+    "execution_ledger_consistent",
+    "critical_gate_failure"
+}
+
+
+def derive_security_gates(passed_test_names: Set[str], crypto_metrics: Dict[str, Any]) -> Dict[str, Any]:
+    queue_fsync_verified = "test_queue_fsync_persistence_verified" in passed_test_names
+    queue_restart_integrity_verified = (
+        "test_accepted_queue_survives_restart" in passed_test_names and
+        "test_accepted_item_not_lost_after_restart" in passed_test_names
+    )
+    queue_corruption_fail_closed = "test_fail_closed_on_malformed_json" in passed_test_names
+    queue_record_readback_verified = "test_queue_and_replay_ledger_consistent" in passed_test_names
+
+    remote_fail_closed = "test_fail_closed_on_github_unavailable" in passed_test_names
+    strict_remote_ancestry = "test_directive_commit_not_reachable_from_main_rejected" in passed_test_names
+
+    worktree_fallback_disabled = (
+        "test_local_modified_copy_cannot_authenticate" in passed_test_names and
+        "test_commit_exists_but_directive_absent_rejected" in passed_test_names
+    )
+    worktree_fallback = not worktree_fallback_disabled
+
+    toctou_revalidation_verified = "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names
+
+    real_signature_verification_tested = all([
+        crypto_metrics.get("real_unsigned_commit_rejected") is True,
+        crypto_metrics.get("real_invalid_signature_rejected") is True,
+        crypto_metrics.get("real_trusted_signer_accepted") is True,
+        crypto_metrics.get("real_untrusted_signer_rejected") is True,
+        crypto_metrics.get("author_metadata_authorization_disabled") is True,
+        crypto_metrics.get("envelope_self_attestation_disabled") is True,
+        crypto_metrics.get("real_git_verify_commit_success_count", 0) >= 2,
+        crypto_metrics.get("real_git_verify_commit_failure_count", 0) >= 2
+    ])
+
+    return {
+        "queue_fsync_verified": queue_fsync_verified,
+        "queue_restart_integrity_verified": queue_restart_integrity_verified,
+        "queue_corruption_fail_closed": queue_corruption_fail_closed,
+        "queue_record_readback_verified": queue_record_readback_verified,
+        "remote_fail_closed": remote_fail_closed,
+        "strict_remote_ancestry": strict_remote_ancestry,
+        "worktree_fallback": worktree_fallback,
+        "toctou_revalidation_verified": toctou_revalidation_verified,
+        "real_signature_verification_tested": real_signature_verification_tested
+    }
+
+
+def audit_certification_generator_ast(gen_file: Path = None) -> bool:
     """
     AST Self-Auditing Scanner: Inspects generate_certification_02_5.py source code AST
-    to verify no critical security variables are assigned literal constant values without computation.
+    to verify no critical security variables are assigned literal constant values without computation,
+    and no critical dict entries in cert_data use hardcoded primitive literals.
     Returns True if NO critical certification fields are hardcoded.
     """
-    gen_file = ROOT_DIR / "generate_certification_02_5.py"
+    if gen_file is None:
+        gen_file = ROOT_DIR / "generate_certification_02_5.py"
     if not gen_file.exists():
         return False
 
     try:
         tree = ast.parse(gen_file.read_text(encoding="utf-8"))
-        critical_vars = {
-            "hardcoded_signature_bypass_count",
-            "production_placeholder_signer_count",
-            "test_keys_isolated_from_production",
-            "mutating_directives_executed"
-        }
 
         for node in ast.walk(tree):
+            # A. Variable assignments
             if isinstance(node, ast.Assign):
                 for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id in critical_vars:
-                        # Allow function parameter defaults or assigned dict values, but disallow literal primitive assignments in main body
+                    if isinstance(target, ast.Name) and target.id in CRITICAL_CERTIFICATION_FIELDS:
                         if isinstance(node.value, (ast.Constant, ast.NameConstant)):
-                            # Check if inside generate_certification function body as top-level literal override
                             return False
+
+            # B. Dictionary literal keys in cert_data
+            if isinstance(node, ast.Dict):
+                for key_node, val_node in zip(node.keys, node.values):
+                    key_name = None
+                    if isinstance(key_node, ast.Constant) and isinstance(key_node.value, str):
+                        key_name = key_node.value
+                    elif isinstance(key_node, ast.Str):
+                        key_name = key_node.s
+
+                    if key_name and key_name in CRITICAL_CERTIFICATION_FIELDS:
+                        if isinstance(val_node, (ast.Constant, ast.NameConstant)):
+                            return False
+
         return True
     except Exception:
         return False
@@ -306,14 +382,28 @@ def generate_certification(
     cg_toctou_revalidation = "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names
     cg_no_unauthorized_execution = "test_directive_never_executes_target_mutation" in passed_test_names
 
-    queue_fsync_verified = True
-    queue_restart_integrity_verified = True
-    queue_corruption_fail_closed = True
-    queue_record_readback_verified = True
-    toctou_revalidation_verified = cg_toctou_revalidation
-    remote_fail_closed = True
-    strict_remote_ancestry = True
-    worktree_fallback = False
+    crypto_metrics = {
+        "real_unsigned_commit_rejected": real_unsigned_commit_rejected,
+        "real_invalid_signature_rejected": real_invalid_signature_rejected,
+        "real_trusted_signer_accepted": real_trusted_signer_accepted,
+        "real_untrusted_signer_rejected": real_untrusted_signer_rejected,
+        "author_metadata_authorization_disabled": author_metadata_authorization_disabled,
+        "envelope_self_attestation_disabled": envelope_self_attestation_disabled,
+        "real_git_verify_commit_success_count": real_git_verify_commit_success_count,
+        "real_git_verify_commit_failure_count": real_git_verify_commit_failure_count
+    }
+
+    sec_gates = derive_security_gates(passed_test_names, crypto_metrics)
+
+    queue_fsync_verified = sec_gates["queue_fsync_verified"]
+    queue_restart_integrity_verified = sec_gates["queue_restart_integrity_verified"]
+    queue_corruption_fail_closed = sec_gates["queue_corruption_fail_closed"]
+    queue_record_readback_verified = sec_gates["queue_record_readback_verified"]
+    toctou_revalidation_verified = sec_gates["toctou_revalidation_verified"]
+    remote_fail_closed = sec_gates["remote_fail_closed"]
+    strict_remote_ancestry = sec_gates["strict_remote_ancestry"]
+    worktree_fallback = sec_gates["worktree_fallback"]
+    real_signature_verification_tested = sec_gates["real_signature_verification_tested"]
 
     critical_gate_failure = not (
         cg_provenance_integrity and
@@ -334,7 +424,16 @@ def generate_certification(
         production_signer_public_key_verified and
         crypto_evidence_fresh and
         crypto_evidence_run_id_match and
-        test_keys_isolated_from_production
+        test_keys_isolated_from_production and
+        queue_fsync_verified and
+        queue_restart_integrity_verified and
+        queue_corruption_fail_closed and
+        queue_record_readback_verified and
+        remote_fail_closed and
+        strict_remote_ancestry and
+        not worktree_fallback and
+        toctou_revalidation_verified and
+        real_signature_verification_tested
     )
 
     # 4-Commit Provenance & Ancestry Resolution
@@ -428,7 +527,7 @@ def generate_certification(
         "real_crypto_test_backend": real_crypto_test_backend,
         "real_git_verify_commit_success_count": real_git_verify_commit_success_count,
         "real_git_verify_commit_failure_count": real_git_verify_commit_failure_count,
-        "real_signature_verification_tested": True,
+        "real_signature_verification_tested": real_signature_verification_tested,
         "real_unsigned_commit_rejected": real_unsigned_commit_rejected,
         "real_invalid_signature_rejected": real_invalid_signature_rejected,
         "real_trusted_signer_accepted": real_trusted_signer_accepted,

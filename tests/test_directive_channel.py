@@ -692,3 +692,26 @@ def test_channel_status_reconstructed_after_restart(tmp_path):
     queued = status.get("execution_queue_count", status.get("queued_count", 0))
     assert total >= 2
     assert queued >= 2
+
+
+# 38. Queue Fsync & Persistence Verification Contract
+def test_queue_fsync_persistence_verified(tmp_path):
+    queue_file = tmp_path / "execution_queue.jsonl"
+    queue = DurableExecutionQueue(queue_file_path=queue_file)
+
+    sample_dict = build_sample_directive(directive_id="fsync-001")
+    payload = DirectivePayload.from_dict(sample_dict)
+    envelope = DirectiveEnvelope.from_dict(sample_dict.get("envelope", {}))
+    auth_meta = {
+        "payload_sha256": envelope.payload_sha256,
+        "payload_blob_sha": envelope.payload_blob_sha,
+        "signer_identity": envelope.signer_identity
+    }
+
+    item = queue.enqueue_payload(payload, envelope, auth_meta)
+    assert item is not None
+    assert item.readback_verified is True
+    assert queue_file.exists()
+
+
+

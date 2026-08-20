@@ -16,6 +16,7 @@ from config import settings
 from src.directive.scanner import scan_authentication_bypasses
 from src.directive.signer_validator import validate_production_signers, compute_ssh_public_key_fingerprint
 from src.directive.reconciler import reconcile_execution_evidence
+from generate_certification_02_5 import audit_certification_generator_ast, derive_security_gates
 
 
 # A. TEST_INJECTED_SHA_BYPASS_DETECTED
@@ -384,3 +385,48 @@ def test_evidence_from_previous_run_rejected():
 
     valid_run = (current_run_id == previous_evidence_run_id)
     assert valid_run is False
+
+
+# BLOCK 2 TARGETED TESTS (A - G)
+
+def test_block2_ast_scanner_detects_injected_variable_assignment(tmp_path):
+    gen_file = tmp_path / "generate_certification_02_5.py"
+    gen_file.write_text("queue_fsync_verified = True\n", encoding="utf-8")
+    assert audit_certification_generator_ast(gen_file=gen_file) is False
+
+
+def test_block2_ast_scanner_detects_injected_remote_fail_closed(tmp_path):
+    gen_file = tmp_path / "generate_certification_02_5.py"
+    gen_file.write_text("remote_fail_closed = True\n", encoding="utf-8")
+    assert audit_certification_generator_ast(gen_file=gen_file) is False
+
+
+def test_block2_ast_scanner_detects_injected_dict_literal(tmp_path):
+    gen_file = tmp_path / "generate_certification_02_5.py"
+    gen_file.write_text('cert_data = {"real_signature_verification_tested": True}\n', encoding="utf-8")
+    assert audit_certification_generator_ast(gen_file=gen_file) is False
+
+
+def test_block2_ast_scanner_allows_computed_assignment(tmp_path):
+    gen_file = tmp_path / "generate_certification_02_5.py"
+    gen_file.write_text('queue_fsync_verified = "test_queue_fsync_persistence_verified" in passed_test_names\n', encoding="utf-8")
+    assert audit_certification_generator_ast(gen_file=gen_file) is True
+
+
+def test_block2_ast_scanner_allows_computed_dict_entry(tmp_path):
+    gen_file = tmp_path / "generate_certification_02_5.py"
+    gen_file.write_text('cert_data = {"queue_fsync_verified": queue_fsync_verified}\n', encoding="utf-8")
+    assert audit_certification_generator_ast(gen_file=gen_file) is True
+
+
+def test_block2_derive_security_gates_missing_queue_test():
+    res = derive_security_gates(passed_test_names=set(), crypto_metrics={})
+    assert res["queue_fsync_verified"] is False
+    assert res["queue_restart_integrity_verified"] is False
+
+
+def test_block2_derive_security_gates_missing_remote_test():
+    res = derive_security_gates(passed_test_names=set(), crypto_metrics={})
+    assert res["remote_fail_closed"] is False
+    assert res["strict_remote_ancestry"] is False
+
