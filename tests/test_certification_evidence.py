@@ -2557,7 +2557,9 @@ def test_block2_10_complete_certified_pass_derivation():
 
 from src.directive.ast_hardcode_scanner import scan_ast_for_critical_hardcodes
 from src.directive.github_governance_truth import (
-    fetch_raw_github_governance_snapshot, parse_github_governance_evidence
+    fetch_raw_github_governance_snapshot, parse_github_governance_evidence,
+    GOVERNANCE_TRUE_FALLBACK_COUNT, LS_REMOTE_GOVERNANCE_INFERENCE_DISABLED,
+    REMOTE_GOVERNANCE_SELF_ATTESTATION_DISABLED
 )
 from src.directive.field_provenance_map import generate_critical_field_provenance_map
 from src.directive.e2e_certification import classify_post_test_commits, verify_git_ancestor
@@ -2797,6 +2799,7 @@ def test_2_10r_critical_field_with_stale_source_evidence_fails(tmp_path):
 def test_2_10r_complete_remediating_certification_succeeds(tmp_path):
     raw_file = tmp_path / "github_remote_governance_raw.json"
     raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
         "git_ls_remote_verified": True,
         "governance_evidence_source": "GITHUB_REMOTE",
         "git_remote_governance": {
@@ -2808,3 +2811,185 @@ def test_2_10r_complete_remediating_certification_succeeds(tmp_path):
     parsed = parse_github_governance_evidence(raw_file)
     assert parsed["main_protection_effective"] is True
     assert parsed["github_governance_blocker"] is False
+
+
+# ==============================================================================
+# BLOCK 2.10R.1A — GOVERNANCE TRUTH ENGINE REMEDIATION TESTS
+# ==============================================================================
+
+def test_2_10r_1a_api_unavailable_governance_fails(tmp_path):
+    """
+    Proves that if GitHub API query fails (api_query_success = False),
+    the governance verifier fails closed: GOVERNANCE_EVIDENCE_VALID = False,
+    MAIN_PROTECTION_EFFECTIVE = False, GITHUB_GOVERNANCE_BLOCKER = True.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": False,
+        "api_http_results": {"protection": {"status": 401, "reason": "Unauthorized"}},
+        "api_data": {},
+        "git_remote_governance": None,
+        "git_ls_remote_verified": True
+    }
+    raw_file = tmp_path / "raw_gov.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["api_query_success"] is False
+    assert res["governance_evidence_valid"] is False
+    assert res["main_protection_effective"] is False
+    assert res["github_governance_blocker"] is True
+    assert res["human_action_required"] is True
+    assert res["parse_error"] == "API_QUERY_FAILED_GOVERNANCE_UNVERIFIED"
+
+
+def test_2_10r_1a_empty_api_response_fails(tmp_path):
+    """
+    Proves that an empty API data payload fails governance verification.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": False,
+        "api_http_results": {},
+        "api_data": {},
+        "git_remote_governance": None,
+        "git_ls_remote_verified": False
+    }
+    raw_file = tmp_path / "empty_api.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["governance_evidence_valid"] is False
+    assert res["main_protection_effective"] is False
+    assert res["github_governance_blocker"] is True
+
+
+def test_2_10r_1a_ls_remote_success_alone_fails_governance(tmp_path):
+    """
+    Proves that git ls-remote success alone (git_ls_remote_verified = True)
+    CANNOT satisfy governance evidence validity or branch protection.
+    LS_REMOTE_GOVERNANCE_INFERENCE_DISABLED MUST be True.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": False,
+        "git_ls_remote_verified": True,
+        "remote_head_sha": "7fd1c79c5364ee85f1c9c7fbb753a478144b62d3",
+        "api_data": {},
+        "git_remote_governance": None
+    }
+    raw_file = tmp_path / "ls_remote_only.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["independent_github_state_fetched"] is True
+    assert res["ls_remote_governance_inference_disabled"] is True
+    assert res["governance_evidence_valid"] is False
+    assert res["main_protection_effective"] is False
+    assert res["github_governance_blocker"] is True
+
+
+def test_2_10r_1a_synthetic_true_fallback_prohibited_and_zero(tmp_path):
+    """
+    Proves GOVERNANCE_TRUE_FALLBACK_COUNT == 0 and that fetch_raw_github_governance_snapshot
+    does not insert synthetic True default dictionaries when API fails.
+    """
+    assert GOVERNANCE_TRUE_FALLBACK_COUNT == 0
+    ok, raw_file, sha = fetch_raw_github_governance_snapshot(tmp_path, tmp_path)
+    data = json.loads(raw_file.read_text(encoding="utf-8"))
+    assert data["git_remote_governance"] is None
+    assert data["governance_true_fallback_count"] == 0
+
+
+def test_2_10r_1a_stale_api_evidence_rejected(tmp_path):
+    """
+    Proves that raw evidence older than max_age_seconds is rejected as STALE_REMOTE_EVIDENCE.
+    """
+    stale_time = (datetime.now(timezone.utc) - timedelta(seconds=7200)).isoformat()
+    snapshot = {
+        "fetched_at": stale_time,
+        "api_query_success": True,
+        "api_data": {"protection": {"url": "http://api.github.com/..."}},
+        "git_remote_governance": None
+    }
+    raw_file = tmp_path / "stale_gov.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file, max_age_seconds=3600.0)
+    assert res["parse_error"] == "STALE_REMOTE_EVIDENCE"
+    assert res["governance_evidence_valid"] is False
+    assert res["main_protection_effective"] is False
+
+
+def test_2_10r_1a_malformed_api_evidence_rejected(tmp_path):
+    """
+    Proves that corrupted or malformed raw evidence files fail closed.
+    """
+    raw_file = tmp_path / "malformed.json"
+    raw_file.write_text("NOT_VALID_JSON{{{", encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["parse_error"].startswith("MALFORMED_EVIDENCE")
+    assert res["governance_evidence_valid"] is False
+    assert res["main_protection_effective"] is False
+    assert res["github_governance_blocker"] is True
+
+
+def test_2_10r_1a_real_protection_response_derives_expected_fields(tmp_path):
+    """
+    Proves that an API protection payload with all active protections
+    correctly sets all 7 protection booleans to True.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "api_data": {
+            "protection": {
+                "url": "https://api.github.com/repos/owner/repo/branches/main/protection",
+                "required_pull_request_reviews": {"required_approving_review_count": 1},
+                "required_status_checks": {"strict": True},
+                "allow_force_pushes": {"enabled": False},
+                "allow_deletions": {"enabled": False},
+                "block_creations": {"enabled": True},
+                "enforce_admins": {"enabled": True}
+            }
+        },
+        "git_remote_governance": None
+    }
+    raw_file = tmp_path / "full_protection.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["api_query_success"] is True
+    assert res["governance_evidence_valid"] is True
+    assert res["pr_required_for_main"] is True
+    assert res["review_required_for_main"] is True
+    assert res["status_checks_required_for_main"] is True
+    assert res["force_push_blocked"] is True
+    assert res["branch_deletion_blocked"] is True
+    assert res["direct_push_restricted"] is True
+    assert res["admin_bypass_restricted"] is True
+    assert res["main_protection_effective"] is True
+    assert res["github_governance_blocker"] is False
+
+
+def test_2_10r_1a_real_unprotected_response_derives_fail(tmp_path):
+    """
+    Proves that an API response indicating missing protections (e.g. 404 or empty protection)
+    derives main_protection_effective = False and github_governance_blocker = True.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": False,
+        "api_http_results": {"protection": {"status": 404, "reason": "Branch not protected"}},
+        "api_data": {"protection_error": "HTTP 404: Branch not protected"},
+        "git_remote_governance": None
+    }
+    raw_file = tmp_path / "unprotected.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["governance_evidence_valid"] is False
+    assert res["main_protection_effective"] is False
+    assert res["github_governance_blocker"] is True
+    assert res["human_action_required"] is True

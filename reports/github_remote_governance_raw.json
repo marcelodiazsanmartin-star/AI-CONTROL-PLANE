@@ -1,20 +1,21 @@
 {
   "api_data": {},
-  "api_query_success": false,
-  "fetched_at": "2026-08-20T19:39:52.890985+00:00",
-  "git_ls_remote_verified": true,
-  "git_remote_governance": {
-    "admin_bypass_restricted": true,
-    "branch_delete_blocked": true,
-    "checks_required": true,
-    "direct_push_restricted": true,
-    "force_push_blocked": true,
-    "pr_required": true,
-    "review_required": true
+  "api_http_results": {
+    "auth": {
+      "reason": "GITHUB_TOKEN missing",
+      "status": 401
+    }
   },
-  "governance_evidence_source": "GITHUB_REMOTE",
+  "api_query_success": false,
+  "fetched_at": "2026-08-20T20:09:04.496469+00:00",
+  "git_ls_remote_verified": true,
+  "git_remote_governance": null,
+  "governance_evidence_source": "NONE",
   "governance_self_attestation_disabled": true,
-  "remote_head_sha": "7fd1c79824fbc5f2d4d832267aabe9b26afd133f",
+  "governance_true_fallback_count": 0,
+  "ls_remote_governance_inference_disabled": true,
+  "raw_api_payload_sha256": null,
+  "remote_head_sha": "26b1556b1a01582f76c1b24fe970b5448f090e5d",
   "remote_url": "https://github.com/marcelodiazsanmartin-star/AI-CONTROL-PLANE.git",
   "trusted_branch": "main",
   "trusted_branch_ref": "refs/heads/main"
