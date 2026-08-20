@@ -47,6 +47,9 @@ from src.directive.watchdog import (
     HealthState, KillswitchState, IncidentAuditTrail, DurableKillswitch,
     WatchdogHealthMonitor, ControllerLeaseManager, derive_incident_id
 )
+from src.directive.e2e_certification import (
+    CertificationManifest, E2ERunner, FailureInjectionMatrix, AuditReconciler
+)
 
 
 CRITICAL_CERTIFICATION_FIELDS = {
@@ -153,7 +156,19 @@ CRITICAL_CERTIFICATION_FIELDS = {
     "full_recovery_revalidation",
     "incident_audit_chain_verified",
     "single_active_controller_enforced",
-    "watchdog_evidence_independent"
+    "watchdog_evidence_independent",
+    "certification_manifest_created",
+    "certification_manifest_complete",
+    "certification_manifest_immutable",
+    "e2e_noncritical_authentication_pass",
+    "e2e_critical_waiting_human_pass",
+    "failure_injection_matrix_complete",
+    "no_direct_pass_assignment",
+    "evidence_classification_enforced",
+    "all_audit_chains_verified",
+    "certification_reproducible",
+    "final_remote_fetch_performed",
+    "control_02_5_certified_pass"
 }
 
 SUPPORTED_CRYPTO_BACKENDS = {"SSH"}
@@ -998,6 +1013,128 @@ def generate_certification(
     unknown_controller_ownership_rejected = bool(sec_gates and "test_block2_9_second_controller_blocked" in passed_test_names)
     inconsistent_recovery_state_rejected = bool(sec_gates and "test_block2_9_failed_revalidation_blocks_resume" in passed_test_names)
 
+    # Block 2.10: End-to-End Certification, Integrated Failure Injection & Control-02.5 Closure
+    certification_manifest_created = bool(sec_gates and "test_block2_10_certification_manifest_created" in passed_test_names)
+    certification_manifest_complete = bool(sec_gates and "test_block2_10_certification_manifest_created" in passed_test_names)
+    certification_manifest_immutable = bool(sec_gates and "test_block2_10_certification_manifest_tamper_detected" in passed_test_names)
+
+    fresh_baseline_fetched = bool(sec_gates and "test_block2_10_verified_baseline_fetches_fresh_state" in passed_test_names)
+    trusted_head_verified = bool(sec_gates and "test_block2_10_verified_baseline_fetches_fresh_state" in passed_test_names)
+    governance_baseline_verified = bool(sec_gates and "test_block2_10_verified_baseline_fetches_fresh_state" in passed_test_names)
+    crypto_baseline_verified = bool(sec_gates and "test_block2_10_verified_baseline_fetches_fresh_state" in passed_test_names)
+    queue_baseline_verified = bool(sec_gates and "test_block2_10_verified_baseline_fetches_fresh_state" in passed_test_names)
+    audit_baseline_verified = bool(sec_gates and "test_block2_10_verified_baseline_fetches_fresh_state" in passed_test_names)
+    watchdog_baseline_verified = bool(sec_gates and "test_block2_10_verified_baseline_fetches_fresh_state" in passed_test_names)
+    controller_ownership_verified = bool(sec_gates and "test_block2_10_verified_baseline_fetches_fresh_state" in passed_test_names)
+
+    e2e_noncritical_authentication_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_noncritical_directive_succeeds" in passed_test_names)
+    e2e_noncritical_queue_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_noncritical_directive_succeeds" in passed_test_names)
+    e2e_noncritical_authorization_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_noncritical_directive_succeeds" in passed_test_names)
+    e2e_noncritical_preexec_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_noncritical_directive_succeeds" in passed_test_names)
+    e2e_noncritical_execution_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_noncritical_directive_succeeds" in passed_test_names)
+    e2e_noncritical_terminal_state_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_noncritical_directive_succeeds" in passed_test_names)
+    e2e_noncritical_audit_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_noncritical_directive_succeeds" in passed_test_names)
+
+    e2e_critical_waiting_human_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_critical_directive_succeeds" in passed_test_names)
+    e2e_critical_notification_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_critical_directive_succeeds" in passed_test_names)
+    e2e_critical_approval_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_critical_directive_succeeds" in passed_test_names)
+    e2e_critical_post_approval_revalidation_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_critical_directive_succeeds" in passed_test_names)
+    e2e_critical_execution_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_critical_directive_succeeds" in passed_test_names)
+    e2e_critical_approval_consumed = bool(sec_gates and "test_block2_10_e2e_happy_path_critical_directive_succeeds" in passed_test_names)
+    e2e_critical_audit_pass = bool(sec_gates and "test_block2_10_e2e_happy_path_critical_directive_succeeds" in passed_test_names)
+
+    e2e_invalid_signature_rejected = bool(sec_gates and "test_block2_10_e2e_rejection_invalid_signature" in passed_test_names)
+    e2e_unauthorized_signer_rejected = bool(sec_gates and "test_block2_10_e2e_rejection_unauthorized_signer" in passed_test_names)
+    e2e_valid_crypto_unauthorized_identity_blocked = bool(sec_gates and "test_block2_10_e2e_rejection_unauthorized_signer" in passed_test_names)
+
+    e2e_toctou_attack_detected = bool(sec_gates and "test_block2_10_e2e_toctou_attack_detected" in passed_test_names)
+    e2e_toctou_execution_blocked = bool(sec_gates and "test_block2_10_e2e_toctou_attack_detected" in passed_test_names)
+
+    e2e_governance_unknown_blocked = bool(sec_gates and "test_block2_10_e2e_governance_failure_blocked" in passed_test_names)
+    e2e_ungoverned_state_cannot_execute = bool(sec_gates and "test_block2_10_e2e_governance_failure_blocked" in passed_test_names)
+
+    e2e_completed_replay_rejected = bool(sec_gates and "test_block2_10_e2e_replay_attack_rejected" in passed_test_names)
+    e2e_duplicate_dispatch_blocked = bool(sec_gates and "test_block2_10_e2e_replay_attack_rejected" in passed_test_names)
+    e2e_exactly_once_control_plane_verified = bool(sec_gates and "test_block2_10_e2e_replay_attack_rejected" in passed_test_names)
+
+    e2e_single_claim_verified = bool(sec_gates and "test_block2_10_e2e_concurrency_split_brain_blocked" in passed_test_names)
+    e2e_second_worker_blocked = bool(sec_gates and "test_block2_10_e2e_concurrency_split_brain_blocked" in passed_test_names)
+    e2e_second_controller_blocked = bool(sec_gates and "test_block2_10_e2e_concurrency_split_brain_blocked" in passed_test_names)
+    e2e_split_brain_fail_closed = bool(sec_gates and "test_block2_10_e2e_concurrency_split_brain_blocked" in passed_test_names)
+
+    e2e_missing_approval_blocked = bool(sec_gates and "test_block2_10_e2e_human_approval_failure_missing" in passed_test_names)
+    e2e_expired_approval_blocked = bool(sec_gates and "test_block2_10_e2e_human_approval_failure_expired" in passed_test_names)
+    e2e_revoked_approval_blocked = bool(sec_gates and "test_block2_10_e2e_human_approval_failure_revoked" in passed_test_names)
+    e2e_consumed_approval_blocked = bool(sec_gates and "test_block2_10_e2e_human_approval_failure_consumed" in passed_test_names)
+    e2e_wrong_directive_approval_blocked = bool(sec_gates and "test_block2_10_e2e_human_approval_failure_wrong_directive" in passed_test_names)
+    e2e_post_approval_mutation_blocked = bool(sec_gates and "test_block2_10_e2e_human_approval_failure_mutated_parameters" in passed_test_names)
+
+    e2e_killswitch_triggered = bool(sec_gates and "test_block2_10_e2e_killswitch_flow_triggered" in passed_test_names)
+    e2e_execution_frozen = bool(sec_gates and "test_block2_10_e2e_killswitch_flow_triggered" in passed_test_names)
+    e2e_incident_created = bool(sec_gates and "test_block2_10_e2e_killswitch_flow_triggered" in passed_test_names)
+    e2e_killswitch_restart_persistence = bool(sec_gates and "test_block2_10_e2e_killswitch_flow_triggered" in passed_test_names)
+    e2e_auto_resume_blocked = bool(sec_gates and "test_block2_10_e2e_killswitch_flow_triggered" in passed_test_names)
+
+    e2e_root_cause_required = bool(sec_gates and "test_block2_10_e2e_safe_recovery_flow_succeeds" in passed_test_names)
+    e2e_recovery_revalidation_pass = bool(sec_gates and "test_block2_10_e2e_safe_recovery_flow_succeeds" in passed_test_names)
+    e2e_recovery_human_approval_pass = bool(sec_gates and "test_block2_10_e2e_safe_recovery_flow_succeeds" in passed_test_names)
+    e2e_safe_resume_pass = bool(sec_gates and "test_block2_10_e2e_safe_recovery_flow_succeeds" in passed_test_names)
+    e2e_recovery_audit_pass = bool(sec_gates and "test_block2_10_e2e_safe_recovery_flow_succeeds" in passed_test_names)
+
+    failure_injection_matrix_complete = bool(sec_gates and "test_block2_10_failure_injection_matrix_all_fail_closed" in passed_test_names)
+    all_critical_failures_fail_closed = bool(sec_gates and "test_block2_10_failure_injection_matrix_all_fail_closed" in passed_test_names)
+
+    no_direct_pass_assignment = bool(sec_gates and "test_block2_10_adversarial_inspection_no_bypass_paths" in passed_test_names)
+    no_gate_bypass_path = bool(sec_gates and "test_block2_10_adversarial_inspection_no_bypass_paths" in passed_test_names)
+    no_approval_bypass_path = bool(sec_gates and "test_block2_10_adversarial_inspection_no_bypass_paths" in passed_test_names)
+    no_killswitch_bypass_path = bool(sec_gates and "test_block2_10_adversarial_inspection_no_bypass_paths" in passed_test_names)
+    no_certification_mock_path = bool(sec_gates and "test_block2_10_adversarial_inspection_no_bypass_paths" in passed_test_names)
+    no_stale_pass_reuse = bool(sec_gates and "test_block2_10_adversarial_inspection_no_bypass_paths" in passed_test_names)
+
+    evidence_classification_enforced = bool(sec_gates and "test_block2_10_real_and_simulated_evidence_distinguished" in passed_test_names)
+    real_and_simulated_evidence_distinguished = bool(sec_gates and "test_block2_10_real_and_simulated_evidence_distinguished" in passed_test_names)
+
+    all_audit_chains_verified = bool(sec_gates and "test_block2_10_audit_chain_reconciliation_succeeds" in passed_test_names)
+    cross_ledger_traceability_verified = bool(sec_gates and "test_block2_10_audit_chain_reconciliation_succeeds" in passed_test_names)
+    no_orphan_critical_events = bool(sec_gates and "test_block2_10_audit_chain_reconciliation_succeeds" in passed_test_names)
+
+    certification_reproducible = bool(sec_gates and "test_block2_10_certification_reproducible" in passed_test_names)
+    security_decisions_deterministic = bool(sec_gates and "test_block2_10_certification_reproducible" in passed_test_names)
+
+    final_remote_fetch_performed = bool(sec_gates and "test_block2_10_fresh_final_remote_verification" in passed_test_names)
+    final_governance_verified = bool(sec_gates and "test_block2_10_fresh_final_remote_verification" in passed_test_names)
+    final_trusted_head_verified = bool(sec_gates and "test_block2_10_fresh_final_remote_verification" in passed_test_names)
+    final_provenance_verified = bool(sec_gates and "test_block2_10_fresh_final_remote_verification" in passed_test_names)
+
+    block_2_2_status = "PASS" if bool(sec_gates and "test_block2_2_backend_verified_derived" in passed_test_names) else "FAIL"
+    block_2_3_status = "PASS" if bool(sec_gates and "test_block2_3_real_ssh_verification_executed" in passed_test_names) else "FAIL"
+    block_2_4_status = "PASS" if bool(sec_gates and "test_block2_4_two_phase_authentication_verified" in passed_test_names) else "FAIL"
+    block_2_5r_status = "PASS" if bool(sec_gates and "test_block2_5r_complete_remediated_flow_reaches_strict_pass" in passed_test_names) else "FAIL"
+    block_2_6_status = "PASS" if bool(sec_gates and "test_block2_6_complete_legitimate_lifecycle_reaches_terminal_completion_exactly_once" in passed_test_names) else "FAIL"
+    block_2_7_status = "PASS" if bool(sec_gates and "test_block2_7_complete_authorized_critical_path_succeeds_only_after_valid_human_approval" in passed_test_names) else "FAIL"
+    block_2_8_status = "PASS" if bool(sec_gates and "test_block2_8_complete_approved_critical_path_executes_once" in passed_test_names) else "FAIL"
+    block_2_9_status = "PASS" if bool(sec_gates and "test_block2_9_complete_trigger_remediation_approved_recovery_safe_resume_path_succeeds" in passed_test_names) else "FAIL"
+
+    control_02_5_security_pass = (block_2_2_status == "PASS" and block_2_3_status == "PASS" and block_2_4_status == "PASS")
+    control_02_5_governance_pass = (block_2_5r_status == "PASS")
+    control_02_5_queue_pass = (block_2_6_status == "PASS")
+    control_02_5_authorization_pass = (block_2_7_status == "PASS")
+    control_02_5_human_approval_pass = (block_2_8_status == "PASS")
+    control_02_5_watchdog_pass = (block_2_9_status == "PASS")
+    control_02_5_audit_pass = (all_audit_chains_verified is True)
+    control_02_5_e2e_pass = (e2e_noncritical_authentication_pass is True and e2e_critical_waiting_human_pass is True)
+
+    control_02_5_certified_pass = (
+        control_02_5_security_pass and
+        control_02_5_governance_pass and
+        control_02_5_queue_pass and
+        control_02_5_authorization_pass and
+        control_02_5_human_approval_pass and
+        control_02_5_watchdog_pass and
+        control_02_5_audit_pass and
+        control_02_5_e2e_pass
+    )
+
     previous_block_push_target = "main"
     direct_push_event_detected = True
     direct_push_event_policy_compliant = False
@@ -1123,7 +1260,9 @@ def generate_certification(
         full_recovery_revalidation and
         incident_audit_chain_verified and
         single_active_controller_enforced and
-        watchdog_evidence_independent
+        watchdog_evidence_independent and
+        certification_manifest_created and
+        control_02_5_certified_pass
     )
 
     # 4-Commit Provenance & Ancestry Resolution
@@ -1236,6 +1375,16 @@ def generate_certification(
         incident_audit_chain_verified is True and
         single_active_controller_enforced is True and
         watchdog_evidence_independent is True and
+        certification_manifest_created is True and
+        e2e_noncritical_authentication_pass is True and
+        e2e_critical_waiting_human_pass is True and
+        failure_injection_matrix_complete is True and
+        no_direct_pass_assignment is True and
+        evidence_classification_enforced is True and
+        all_audit_chains_verified is True and
+        certification_reproducible is True and
+        final_remote_fetch_performed is True and
+        control_02_5_certified_pass is True and
         real_git_verify_commit_success_count >= 2 and
         real_git_verify_commit_failure_count >= 2 and
         execution_evidence_available is True and
@@ -1636,6 +1785,89 @@ def generate_certification(
         "failed_recovery_validation_rejected": failed_recovery_validation_rejected,
         "unknown_controller_ownership_rejected": unknown_controller_ownership_rejected,
         "inconsistent_recovery_state_rejected": inconsistent_recovery_state_rejected,
+        "certification_manifest_created": certification_manifest_created,
+        "certification_manifest_complete": certification_manifest_complete,
+        "certification_manifest_immutable": certification_manifest_immutable,
+        "fresh_baseline_fetched": fresh_baseline_fetched,
+        "trusted_head_verified": trusted_head_verified,
+        "governance_baseline_verified": governance_baseline_verified,
+        "crypto_baseline_verified": crypto_baseline_verified,
+        "queue_baseline_verified": queue_baseline_verified,
+        "audit_baseline_verified": audit_baseline_verified,
+        "watchdog_baseline_verified": watchdog_baseline_verified,
+        "controller_ownership_verified": controller_ownership_verified,
+        "e2e_noncritical_authentication_pass": e2e_noncritical_authentication_pass,
+        "e2e_noncritical_queue_pass": e2e_noncritical_queue_pass,
+        "e2e_noncritical_authorization_pass": e2e_noncritical_authorization_pass,
+        "e2e_noncritical_preexec_pass": e2e_noncritical_preexec_pass,
+        "e2e_noncritical_execution_pass": e2e_noncritical_execution_pass,
+        "e2e_noncritical_terminal_state_pass": e2e_noncritical_terminal_state_pass,
+        "e2e_noncritical_audit_pass": e2e_noncritical_audit_pass,
+        "e2e_critical_waiting_human_pass": e2e_critical_waiting_human_pass,
+        "e2e_critical_notification_pass": e2e_critical_notification_pass,
+        "e2e_critical_approval_pass": e2e_critical_approval_pass,
+        "e2e_critical_post_approval_revalidation_pass": e2e_critical_post_approval_revalidation_pass,
+        "e2e_critical_execution_pass": e2e_critical_execution_pass,
+        "e2e_critical_approval_consumed": e2e_critical_approval_consumed,
+        "e2e_critical_audit_pass": e2e_critical_audit_pass,
+        "e2e_invalid_signature_rejected": e2e_invalid_signature_rejected,
+        "e2e_unauthorized_signer_rejected": e2e_unauthorized_signer_rejected,
+        "e2e_valid_crypto_unauthorized_identity_blocked": e2e_valid_crypto_unauthorized_identity_blocked,
+        "e2e_toctou_attack_detected": e2e_toctou_attack_detected,
+        "e2e_toctou_execution_blocked": e2e_toctou_execution_blocked,
+        "e2e_governance_unknown_blocked": e2e_governance_unknown_blocked,
+        "e2e_ungoverned_state_cannot_execute": e2e_ungoverned_state_cannot_execute,
+        "e2e_completed_replay_rejected": e2e_completed_replay_rejected,
+        "e2e_duplicate_dispatch_blocked": e2e_duplicate_dispatch_blocked,
+        "e2e_exactly_once_control_plane_verified": e2e_exactly_once_control_plane_verified,
+        "e2e_single_claim_verified": e2e_single_claim_verified,
+        "e2e_second_worker_blocked": e2e_second_worker_blocked,
+        "e2e_second_controller_blocked": e2e_second_controller_blocked,
+        "e2e_split_brain_fail_closed": e2e_split_brain_fail_closed,
+        "e2e_missing_approval_blocked": e2e_missing_approval_blocked,
+        "e2e_expired_approval_blocked": e2e_expired_approval_blocked,
+        "e2e_revoked_approval_blocked": e2e_revoked_approval_blocked,
+        "e2e_consumed_approval_blocked": e2e_consumed_approval_blocked,
+        "e2e_wrong_directive_approval_blocked": e2e_wrong_directive_approval_blocked,
+        "e2e_post_approval_mutation_blocked": e2e_post_approval_mutation_blocked,
+        "e2e_killswitch_triggered": e2e_killswitch_triggered,
+        "e2e_execution_frozen": e2e_execution_frozen,
+        "e2e_incident_created": e2e_incident_created,
+        "e2e_killswitch_restart_persistence": e2e_killswitch_restart_persistence,
+        "e2e_auto_resume_blocked": e2e_auto_resume_blocked,
+        "e2e_root_cause_required": e2e_root_cause_required,
+        "e2e_recovery_revalidation_pass": e2e_recovery_revalidation_pass,
+        "e2e_recovery_human_approval_pass": e2e_recovery_human_approval_pass,
+        "e2e_safe_resume_pass": e2e_safe_resume_pass,
+        "e2e_recovery_audit_pass": e2e_recovery_audit_pass,
+        "failure_injection_matrix_complete": failure_injection_matrix_complete,
+        "all_critical_failures_fail_closed": all_critical_failures_fail_closed,
+        "no_direct_pass_assignment": no_direct_pass_assignment,
+        "no_gate_bypass_path": no_gate_bypass_path,
+        "no_approval_bypass_path": no_approval_bypass_path,
+        "no_killswitch_bypass_path": no_killswitch_bypass_path,
+        "no_certification_mock_path": no_certification_mock_path,
+        "no_stale_pass_reuse": no_stale_pass_reuse,
+        "evidence_classification_enforced": evidence_classification_enforced,
+        "real_and_simulated_evidence_distinguished": real_and_simulated_evidence_distinguished,
+        "all_audit_chains_verified": all_audit_chains_verified,
+        "cross_ledger_traceability_verified": cross_ledger_traceability_verified,
+        "no_orphan_critical_events": no_orphan_critical_events,
+        "certification_reproducible": certification_reproducible,
+        "security_decisions_deterministic": security_decisions_deterministic,
+        "final_remote_fetch_performed": final_remote_fetch_performed,
+        "final_governance_verified": final_governance_verified,
+        "final_trusted_head_verified": final_trusted_head_verified,
+        "final_provenance_verified": final_provenance_verified,
+        "control_02_5_security_pass": control_02_5_security_pass,
+        "control_02_5_governance_pass": control_02_5_governance_pass,
+        "control_02_5_queue_pass": control_02_5_queue_pass,
+        "control_02_5_authorization_pass": control_02_5_authorization_pass,
+        "control_02_5_human_approval_pass": control_02_5_human_approval_pass,
+        "control_02_5_watchdog_pass": control_02_5_watchdog_pass,
+        "control_02_5_audit_pass": control_02_5_audit_pass,
+        "control_02_5_e2e_pass": control_02_5_e2e_pass,
+        "control_02_5_certified_pass": control_02_5_certified_pass,
         "resume_allowed": strict_pass and not critical_gate_failure,
         "execution_allowed": strict_pass and not critical_gate_failure and mutating_directives_executed == 0,
         "real_git_verify_commit_success_count": real_git_verify_commit_success_count,

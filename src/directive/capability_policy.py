@@ -21,6 +21,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, Set, List
 
+from src.directive.approval_engine import revalidate_approval_for_execution
+
 
 class RiskClass(str, Enum):
     READ_ONLY = "READ_ONLY"
@@ -204,6 +206,27 @@ class AuthorizationAuditTrail:
 
         return rec
 
+    def verify_integrity(self) -> Tuple[bool, Optional[str]]:
+        if not self.audit_file.exists():
+            return True, None
+        try:
+            lines = self.audit_file.read_text(encoding="utf-8").strip().splitlines()
+            expected_prev = "0000000000000000000000000000000000000000000000000000000000000000"
+            for line in lines:
+                if not line.strip():
+                    continue
+                rec = json.loads(line)
+                if rec.get("previous_event_hash") != expected_prev:
+                    return False, "PREVIOUS_EVENT_HASH_TAMPER_DETECTED"
+                body = f"{rec['directive_id']}:{rec['capability_id']}:{rec['requested_target']}:{rec['parameter_hash']}:{rec['derived_risk_class']}:{rec['human_approval_required']}:{rec['approval_id']}:{rec['authorized']}:{rec['rejection_reason']}:{rec['timestamp']}:{rec['previous_event_hash']}"
+                expected_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
+                if rec.get("event_hash") != expected_hash:
+                    return False, "EVENT_HASH_TAMPER_DETECTED"
+                expected_prev = rec.get("event_hash")
+            return True, None
+        except Exception as e:
+            return False, f"VERIFICATION_ERROR: {str(e)}"
+
 
 def evaluate_execution_authorization(
     directive_id: str,
@@ -279,10 +302,18 @@ def evaluate_execution_authorization(
             return False, None, "MISSING_HUMAN_APPROVAL_BLOCKED"
         
         # Verify approval is bound to exact directive & parameters
+        computed_param_hash = hashlib.sha256(param_str.encode("utf-8")).hexdigest()
+        rec = human_approval_data.get("rec")
+        if rec:
+            ok_reval, err_reval = revalidate_approval_for_execution(
+                rec, directive_id, capability_id, computed_param_hash, requested_target, derived_risk.value
+            )
+            if not ok_reval:
+                return False, None, err_reval
+
         if human_approval_data.get("directive_id") != directive_id:
             return False, None, "APPROVAL_SCOPE_BOUND_TO_ACTION"
-        
-        computed_param_hash = hashlib.sha256(param_str.encode("utf-8")).hexdigest()
+
         if human_approval_data.get("parameter_hash") != computed_param_hash:
             return False, None, "APPROVAL_SCOPE_BOUND_TO_PARAMETERS"
 

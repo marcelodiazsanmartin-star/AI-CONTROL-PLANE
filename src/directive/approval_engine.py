@@ -355,13 +355,14 @@ def revalidate_approval_for_execution(
     if not approval_rec:
         return False, "MISSING_APPROVAL_REJECTED"
 
-    if approval_rec.get("consumed", False) or approval_rec.get("state") == ApprovalState.CONSUMED.value:
+    curr_state_str = str(approval_rec.get("state", ""))
+    if approval_rec.get("consumed", False) or curr_state_str == ApprovalState.CONSUMED.value:
         return False, "CONSUMED_APPROVAL_REPLAY_REJECTED"
 
-    if approval_rec.get("revoked", False) or approval_rec.get("state") == ApprovalState.REVOKED.value:
+    if approval_rec.get("revoked", False) or curr_state_str == ApprovalState.REVOKED.value:
         return False, "REVOKED_APPROVAL_REJECTED"
 
-    if approval_rec.get("state") != ApprovalState.APPROVED.value:
+    if curr_state_str != ApprovalState.APPROVED.value:
         return False, "UNKNOWN_APPROVAL_STATE_REJECTED"
 
     if time.time() > approval_rec.get("expires_at", 0):
