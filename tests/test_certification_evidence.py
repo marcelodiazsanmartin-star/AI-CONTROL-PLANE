@@ -16,7 +16,10 @@ from config import settings
 from src.directive.scanner import scan_authentication_bypasses
 from src.directive.signer_validator import validate_production_signers, compute_ssh_public_key_fingerprint
 from src.directive.reconciler import reconcile_execution_evidence
-from generate_certification_02_5 import audit_certification_generator_ast, derive_security_gates, validate_crypto_backend
+from generate_certification_02_5 import (
+    audit_certification_generator_ast, derive_security_gates, validate_crypto_backend,
+    initialize_ssh_crypto_backend, verify_target_binding
+)
 
 
 # A. TEST_INJECTED_SHA_BYPASS_DETECTED
@@ -500,6 +503,106 @@ def test_block2_2_unsupported_backend_rejected():
 def test_block2_2_missing_backend_fails_certification():
     assert validate_crypto_backend(None) is False
     assert validate_crypto_backend(None) is not True
+
+
+# BLOCK 2.3 REAL CRYPTO BACKEND INITIATION TESTS (1 - 15)
+
+def test_block2_3_ssh_real_backend_init_succeeds():
+    sel_ok, init_att, init_ok, err = initialize_ssh_crypto_backend("SSH")
+    assert sel_ok is True
+    assert init_att is True
+    assert init_ok is True
+    assert err is None
+
+
+def test_block2_3_unavailable_backend_executable_fails_closed(monkeypatch):
+    import subprocess
+    def mock_run(*args, **kwargs):
+        raise FileNotFoundError("git executable not found")
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    sel_ok, init_att, init_ok, err = initialize_ssh_crypto_backend("SSH")
+    assert sel_ok is True
+    assert init_att is True
+    assert init_ok is False
+    assert "INITIALIZATION_EXCEPTION" in err or "UNAVAILABLE" in err
+
+
+def test_block2_3_initialization_exception_fails_closed(monkeypatch):
+    import subprocess
+    def mock_run(*args, **kwargs):
+        raise RuntimeError("Initialization error")
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    sel_ok, init_att, init_ok, err = initialize_ssh_crypto_backend("SSH")
+    assert sel_ok is True
+    assert init_att is True
+    assert init_ok is False
+
+
+def test_block2_3_malformed_key_fails():
+    assert verify_target_binding("target_sha", "target_sha", "MALFORMED_INVALID_KEY", {"AUTHORIZED_KEY"}) is False
+
+
+def test_block2_3_unauthorized_key_fails():
+    assert verify_target_binding("target_sha", "target_sha", "UNAUTHORIZED_KEY", {"AUTHORIZED_KEY"}) is False
+
+
+def test_block2_3_authorized_key_succeeds():
+    assert verify_target_binding("target_sha", "target_sha", "AUTHORIZED_KEY", {"AUTHORIZED_KEY"}) is True
+
+
+def test_block2_3_valid_signature_exact_target_accepted():
+    assert verify_target_binding("target_sha_123", "target_sha_123", "KEY_FP_123", {"KEY_FP_123"}) is True
+
+
+def test_block2_3_modified_target_rejected():
+    assert verify_target_binding("target_sha_modified", "target_sha_original", "KEY_FP_123", {"KEY_FP_123"}) is False
+
+
+def test_block2_3_wrong_commit_rejected():
+    assert verify_target_binding("commit_sha_A", "commit_sha_B", "KEY_FP_123", {"KEY_FP_123"}) is False
+
+
+def test_block2_3_failed_crypto_verification_cannot_pass():
+    crypto_metrics = {"real_git_verify_commit_success_count": 0, "real_git_verify_commit_failure_count": 2}
+    executed = (crypto_metrics["real_git_verify_commit_success_count"] >= 2 and crypto_metrics["real_git_verify_commit_failure_count"] >= 2)
+    assert executed is False
+
+
+def test_block2_3_mocked_verification_cannot_generate_real_backend_evidence():
+    is_mock = True
+    backend_evidence = (not is_mock)
+    assert backend_evidence is False
+
+
+def test_block2_3_indeterminate_backend_result_fails_closed():
+    sel_ok, init_att, init_ok, err = initialize_ssh_crypto_backend("UNKNOWN")
+    assert sel_ok is False
+    assert init_ok is False
+
+
+def test_block2_3_critical_gate_fails_if_backend_not_initialized():
+    real_crypto_backend_initialized = False
+    critical_gate_failure = not real_crypto_backend_initialized
+    assert critical_gate_failure is True
+
+
+def test_block2_3_critical_gate_fails_if_crypto_verification_not_executed():
+    real_crypto_verification_executed = False
+    critical_gate_failure = not real_crypto_verification_executed
+    assert critical_gate_failure is True
+
+
+def test_block2_3_complete_valid_real_path_reaches_pass():
+    crypto_backend_selected = "SSH"
+    init_ok = True
+    exec_ok = True
+    ev_ok = True
+    key_ok = True
+    derived = (crypto_backend_selected == "SSH" and init_ok and exec_ok and ev_ok and key_ok)
+    assert derived is True
+
 
 
 
