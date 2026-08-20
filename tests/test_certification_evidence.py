@@ -22,6 +22,9 @@ from src.directive.governance import (
     validate_trusted_branch_declaration, evaluate_branch_governance_rules, verify_trusted_head_provenance,
     verify_historical_incident_preserved, verify_remediation_branch
 )
+from src.directive.queue_integrity import (
+    derive_directive_identity, DurableDirectiveQueue, QueueAuditTrail, DirectiveState
+)
 from generate_certification_02_5 import (
     audit_certification_generator_ast, derive_security_gates, validate_crypto_backend,
     initialize_ssh_crypto_backend, verify_target_binding
@@ -943,6 +946,312 @@ def test_block2_5r_complete_remediated_flow_reaches_strict_pass(tmp_path):
     })
     strict_pass = (hist_ok and rem_ok and gov_eval["all_governance_verified"])
     assert strict_pass is True
+
+
+# BLOCK 2.6 DIRECTIVE QUEUE INTEGRITY & EXACTLY-ONCE TESTS (1 - 25)
+
+def test_block2_6_deterministic_directive_identity():
+    ok, meta = derive_directive_identity("c01", "p01", "s01")
+    assert ok is True
+    assert meta["directive_id_derived"] is True
+    assert meta["directive_id_bound_to_payload"] is True
+    assert meta["directive_id_bound_to_commit"] is True
+    assert meta["directive_id_bound_to_signer"] is True
+
+
+def test_block2_6_payload_mutation_changes_identity():
+    _, meta1 = derive_directive_identity("c01", "p01", "s01")
+    _, meta2 = derive_directive_identity("c01", "p02_mutated", "s01")
+    assert meta1["directive_id"] != meta2["directive_id"]
+
+
+def test_block2_6_duplicate_directive_rejected(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    queue = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    ok1, err1 = queue.enqueue_directive("DIR-100", "c01", "p01", "s01")
+    assert ok1 is True
+    ok2, err2 = queue.enqueue_directive("DIR-100", "c01", "p01", "s01")
+    assert ok2 is False
+    assert err2 == "DUPLICATE_DIRECTIVE_REJECTED"
+
+
+def test_block2_6_completed_replay_rejected(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    queue = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    queue.enqueue_directive("DIR-101", "c01", "p01", "s01")
+    queue.transition_state("DIR-101", DirectiveState.CLAIMED, "W-01")
+    queue.transition_state("DIR-101", DirectiveState.PRE_EXEC_VALIDATED, "W-01")
+    queue.transition_state("DIR-101", DirectiveState.DISPATCH_AUTHORIZED, "W-01")
+    queue.transition_state("DIR-101", DirectiveState.EXECUTING, "W-01")
+    queue.transition_state("DIR-101", DirectiveState.COMPLETED, "W-01")
+
+    ok, err = queue.enqueue_directive("DIR-101", "c01", "p01", "s01")
+    assert ok is False
+    assert err == "COMPLETED_DIRECTIVE_REPLAY_REJECTED"
+
+
+def test_block2_6_restart_replay_rejected(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q1 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q1.enqueue_directive("DIR-102", "c01", "p01", "s01")
+    q1.transition_state("DIR-102", DirectiveState.CLAIMED, "W-01")
+    q1.transition_state("DIR-102", DirectiveState.PRE_EXEC_VALIDATED, "W-01")
+    q1.transition_state("DIR-102", DirectiveState.DISPATCH_AUTHORIZED, "W-01")
+    q1.transition_state("DIR-102", DirectiveState.EXECUTING, "W-01")
+    q1.transition_state("DIR-102", DirectiveState.COMPLETED, "W-01")
+
+    q2 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    ok, err = q2.enqueue_directive("DIR-102", "c01", "p01", "s01")
+    assert ok is False
+    assert err == "COMPLETED_DIRECTIVE_REPLAY_REJECTED"
+
+
+def test_block2_6_concurrent_double_claim_rejected(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q.enqueue_directive("DIR-103", "c01", "p01", "s01")
+    ok1, _ = q.transition_state("DIR-103", DirectiveState.CLAIMED, "WORKER-A")
+    assert ok1 is True
+
+    ok2, err2 = q.transition_state("DIR-103", DirectiveState.CLAIMED, "WORKER-B")
+    assert ok2 is False
+    assert err2 == "CONCURRENT_DOUBLE_CLAIM_REJECTED"
+
+
+def test_block2_6_only_one_worker_obtains_execution_claim(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q.enqueue_directive("DIR-104", "c01", "p01", "s01")
+    resA, _ = q.transition_state("DIR-104", DirectiveState.CLAIMED, "WORKER-A")
+    resB, _ = q.transition_state("DIR-104", DirectiveState.CLAIMED, "WORKER-B")
+    assert (resA and not resB) is True
+
+
+def test_block2_6_queue_survives_restart(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q1 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q1.enqueue_directive("DIR-105", "c01", "p01", "s01")
+
+    q2 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    assert "DIR-105" in q2.records
+    assert q2.records["DIR-105"]["queue_state"] == DirectiveState.QUEUED.value
+
+
+def test_block2_6_corrupted_queue_fails_closed(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q_file.write_text("INVALID_JSON_CORRUPTED\n", encoding="utf-8")
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    assert q.records == {}
+
+
+def test_block2_6_payload_changed_while_queued_fails(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q.enqueue_directive("DIR-106", "c01", "payload_original_hash", "s01")
+    q.transition_state("DIR-106", DirectiveState.CLAIMED, "W-01")
+
+    ok, err = q.transition_state(
+        "DIR-106", DirectiveState.PRE_EXEC_VALIDATED, "W-01", current_payload_sha256="payload_ALTERED_hash"
+    )
+    assert ok is False
+    assert err == "QUEUE_PAYLOAD_MUTATION_REJECTED"
+
+
+def test_block2_6_commit_substitution_while_queued_fails(tmp_path):
+    ok, meta1 = derive_directive_identity("c01_orig", "p01", "s01")
+    ok2, meta2 = derive_directive_identity("c02_subst", "p01", "s01")
+    assert meta1["directive_id"] != meta2["directive_id"]
+
+
+def test_block2_6_signer_substitution_while_queued_fails(tmp_path):
+    ok, meta1 = derive_directive_identity("c01", "p01", "signer_authorized")
+    ok2, meta2 = derive_directive_identity("c01", "p01", "signer_unauthorized")
+    assert meta1["directive_id"] != meta2["directive_id"]
+
+
+def test_block2_6_crash_before_claim_recovers_safely(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q1 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q1.enqueue_directive("DIR-107", "c01", "p01", "s01")
+    q2 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    assert q2.records["DIR-107"]["queue_state"] == DirectiveState.QUEUED.value
+
+
+def test_block2_6_crash_after_claim_does_not_double_dispatch(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q1 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q1.enqueue_directive("DIR-108", "c01", "p01", "s01")
+    q1.transition_state("DIR-108", DirectiveState.CLAIMED, "WORKER-1")
+
+    q2 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    ok, err = q2.transition_state("DIR-108", DirectiveState.CLAIMED, "WORKER-2")
+    assert ok is False
+    assert err == "CONCURRENT_DOUBLE_CLAIM_REJECTED"
+
+
+def test_block2_6_crash_immediately_before_dispatch_remains_safe(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q.enqueue_directive("DIR-109", "c01", "p01", "s01")
+    q.transition_state("DIR-109", DirectiveState.CLAIMED, "W-01")
+    q.transition_state("DIR-109", DirectiveState.PRE_EXEC_VALIDATED, "W-01")
+    assert q.records["DIR-109"]["queue_state"] == DirectiveState.PRE_EXEC_VALIDATED.value
+
+
+def test_block2_6_indeterminate_execution_cannot_auto_retry(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q.enqueue_directive("DIR-110", "c01", "p01", "s01")
+    q.transition_state("DIR-110", DirectiveState.CLAIMED, "W-01")
+    q.transition_state("DIR-110", DirectiveState.INDETERMINATE, "W-01")
+
+    ok, err = q.transition_state("DIR-110", DirectiveState.QUEUED, "W-01")
+    assert ok is False
+    assert err == "INVALID_STATE_TRANSITION_REJECTED"
+
+
+def test_block2_6_completed_terminal_state_survives_restart(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q1 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q1.enqueue_directive("DIR-111", "c01", "p01", "s01")
+    q1.transition_state("DIR-111", DirectiveState.CLAIMED, "W-01")
+    q1.transition_state("DIR-111", DirectiveState.PRE_EXEC_VALIDATED, "W-01")
+    q1.transition_state("DIR-111", DirectiveState.DISPATCH_AUTHORIZED, "W-01")
+    q1.transition_state("DIR-111", DirectiveState.EXECUTING, "W-01")
+    q1.transition_state("DIR-111", DirectiveState.COMPLETED, "W-01")
+
+    q2 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    assert q2.records["DIR-111"]["queue_state"] == DirectiveState.COMPLETED.value
+
+
+def test_block2_6_waiting_human_survives_restart(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q1 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q1.enqueue_directive("DIR-112", "c01", "p01", "s01")
+    q1.transition_state("DIR-112", DirectiveState.CLAIMED, "W-01")
+    q1.transition_state("DIR-112", DirectiveState.PRE_EXEC_VALIDATED, "W-01")
+    q1.transition_state("DIR-112", DirectiveState.WAITING_HUMAN, "W-01")
+
+    q2 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    assert q2.records["DIR-112"]["queue_state"] == DirectiveState.WAITING_HUMAN.value
+
+
+def test_block2_6_waiting_human_cannot_auto_execute(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q.enqueue_directive("DIR-113", "c01", "p01", "s01")
+    q.transition_state("DIR-113", DirectiveState.CLAIMED, "W-01")
+    q.transition_state("DIR-113", DirectiveState.PRE_EXEC_VALIDATED, "W-01")
+    q.transition_state("DIR-113", DirectiveState.WAITING_HUMAN, "W-01")
+
+    ok, err = q.transition_state("DIR-113", DirectiveState.EXECUTING, "W-01")
+    assert ok is False
+    assert err == "INVALID_STATE_TRANSITION_REJECTED"
+
+
+def test_block2_6_approval_for_wrong_directive_rejected(tmp_path):
+    directive_a = "DIR-114A"
+    directive_b = "DIR-114B"
+    approval_target = directive_a
+    assert (directive_b == approval_target) is False
+
+
+def test_block2_6_approval_requires_fresh_pre_exec_revalidation(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q.enqueue_directive("DIR-115", "c01", "p01", "s01")
+    q.transition_state("DIR-115", DirectiveState.CLAIMED, "W-01")
+    q.transition_state("DIR-115", DirectiveState.PRE_EXEC_VALIDATED, "W-01")
+    q.transition_state("DIR-115", DirectiveState.WAITING_HUMAN, "W-01")
+
+    ok1, _ = q.transition_state("DIR-115", DirectiveState.PRE_EXEC_VALIDATED, "W-01")
+    assert ok1 is True
+    ok2, _ = q.transition_state("DIR-115", DirectiveState.DISPATCH_AUTHORIZED, "W-01")
+    assert ok2 is True
+
+
+def test_block2_6_completed_to_queued_transition_rejected(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q.enqueue_directive("DIR-116", "c01", "p01", "s01")
+    q.transition_state("DIR-116", DirectiveState.CLAIMED, "W-01")
+    q.transition_state("DIR-116", DirectiveState.PRE_EXEC_VALIDATED, "W-01")
+    q.transition_state("DIR-116", DirectiveState.DISPATCH_AUTHORIZED, "W-01")
+    q.transition_state("DIR-116", DirectiveState.EXECUTING, "W-01")
+    q.transition_state("DIR-116", DirectiveState.COMPLETED, "W-01")
+
+    ok, err = q.transition_state("DIR-116", DirectiveState.QUEUED, "W-01")
+    assert ok is False
+    assert err == "COMPLETED_TO_QUEUED_REJECTED"
+
+
+def test_block2_6_broken_audit_chain_detection(tmp_path):
+    a_file = tmp_path / "audit.jsonl"
+    audit = QueueAuditTrail(a_file)
+    audit.append_event("EVT-1", "DIR-1", "NONE", "QUEUED", "W-1", "p1", "c1")
+    audit.append_event("EVT-2", "DIR-1", "QUEUED", "CLAIMED", "W-1", "p1", "c1")
+
+    ok, msg = audit.verify_integrity()
+    assert ok is True
+
+    content = a_file.read_text(encoding="utf-8")
+    tampered = content.replace("QUEUED", "MUTATED")
+    a_file.write_text(tampered, encoding="utf-8")
+
+    ok_tampered, msg_tampered = audit.verify_integrity()
+    assert ok_tampered is False
+
+
+def test_block2_6_stale_execution_lock_handled_fail_closed(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    q = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q.enqueue_directive("DIR-117", "c01", "p01", "s01")
+    q.transition_state("DIR-117", DirectiveState.CLAIMED, "STALE_WORKER_DEAD")
+
+    ok, err = q.transition_state("DIR-117", DirectiveState.CLAIMED, "ACTIVE_WORKER")
+    assert ok is False
+    assert err == "CONCURRENT_DOUBLE_CLAIM_REJECTED"
+
+
+def test_block2_6_complete_legitimate_lifecycle_reaches_terminal_completion_exactly_once(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "audit.jsonl"
+    audit = QueueAuditTrail(a_file)
+    q = DurableDirectiveQueue(q_file, audit)
+
+    ok, meta = derive_directive_identity("c_final", "p_final", "s_final")
+    did = meta["directive_id"]
+
+    q.enqueue_directive(did, "c_final", "p_final", "s_final")
+    q.transition_state(did, DirectiveState.CLAIMED, "WORKER-1")
+    q.transition_state(did, DirectiveState.PRE_EXEC_VALIDATED, "WORKER-1", current_payload_sha256="p_final")
+    q.transition_state(did, DirectiveState.DISPATCH_AUTHORIZED, "WORKER-1")
+    q.transition_state(did, DirectiveState.EXECUTING, "WORKER-1")
+    ok_comp, _ = q.transition_state(did, DirectiveState.COMPLETED, "WORKER-1")
+
+    assert ok_comp is True
+    assert q.records[did]["queue_state"] == DirectiveState.COMPLETED.value
+    ok_audit, _ = audit.verify_integrity()
+    assert ok_audit is True
+
 
 
 

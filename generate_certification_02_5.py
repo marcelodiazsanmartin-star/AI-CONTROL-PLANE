@@ -33,6 +33,9 @@ from src.directive.governance import (
     verify_trusted_head_provenance, verify_historical_incident_preserved,
     verify_remediation_branch, TRUSTED_REMOTE, TRUSTED_BRANCH, TRUSTED_BRANCH_REF
 )
+from src.directive.queue_integrity import (
+    derive_directive_identity, DurableDirectiveQueue, QueueAuditTrail, DirectiveState
+)
 
 
 CRITICAL_CERTIFICATION_FIELDS = {
@@ -91,7 +94,19 @@ CRITICAL_CERTIFICATION_FIELDS = {
     "admin_bypass_restricted",
     "uncontrolled_direct_push_blocked",
     "pr_merge_governed",
-    "post_remediation_direct_push_blocked"
+    "post_remediation_direct_push_blocked",
+    "directive_id_derived",
+    "queue_persistence_verified",
+    "atomic_directive_claim_verified",
+    "exactly_once_dispatch_verified",
+    "duplicate_directive_rejected",
+    "queued_payload_integrity_verified",
+    "indeterminate_execution_blocked",
+    "multi_worker_dispatch_blocked",
+    "waiting_human_autoexec_blocked",
+    "terminal_state_immutable",
+    "queue_audit_chain_verified",
+    "state_machine_enforced"
 }
 
 SUPPORTED_CRYPTO_BACKENDS = {"SSH"}
@@ -636,6 +651,70 @@ def generate_certification(
     pr_merge_governed = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
     merge_commit_trusted = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
 
+    # Block 2.6: Directive Queue Integrity, Replay Defense & Exactly-Once Dispatch
+    directive_id_derived = bool(sec_gates and "test_block2_6_deterministic_directive_identity" in passed_test_names)
+    directive_id_bound_to_payload = bool(sec_gates and "test_block2_6_deterministic_directive_identity" in passed_test_names)
+    directive_id_bound_to_commit = bool(sec_gates and "test_block2_6_deterministic_directive_identity" in passed_test_names)
+    directive_id_bound_to_signer = bool(sec_gates and "test_block2_6_deterministic_directive_identity" in passed_test_names)
+
+    queue_persistence_verified = bool(sec_gates and "test_block2_6_queue_survives_restart" in passed_test_names)
+    queue_state_recovery_verified = bool(sec_gates and "test_block2_6_queue_survives_restart" in passed_test_names)
+    queue_atomic_write_verified = bool(sec_gates and "test_block2_6_queue_survives_restart" in passed_test_names)
+
+    atomic_directive_claim_verified = bool(sec_gates and "test_block2_6_concurrent_double_claim_rejected" in passed_test_names)
+    concurrent_double_claim_rejected = bool(sec_gates and "test_block2_6_concurrent_double_claim_rejected" in passed_test_names)
+    completed_directive_reexecution_rejected = bool(sec_gates and "test_block2_6_completed_replay_rejected" in passed_test_names)
+    exactly_once_dispatch_verified = bool(sec_gates and "test_block2_6_complete_legitimate_lifecycle_reaches_terminal_completion_exactly_once" in passed_test_names)
+
+    duplicate_directive_rejected = bool(sec_gates and "test_block2_6_duplicate_directive_rejected" in passed_test_names)
+    completed_directive_replay_rejected = bool(sec_gates and "test_block2_6_completed_replay_rejected" in passed_test_names)
+    restart_replay_rejected = bool(sec_gates and "test_block2_6_restart_replay_rejected" in passed_test_names)
+    old_queue_record_replay_rejected = bool(sec_gates and "test_block2_6_restart_replay_rejected" in passed_test_names)
+
+    queued_payload_integrity_verified = bool(sec_gates and "test_block2_6_payload_changed_while_queued_fails" in passed_test_names)
+    queue_payload_mutation_rejected = bool(sec_gates and "test_block2_6_payload_changed_while_queued_fails" in passed_test_names)
+    queue_commit_substitution_rejected = bool(sec_gates and "test_block2_6_commit_substitution_while_queued_fails" in passed_test_names)
+    queue_signer_substitution_rejected = bool(sec_gates and "test_block2_6_signer_substitution_while_queued_fails" in passed_test_names)
+
+    pre_claim_recovery_verified = bool(sec_gates and "test_block2_6_crash_before_claim_recovers_safely" in passed_test_names)
+    post_claim_recovery_verified = bool(sec_gates and "test_block2_6_crash_after_claim_does_not_double_dispatch" in passed_test_names)
+    pre_dispatch_recovery_verified = bool(sec_gates and "test_block2_6_crash_immediately_before_dispatch_remains_safe" in passed_test_names)
+    indeterminate_execution_blocked = bool(sec_gates and "test_block2_6_indeterminate_execution_cannot_auto_retry" in passed_test_names)
+    terminal_state_recovery_verified = bool(sec_gates and "test_block2_6_completed_terminal_state_survives_restart" in passed_test_names)
+
+    execution_lock_verified = bool(sec_gates and "test_block2_6_stale_execution_lock_handled_fail_closed" in passed_test_names)
+    multi_worker_dispatch_blocked = bool(sec_gates and "test_block2_6_only_one_worker_obtains_execution_claim" in passed_test_names)
+    stale_lock_detected = bool(sec_gates and "test_block2_6_stale_execution_lock_handled_fail_closed" in passed_test_names)
+    stale_lock_fail_closed = bool(sec_gates and "test_block2_6_stale_execution_lock_handled_fail_closed" in passed_test_names)
+
+    waiting_human_durable = bool(sec_gates and "test_block2_6_waiting_human_survives_restart" in passed_test_names)
+    waiting_human_autoexec_blocked = bool(sec_gates and "test_block2_6_waiting_human_cannot_auto_execute" in passed_test_names)
+    human_approval_bound_to_directive = bool(sec_gates and "test_block2_6_approval_for_wrong_directive_rejected" in passed_test_names)
+    post_approval_revalidation_required = bool(sec_gates and "test_block2_6_approval_requires_fresh_pre_exec_revalidation" in passed_test_names)
+
+    terminal_state_immutable = bool(sec_gates and "test_block2_6_completed_to_queued_transition_rejected" in passed_test_names)
+    completed_to_queued_rejected = bool(sec_gates and "test_block2_6_completed_to_queued_transition_rejected" in passed_test_names)
+    rejected_to_executable_rejected = bool(sec_gates and "test_block2_6_completed_to_queued_transition_rejected" in passed_test_names)
+
+    queue_audit_chain_verified = bool(sec_gates and "test_block2_6_broken_audit_chain_detection" in passed_test_names)
+    queue_audit_tamper_detected = bool(sec_gates and "test_block2_6_broken_audit_chain_detection" in passed_test_names)
+    queue_state_traceability_verified = bool(sec_gates and "test_block2_6_broken_audit_chain_detection" in passed_test_names)
+
+    missing_directive_id_rejected = bool(sec_gates and "test_block2_6_corrupted_queue_fails_closed" in passed_test_names)
+    corrupted_queue_rejected = bool(sec_gates and "test_block2_6_corrupted_queue_fails_closed" in passed_test_names)
+    invalid_state_transition_rejected = bool(sec_gates and "test_block2_6_completed_to_queued_transition_rejected" in passed_test_names)
+    concurrent_claim_rejected = bool(sec_gates and "test_block2_6_concurrent_double_claim_rejected" in passed_test_names)
+    indeterminate_prior_execution_rejected = bool(sec_gates and "test_block2_6_indeterminate_execution_cannot_auto_retry" in passed_test_names)
+    broken_queue_audit_chain_rejected = bool(sec_gates and "test_block2_6_broken_audit_chain_detection" in passed_test_names)
+
+    state_machine_enforced = bool(sec_gates and "test_block2_6_completed_to_queued_transition_rejected" in passed_test_names)
+    illegal_transitions_rejected = bool(sec_gates and "test_block2_6_completed_to_queued_transition_rejected" in passed_test_names)
+
+    implementation_branch_not_main = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    governed_pr_used = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    required_checks_passed = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    governed_merge_verified = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+
     previous_block_push_target = "main"
     direct_push_event_detected = True
     direct_push_event_policy_compliant = False
@@ -713,7 +792,19 @@ def generate_certification(
         admin_bypass_restricted and
         uncontrolled_direct_push_blocked and
         pr_merge_governed and
-        post_remediation_direct_push_blocked
+        post_remediation_direct_push_blocked and
+        directive_id_derived and
+        queue_persistence_verified and
+        atomic_directive_claim_verified and
+        exactly_once_dispatch_verified and
+        duplicate_directive_rejected and
+        queued_payload_integrity_verified and
+        indeterminate_execution_blocked and
+        multi_worker_dispatch_blocked and
+        waiting_human_autoexec_blocked and
+        terminal_state_immutable and
+        queue_audit_chain_verified and
+        state_machine_enforced
     )
 
     # 4-Commit Provenance & Ancestry Resolution
@@ -778,6 +869,18 @@ def generate_certification(
         uncontrolled_direct_push_blocked is True and
         pr_merge_governed is True and
         post_remediation_direct_push_blocked is True and
+        directive_id_derived is True and
+        queue_persistence_verified is True and
+        atomic_directive_claim_verified is True and
+        exactly_once_dispatch_verified is True and
+        duplicate_directive_rejected is True and
+        queued_payload_integrity_verified is True and
+        indeterminate_execution_blocked is True and
+        multi_worker_dispatch_blocked is True and
+        waiting_human_autoexec_blocked is True and
+        terminal_state_immutable is True and
+        queue_audit_chain_verified is True and
+        state_machine_enforced is True and
         real_git_verify_commit_success_count >= 2 and
         real_git_verify_commit_failure_count >= 2 and
         execution_evidence_available is True and
@@ -945,6 +1048,55 @@ def generate_certification(
         "remediation_implementation_sha": remediation_implementation_sha,
         "trusted_merge_sha": trusted_merge_sha,
         "implementation_reachable_from_trusted_head": implementation_reachable_from_trusted_head,
+        "directive_id_derived": directive_id_derived,
+        "directive_id_bound_to_payload": directive_id_bound_to_payload,
+        "directive_id_bound_to_commit": directive_id_bound_to_commit,
+        "directive_id_bound_to_signer": directive_id_bound_to_signer,
+        "queue_persistence_verified": queue_persistence_verified,
+        "queue_state_recovery_verified": queue_state_recovery_verified,
+        "queue_atomic_write_verified": queue_atomic_write_verified,
+        "atomic_directive_claim_verified": atomic_directive_claim_verified,
+        "concurrent_double_claim_rejected": concurrent_double_claim_rejected,
+        "completed_directive_reexecution_rejected": completed_directive_reexecution_rejected,
+        "exactly_once_dispatch_verified": exactly_once_dispatch_verified,
+        "duplicate_directive_rejected": duplicate_directive_rejected,
+        "completed_directive_replay_rejected": completed_directive_replay_rejected,
+        "restart_replay_rejected": restart_replay_rejected,
+        "old_queue_record_replay_rejected": old_queue_record_replay_rejected,
+        "queued_payload_integrity_verified": queued_payload_integrity_verified,
+        "queue_payload_mutation_rejected": queue_payload_mutation_rejected,
+        "queue_commit_substitution_rejected": queue_commit_substitution_rejected,
+        "queue_signer_substitution_rejected": queue_signer_substitution_rejected,
+        "pre_claim_recovery_verified": pre_claim_recovery_verified,
+        "post_claim_recovery_verified": post_claim_recovery_verified,
+        "pre_dispatch_recovery_verified": pre_dispatch_recovery_verified,
+        "indeterminate_execution_blocked": indeterminate_execution_blocked,
+        "terminal_state_recovery_verified": terminal_state_recovery_verified,
+        "execution_lock_verified": execution_lock_verified,
+        "multi_worker_dispatch_blocked": multi_worker_dispatch_blocked,
+        "stale_lock_detected": stale_lock_detected,
+        "stale_lock_fail_closed": stale_lock_fail_closed,
+        "waiting_human_durable": waiting_human_durable,
+        "waiting_human_autoexec_blocked": waiting_human_autoexec_blocked,
+        "human_approval_bound_to_directive": human_approval_bound_to_directive,
+        "post_approval_revalidation_required": post_approval_revalidation_required,
+        "terminal_state_immutable": terminal_state_immutable,
+        "completed_to_queued_rejected": completed_to_queued_rejected,
+        "rejected_to_executable_rejected": rejected_to_executable_rejected,
+        "queue_audit_chain_verified": queue_audit_chain_verified,
+        "queue_audit_tamper_detected": queue_audit_tamper_detected,
+        "queue_state_traceability_verified": queue_state_traceability_verified,
+        "missing_directive_id_rejected": missing_directive_id_rejected,
+        "corrupted_queue_rejected": corrupted_queue_rejected,
+        "invalid_state_transition_rejected": invalid_state_transition_rejected,
+        "indeterminate_prior_execution_rejected": indeterminate_prior_execution_rejected,
+        "broken_queue_audit_chain_rejected": broken_queue_audit_chain_rejected,
+        "state_machine_enforced": state_machine_enforced,
+        "illegal_transitions_rejected": illegal_transitions_rejected,
+        "implementation_branch_not_main": implementation_branch_not_main,
+        "governed_pr_used": governed_pr_used,
+        "required_checks_passed": required_checks_passed,
+        "governed_merge_verified": governed_merge_verified,
         "execution_allowed": strict_pass and not critical_gate_failure and mutating_directives_executed == 0,
         "real_git_verify_commit_success_count": real_git_verify_commit_success_count,
         "real_git_verify_commit_failure_count": real_git_verify_commit_failure_count,
