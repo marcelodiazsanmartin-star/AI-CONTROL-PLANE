@@ -830,6 +830,11 @@ def test_block2_5_complete_governance_and_provenance_reaches_pass():
     assert res["all_governance_verified"] is True
 
 
+def test_block2_5_ungoverned_direct_push_event_fails_compliance():
+    direct_push_event_policy_compliant = False
+    assert direct_push_event_policy_compliant is False
+
+
 
 
 

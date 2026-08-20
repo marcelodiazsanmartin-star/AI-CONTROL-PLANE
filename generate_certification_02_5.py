@@ -593,7 +593,7 @@ def generate_certification(
 
     previous_block_push_target = "main"
     direct_push_event_detected = True
-    direct_push_event_policy_compliant = True
+    direct_push_event_policy_compliant = False
 
     missing_trusted_branch_rejected = True
     unknown_trusted_branch_rejected = True
@@ -655,7 +655,8 @@ def generate_certification(
         direct_push_policy_verified and
         governance_bypass_protection_verified and
         trusted_head_provenance_verified and
-        fresh_governance_state_fetched
+        fresh_governance_state_fetched and
+        direct_push_event_policy_compliant
     )
 
     # 4-Commit Provenance & Ancestry Resolution
