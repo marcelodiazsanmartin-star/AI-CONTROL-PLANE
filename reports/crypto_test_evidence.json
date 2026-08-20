@@ -1,29 +1,29 @@
 {
-  "certification_run_id": "RUN_8E75BA3F46AF",
-  "generated_at": "2026-08-19T20:49:24.947451+00:00",
+  "certification_run_id": "RUN_B2BE9425F681",
+  "generated_at": "2026-08-20T17:48:05.424750+00:00",
   "backend": "SSH",
   "cases": {
     "unsigned": {
       "repo_path": "C:\\Users\\VD\\Desktop\\Antigravity\\AI-CONTROL-PLANE\\tmp_pytest\\test_real_unsigned_commit_reje0\\real_crypto_repo",
-      "commit_sha": "f7fe97dd0cfefaf2c99c19240c74503d23e8e533",
+      "commit_sha": "47ee3971adcb315f3bed63187b51aca15cbe90fa",
       "fingerprint": null,
       "expected_verify_returncode": 1
     },
     "trusted_signed": {
       "repo_path": "C:\\Users\\VD\\Desktop\\Antigravity\\AI-CONTROL-PLANE\\tmp_pytest\\test_real_valid_trusted_signed0\\real_crypto_repo",
-      "commit_sha": "38fee3deee64d939f4c92a127a303b38a961fd5e",
-      "fingerprint": "SHA256:xkLhgMEejaVYY0R5uD/J1RsVS2u0Sy7Jl+CSBnz12gM",
+      "commit_sha": "5d354ba822f56b9609a1818e1cb045360b8de858",
+      "fingerprint": "SHA256:a7RkM2vDHc3nrQv4n7BV3bGhSJm/K6PsDRSq7yCG4HA",
       "expected_verify_returncode": 0
     },
     "untrusted_signed": {
       "repo_path": "C:\\Users\\VD\\Desktop\\Antigravity\\AI-CONTROL-PLANE\\tmp_pytest\\test_real_valid_untrusted_sign0\\real_crypto_repo",
-      "commit_sha": "6a79d11811b08753eca87474b17e999d9de89871",
-      "fingerprint": "SHA256:WQv8CMsAEGsfMv5/L4ypWUT09wMjoLJ+J4m/ODPZll8",
+      "commit_sha": "98fd854cc292c0a887652acfa41fbccb199e0f93",
+      "fingerprint": "SHA256:8FQhMilJta5suL5i/wMrz/HocNO+qZbYzB7qQ7EnCDM",
       "expected_verify_returncode": 0
     },
     "invalid_signature": {
       "repo_path": "C:\\Users\\VD\\Desktop\\Antigravity\\AI-CONTROL-PLANE\\tmp_pytest\\test_real_invalid_signature_re0\\real_crypto_repo",
-      "commit_sha": "0b04c7d9c2687d0a2d1c82de7914b954d5acd0d5",
+      "commit_sha": "fe305ff61710bbaceccb991a8f138c70bfcadd4d",
       "fingerprint": null,
       "expected_verify_returncode": 1
     }
