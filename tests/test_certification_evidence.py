@@ -30,6 +30,10 @@ from src.directive.capability_policy import (
     evaluate_execution_authorization, derive_risk_class, sanitize_and_resolve_path,
     ExecutionAuthorizationToken, AuthorizationAuditTrail, RiskClass
 )
+from src.directive.approval_engine import (
+    derive_approval_request_id, create_approval_context, ApprovalState,
+    DurableApprovalEngine, ApprovalAuditChain, NotificationManager, revalidate_approval_for_execution
+)
 from generate_certification_02_5 import (
     audit_certification_generator_ast, derive_security_gates, validate_crypto_backend,
     initialize_ssh_crypto_backend, verify_target_binding
@@ -1460,6 +1464,340 @@ def test_block2_7_complete_authorized_critical_path_succeeds_only_after_valid_hu
     assert ok2 is True
     assert token2 is not None
     assert err2 is None
+
+
+# BLOCK 2.8 HUMAN APPROVAL LIFECYCLE, NOTIFICATION, EXPIRATION & REVOCATION TESTS (1 - 30)
+
+def test_block2_8_critical_action_enters_waiting_human(tmp_path):
+    q = DurableDirectiveQueue(tmp_path / "queue.jsonl", QueueAuditTrail(tmp_path / "q_audit.jsonl"))
+    q.enqueue_directive("DIR-301", "c01", "p01", "s01")
+    q.transition_state("DIR-301", DirectiveState.CLAIMED, "W1")
+    q.transition_state("DIR-301", DirectiveState.PRE_EXEC_VALIDATED, "W1")
+    ok, _ = q.transition_state("DIR-301", DirectiveState.WAITING_HUMAN, "W1")
+    assert ok is True
+    assert q.records["DIR-301"]["queue_state"] == DirectiveState.WAITING_HUMAN.value
+
+
+def test_block2_8_missing_approval_blocks_execution(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    ok, err = revalidate_approval_for_execution(None, "DIR-302", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is False
+    assert err == "MISSING_APPROVAL_REJECTED"
+
+
+def test_block2_8_authorized_human_approval_succeeds(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-303", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    ok, err = engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+    assert ok is True
+    assert engine.records[app_id]["state"] == ApprovalState.APPROVED.value
+
+
+def test_block2_8_unauthorized_approver_rejected(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-304", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    ok, err = engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="MALICIOUS_ACTOR")
+    assert ok is False
+    assert err == "UNAUTHORIZED_APPROVER_REJECTED"
+
+
+def test_block2_8_self_approval_rejected(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("SEC_ADMIN_1", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SEC_ADMIN_1")
+    ok, err = engine.transition_state(app_id, ApprovalState.APPROVED, "SEC_ADMIN_1", approver_id="SEC_ADMIN_1")
+    assert ok is False
+    assert err == "SELF_APPROVAL_REJECTED"
+
+
+def test_block2_8_unknown_decision_rejected(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-306", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    try:
+        ok, err = engine.transition_state(app_id, ApprovalState("UNKNOWN_DECISION"), "SYSTEM")
+    except ValueError:
+        ok, err = False, "UNKNOWN_APPROVAL_STATE_REJECTED"
+    assert ok is False
+
+
+def test_block2_8_expired_approval_rejected(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-307", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL", ttl_seconds=-10.0)
+    app_id = req["approval_request_id"]
+    ok, err = engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    assert ok is False
+    assert err == "EXPIRED_APPROVAL_REJECTED"
+
+
+def test_block2_8_approval_expires_across_restart(tmp_path):
+    s_file = tmp_path / "apps.jsonl"
+    a_file = tmp_path / "app_audit.jsonl"
+    e1 = DurableApprovalEngine(s_file, ApprovalAuditChain(a_file))
+    req = e1.create_request("DIR-308", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL", ttl_seconds=-5.0)
+    app_id = req["approval_request_id"]
+
+    e2 = DurableApprovalEngine(s_file, ApprovalAuditChain(a_file))
+    ok, err = e2.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    assert ok is False
+    assert err == "EXPIRED_APPROVAL_REJECTED"
+
+
+def test_block2_8_approved_action_can_be_revoked_before_execution(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-309", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+    ok, err = engine.transition_state(app_id, ApprovalState.REVOKED, "SEC_ADMIN_1")
+    assert ok is True
+    assert engine.records[app_id]["revoked"] is True
+
+
+def test_block2_8_revoked_approval_remains_revoked_after_restart(tmp_path):
+    s_file = tmp_path / "apps.jsonl"
+    a_file = tmp_path / "app_audit.jsonl"
+    e1 = DurableApprovalEngine(s_file, ApprovalAuditChain(a_file))
+    req = e1.create_request("DIR-310", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    e1.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    e1.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+    e1.transition_state(app_id, ApprovalState.REVOKED, "SEC_ADMIN_1")
+
+    e2 = DurableApprovalEngine(s_file, ApprovalAuditChain(a_file))
+    assert e2.records[app_id]["state"] == ApprovalState.REVOKED.value
+
+
+def test_block2_8_revoked_approval_replay_rejected(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-311", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+    engine.transition_state(app_id, ApprovalState.REVOKED, "SEC_ADMIN_1")
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-311", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is False
+    assert err == "REVOKED_APPROVAL_REJECTED"
+
+
+def test_block2_8_approval_is_single_use(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-312", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+    engine.transition_state(app_id, ApprovalState.CONSUMED, "WORKER-1")
+    assert engine.records[app_id]["consumed"] is True
+
+
+def test_block2_8_consumed_approval_replay_rejected(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-313", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+    engine.transition_state(app_id, ApprovalState.CONSUMED, "WORKER-1")
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-313", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is False
+    assert err == "CONSUMED_APPROVAL_REPLAY_REJECTED"
+
+
+def test_block2_8_approval_cannot_authorize_another_directive(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-314A", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-314B", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is False
+    assert err == "CROSS_DIRECTIVE_APPROVAL_REUSE_REJECTED"
+
+
+def test_block2_8_approval_cannot_authorize_changed_parameters(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-315", "CAP-RISK-LIMIT-UPDATE", "orig_phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-315", "CAP-RISK-LIMIT-UPDATE", "changed_phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is False
+    assert err == "CROSS_PARAMETER_APPROVAL_REUSE_REJECTED"
+
+
+def test_block2_8_approval_cannot_authorize_changed_target(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-316", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-316", "CAP-RISK-LIMIT-UPDATE", "phash", "CHANGED_TARGET", "CRITICAL")
+    assert ok is False
+    assert err == "POST_APPROVAL_TARGET_MUTATION_REJECTED"
+
+
+def test_block2_8_approval_cannot_authorize_changed_capability(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-317", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-317", "CAP-CHANGED", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is False
+    assert err == "POST_APPROVAL_CAPABILITY_MUTATION_REJECTED"
+
+
+def test_block2_8_approval_cannot_authorize_changed_risk_classification(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-318", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-318", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "READ_ONLY")
+    assert ok is False
+    assert err == "POST_APPROVAL_RISK_MUTATION_REJECTED"
+
+
+def test_block2_8_notification_generated_on_WAITING_HUMAN(tmp_path):
+    nm = NotificationManager(tmp_path / "notifs.jsonl")
+    ok, notif_id, status = nm.send_notification("APP-319", "DIR-319", "CRITICAL", "Risk limit change")
+    assert ok is True
+    assert status == "DELIVERED"
+
+
+def test_block2_8_notification_success_does_not_imply_approval(tmp_path):
+    nm = NotificationManager(tmp_path / "notifs.jsonl")
+    ok, notif_id, status = nm.send_notification("APP-320", "DIR-320", "CRITICAL", "Risk limit change")
+
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-320", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert req["state"] == ApprovalState.REQUESTED.value
+
+
+def test_block2_8_notification_failure_blocks_execution(tmp_path):
+    nm = NotificationManager(tmp_path / "notifs.jsonl")
+    ok, notif_id, err = nm.send_notification("APP-321", "DIR-321", "CRITICAL", "Risk limit change", simulate_failure=True)
+    assert ok is False
+    assert err == "NOTIFICATION_FAILURE_EXECUTION_BLOCKED"
+
+
+def test_block2_8_notification_retry_does_not_duplicate_approval_request(tmp_path):
+    nm = NotificationManager(tmp_path / "notifs.jsonl")
+    ok1, n_id1, _ = nm.send_notification("APP-322", "DIR-322", "CRITICAL", "Risk limit change")
+    ok2, n_id2, _ = nm.send_notification("APP-322", "DIR-322", "CRITICAL", "Risk limit change")
+    assert n_id1 == n_id2
+
+
+def test_block2_8_approval_state_survives_restart(tmp_path):
+    s_file = tmp_path / "apps.jsonl"
+    a_file = tmp_path / "app_audit.jsonl"
+    e1 = DurableApprovalEngine(s_file, ApprovalAuditChain(a_file))
+    req = e1.create_request("DIR-323", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    e1.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    e1.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+
+    e2 = DurableApprovalEngine(s_file, ApprovalAuditChain(a_file))
+    assert e2.records[app_id]["state"] == ApprovalState.APPROVED.value
+
+
+def test_block2_8_full_pre_exec_security_revalidation_occurs_after_approval(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-324", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-324", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is True
+    assert err is None
+
+
+def test_block2_8_approval_invalidated_by_changed_security_state(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-325", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+    engine.records[app_id]["state"] = "INVALIDATED"
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-325", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is False
+    assert err == "UNKNOWN_APPROVAL_STATE_REJECTED"
+
+
+def test_block2_8_broken_approval_audit_chain_detected(tmp_path):
+    a_file = tmp_path / "app_audit.jsonl"
+    ac = ApprovalAuditChain(a_file)
+    ac.append_event("APP-1", "DIR-1", "NONE", "REQUESTED", "SYSTEM")
+    ac.append_event("APP-1", "DIR-1", "REQUESTED", "NOTIFIED", "SYSTEM")
+
+    lines = a_file.read_text().splitlines()
+    tampered = lines[0].replace("REQUESTED", "TAMPERED")
+    a_file.write_text(tampered + "\n" + lines[1] + "\n")
+
+    ok, err = ac.verify_integrity()
+    assert ok is False
+    assert "EVENT_HASH_TAMPER" in err or "PREVIOUS_HASH_MISMATCH" in err
+
+
+def test_block2_8_illegal_approval_state_transition_rejected(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-327", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.REJECTED, "SYSTEM")
+
+    ok, err = engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+    assert ok is False
+    assert err == "ILLEGAL_APPROVAL_TRANSITIONS_REJECTED"
+
+
+def test_block2_8_complete_approved_critical_path_executes_once(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-328", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.APPROVED, "SYSTEM", approver_id="SEC_ADMIN_1")
+
+    ok, _ = revalidate_approval_for_execution(engine.records[app_id], "DIR-328", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is True
+    engine.transition_state(app_id, ApprovalState.CONSUMED, "WORKER-1")
+
+    ok_retry, err_retry = revalidate_approval_for_execution(engine.records[app_id], "DIR-328", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok_retry is False
+    assert err_retry == "CONSUMED_APPROVAL_REPLAY_REJECTED"
+
+
+def test_block2_8_rejected_human_decision_cannot_execute(tmp_path):
+    engine = DurableApprovalEngine(tmp_path / "apps.jsonl", ApprovalAuditChain(tmp_path / "app_audit.jsonl"))
+    req = engine.create_request("DIR-329", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    app_id = req["approval_request_id"]
+    engine.transition_state(app_id, ApprovalState.NOTIFIED, "SYSTEM")
+    engine.transition_state(app_id, ApprovalState.REJECTED, "SEC_ADMIN_1")
+
+    ok, err = revalidate_approval_for_execution(engine.records[app_id], "DIR-329", "CAP-RISK-LIMIT-UPDATE", "phash", "AI-CONTROL-PLANE", "CRITICAL")
+    assert ok is False
+    assert err == "UNKNOWN_APPROVAL_STATE_REJECTED"
+
+
+def test_block2_8_complete_non_critical_action_requires_no_human_approval(tmp_path):
+    ok, token, err = evaluate_execution_authorization("DIR-330", "CAP-GIT-STATUS", {}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is True
+    assert token is not None
+    assert err is None
+
 
 
 

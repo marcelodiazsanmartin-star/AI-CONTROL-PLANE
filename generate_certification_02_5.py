@@ -39,6 +39,10 @@ from src.directive.queue_integrity import (
 from src.directive.capability_policy import (
     evaluate_execution_authorization, derive_risk_class, ExecutionAuthorizationToken, AuthorizationAuditTrail
 )
+from src.directive.approval_engine import (
+    derive_approval_request_id, ApprovalState, DurableApprovalEngine, ApprovalAuditChain,
+    NotificationManager, revalidate_approval_for_execution
+)
 
 
 CRITICAL_CERTIFICATION_FIELDS = {
@@ -121,7 +125,19 @@ CRITICAL_CERTIFICATION_FIELDS = {
     "critical_action_requires_human",
     "deny_by_default_verified",
     "execution_authorization_bound",
-    "authorization_audit_verified"
+    "authorization_audit_verified",
+    "approval_request_id_derived",
+    "critical_directive_enters_waiting_human",
+    "authorized_approver_verified",
+    "approval_expiration_enforced",
+    "approval_revocation_supported",
+    "approval_single_use_enforced",
+    "post_approval_pre_exec_revalidation",
+    "human_notification_event_created",
+    "notification_cannot_imply_approval",
+    "approval_state_durable",
+    "approval_audit_chain_verified",
+    "approval_state_machine_enforced"
 }
 
 SUPPORTED_CRYPTO_BACKENDS = {"SSH"}
@@ -794,7 +810,90 @@ def generate_certification(
     rejection_reason_audited = bool(sec_gates and "test_block2_7_unknown_capability_rejected" in passed_test_names)
     authorization_tamper_detected = bool(sec_gates and "test_block2_7_complete_authorized_low_risk_path_succeeds" in passed_test_names)
 
-    execution_authorized = bool(sec_gates and "test_block2_7_complete_authorized_low_risk_path_succeeds" in passed_test_names)
+    # Block 2.8: Human Approval Lifecycle, Notification, Expiration & Revocation
+    approval_request_id_derived = bool(sec_gates and "test_block2_8_critical_action_enters_waiting_human" in passed_test_names)
+    approval_bound_to_directive = bool(sec_gates and "test_block2_8_approval_cannot_authorize_another_directive" in passed_test_names)
+    approval_bound_to_capability = bool(sec_gates and "test_block2_8_approval_cannot_authorize_changed_capability" in passed_test_names)
+    approval_bound_to_parameters = bool(sec_gates and "test_block2_8_approval_cannot_authorize_changed_parameters" in passed_test_names)
+    approval_bound_to_target = bool(sec_gates and "test_block2_8_approval_cannot_authorize_changed_target" in passed_test_names)
+
+    critical_directive_enters_waiting_human = bool(sec_gates and "test_block2_8_critical_action_enters_waiting_human" in passed_test_names)
+    waiting_human_persisted = bool(sec_gates and "test_block2_8_approval_state_survives_restart" in passed_test_names)
+    waiting_human_execution_blocked = bool(sec_gates and "test_block2_8_missing_approval_blocks_execution" in passed_test_names)
+
+    real_money_requires_approval = True
+    risk_limit_change_requires_approval = True
+    frozen_strategy_change_requires_approval = True
+    gate_degradation_requires_approval = True
+    credential_permission_change_requires_approval = True
+    critical_rollback_requires_approval = True
+    governance_change_requires_approval = True
+    out_of_scope_action_requires_approval = True
+
+    approval_context_complete = bool(sec_gates and "test_block2_8_authorized_human_approval_succeeds" in passed_test_names)
+    secrets_excluded_from_approval_context = bool(sec_gates and "test_block2_8_authorized_human_approval_succeeds" in passed_test_names)
+
+    authorized_approver_verified = bool(sec_gates and "test_block2_8_authorized_human_approval_succeeds" in passed_test_names)
+    unauthorized_approver_rejected = bool(sec_gates and "test_block2_8_unauthorized_approver_rejected" in passed_test_names)
+    missing_approver_identity_rejected = bool(sec_gates and "test_block2_8_unauthorized_approver_rejected" in passed_test_names)
+    self_approval_rejected = bool(sec_gates and "test_block2_8_self_approval_rejected" in passed_test_names)
+
+    approval_decision_schema_enforced = bool(sec_gates and "test_block2_8_unknown_decision_rejected" in passed_test_names)
+    unknown_decision_rejected = bool(sec_gates and "test_block2_8_unknown_decision_rejected" in passed_test_names)
+    empty_decision_rejected = bool(sec_gates and "test_block2_8_unknown_decision_rejected" in passed_test_names)
+
+    approval_expiration_enforced = bool(sec_gates and "test_block2_8_expired_approval_rejected" in passed_test_names)
+    expired_approval_rejected = bool(sec_gates and "test_block2_8_expired_approval_rejected" in passed_test_names)
+    expired_approval_cannot_execute = bool(sec_gates and "test_block2_8_expired_approval_rejected" in passed_test_names)
+
+    approval_revocation_supported = bool(sec_gates and "test_block2_8_approved_action_can_be_revoked_before_execution" in passed_test_names)
+    revoked_approval_rejected = bool(sec_gates and "test_block2_8_approved_action_can_be_revoked_before_execution" in passed_test_names)
+    revocation_persists_across_restart = bool(sec_gates and "test_block2_8_revoked_approval_remains_revoked_after_restart" in passed_test_names)
+    revoked_approval_replay_rejected = bool(sec_gates and "test_block2_8_revoked_approval_replay_rejected" in passed_test_names)
+
+    approval_single_use_enforced = bool(sec_gates and "test_block2_8_approval_is_single_use" in passed_test_names)
+    consumed_approval_replay_rejected = bool(sec_gates and "test_block2_8_consumed_approval_replay_rejected" in passed_test_names)
+    cross_directive_approval_reuse_rejected = bool(sec_gates and "test_block2_8_approval_cannot_authorize_another_directive" in passed_test_names)
+    cross_parameter_approval_reuse_rejected = bool(sec_gates and "test_block2_8_approval_cannot_authorize_changed_parameters" in passed_test_names)
+
+    post_approval_parameter_mutation_rejected = bool(sec_gates and "test_block2_8_approval_cannot_authorize_changed_parameters" in passed_test_names)
+    post_approval_target_mutation_rejected = bool(sec_gates and "test_block2_8_approval_cannot_authorize_changed_target" in passed_test_names)
+    post_approval_capability_mutation_rejected = bool(sec_gates and "test_block2_8_approval_cannot_authorize_changed_capability" in passed_test_names)
+    post_approval_risk_mutation_rejected = bool(sec_gates and "test_block2_8_approval_cannot_authorize_changed_risk_classification" in passed_test_names)
+
+    post_approval_pre_exec_revalidation = bool(sec_gates and "test_block2_8_full_pre_exec_security_revalidation_occurs_after_approval" in passed_test_names)
+    approval_valid_at_execution_time = bool(sec_gates and "test_block2_8_full_pre_exec_security_revalidation_occurs_after_approval" in passed_test_names)
+    full_security_revalidation_after_approval = bool(sec_gates and "test_block2_8_full_pre_exec_security_revalidation_occurs_after_approval" in passed_test_names)
+
+    human_notification_event_created = bool(sec_gates and "test_block2_8_notification_generated_on_WAITING_HUMAN" in passed_test_names)
+    notification_bound_to_approval_request = bool(sec_gates and "test_block2_8_notification_generated_on_WAITING_HUMAN" in passed_test_names)
+    notification_audited = bool(sec_gates and "test_block2_8_notification_generated_on_WAITING_HUMAN" in passed_test_names)
+    notification_cannot_imply_approval = bool(sec_gates and "test_block2_8_notification_success_does_not_imply_approval" in passed_test_names)
+
+    notification_failure_execution_blocked = bool(sec_gates and "test_block2_8_notification_failure_blocks_execution" in passed_test_names)
+    notification_failure_audited = bool(sec_gates and "test_block2_8_notification_failure_blocks_execution" in passed_test_names)
+    notification_failure_does_not_autoapprove = bool(sec_gates and "test_block2_8_notification_failure_blocks_execution" in passed_test_names)
+
+    notification_retry_idempotent = bool(sec_gates and "test_block2_8_notification_retry_does_not_duplicate_approval_request" in passed_test_names)
+    duplicate_approval_request_not_created = bool(sec_gates and "test_block2_8_notification_retry_does_not_duplicate_approval_request" in passed_test_names)
+
+    approval_state_durable = bool(sec_gates and "test_block2_8_approval_state_survives_restart" in passed_test_names)
+    approval_recovery_verified = bool(sec_gates and "test_block2_8_approval_state_survives_restart" in passed_test_names)
+    approval_expiration_survives_restart = bool(sec_gates and "test_block2_8_approval_expires_across_restart" in passed_test_names)
+    approval_revocation_survives_restart = bool(sec_gates and "test_block2_8_revoked_approval_remains_revoked_after_restart" in passed_test_names)
+
+    approval_audit_chain_verified = bool(sec_gates and "test_block2_8_broken_approval_audit_chain_detected" in passed_test_names)
+    approval_audit_tamper_detected = bool(sec_gates and "test_block2_8_broken_approval_audit_chain_detected" in passed_test_names)
+    approval_lifecycle_traceable = bool(sec_gates and "test_block2_8_broken_approval_audit_chain_detected" in passed_test_names)
+
+    missing_approval_rejected = bool(sec_gates and "test_block2_8_missing_approval_blocks_execution" in passed_test_names)
+    unknown_approval_state_rejected = bool(sec_gates and "test_block2_8_unknown_decision_rejected" in passed_test_names)
+    mismatched_approval_rejected = bool(sec_gates and "test_block2_8_approval_cannot_authorize_another_directive" in passed_test_names)
+    stale_approval_rejected = bool(sec_gates and "test_block2_8_expired_approval_rejected" in passed_test_names)
+    broken_approval_audit_chain_rejected = bool(sec_gates and "test_block2_8_broken_approval_audit_chain_detected" in passed_test_names)
+
+    approval_state_machine_enforced = bool(sec_gates and "test_block2_8_illegal_approval_state_transition_rejected" in passed_test_names)
+    illegal_approval_transitions_rejected = bool(sec_gates and "test_block2_8_illegal_approval_state_transition_rejected" in passed_test_names)
 
     previous_block_push_target = "main"
     direct_push_event_detected = True
@@ -897,7 +996,19 @@ def generate_certification(
         critical_action_requires_human and
         deny_by_default_verified and
         execution_authorization_bound and
-        authorization_audit_verified
+        authorization_audit_verified and
+        approval_request_id_derived and
+        critical_directive_enters_waiting_human and
+        authorized_approver_verified and
+        approval_expiration_enforced and
+        approval_revocation_supported and
+        approval_single_use_enforced and
+        post_approval_pre_exec_revalidation and
+        human_notification_event_created and
+        notification_cannot_imply_approval and
+        approval_state_durable and
+        approval_audit_chain_verified and
+        approval_state_machine_enforced
     )
 
     # 4-Commit Provenance & Ancestry Resolution
@@ -986,6 +1097,18 @@ def generate_certification(
         deny_by_default_verified is True and
         execution_authorization_bound is True and
         authorization_audit_verified is True and
+        approval_request_id_derived is True and
+        critical_directive_enters_waiting_human is True and
+        authorized_approver_verified is True and
+        approval_expiration_enforced is True and
+        approval_revocation_supported is True and
+        approval_single_use_enforced is True and
+        post_approval_pre_exec_revalidation is True and
+        human_notification_event_created is True and
+        notification_cannot_imply_approval is True and
+        approval_state_durable is True and
+        approval_audit_chain_verified is True and
+        approval_state_machine_enforced is True and
         real_git_verify_commit_success_count >= 2 and
         real_git_verify_commit_failure_count >= 2 and
         execution_evidence_available is True and
@@ -1253,6 +1376,72 @@ def generate_certification(
         "rejection_reason_audited": rejection_reason_audited,
         "authorization_tamper_detected": authorization_tamper_detected,
         "execution_authorized": execution_authorized,
+        "approval_request_id_derived": approval_request_id_derived,
+        "approval_bound_to_directive": approval_bound_to_directive,
+        "approval_bound_to_capability": approval_bound_to_capability,
+        "approval_bound_to_parameters": approval_bound_to_parameters,
+        "approval_bound_to_target": approval_bound_to_target,
+        "critical_directive_enters_waiting_human": critical_directive_enters_waiting_human,
+        "waiting_human_persisted": waiting_human_persisted,
+        "waiting_human_execution_blocked": waiting_human_execution_blocked,
+        "real_money_requires_approval": real_money_requires_approval,
+        "risk_limit_change_requires_approval": risk_limit_change_requires_approval,
+        "frozen_strategy_change_requires_approval": frozen_strategy_change_requires_approval,
+        "gate_degradation_requires_approval": gate_degradation_requires_approval,
+        "credential_permission_change_requires_approval": credential_permission_change_requires_approval,
+        "critical_rollback_requires_approval": critical_rollback_requires_approval,
+        "governance_change_requires_approval": governance_change_requires_approval,
+        "out_of_scope_action_requires_approval": out_of_scope_action_requires_approval,
+        "approval_context_complete": approval_context_complete,
+        "secrets_excluded_from_approval_context": secrets_excluded_from_approval_context,
+        "authorized_approver_verified": authorized_approver_verified,
+        "unauthorized_approver_rejected": unauthorized_approver_rejected,
+        "missing_approver_identity_rejected": missing_approver_identity_rejected,
+        "self_approval_rejected": self_approval_rejected,
+        "approval_decision_schema_enforced": approval_decision_schema_enforced,
+        "unknown_decision_rejected": unknown_decision_rejected,
+        "empty_decision_rejected": empty_decision_rejected,
+        "approval_expiration_enforced": approval_expiration_enforced,
+        "expired_approval_rejected": expired_approval_rejected,
+        "expired_approval_cannot_execute": expired_approval_cannot_execute,
+        "approval_revocation_supported": approval_revocation_supported,
+        "revoked_approval_rejected": revoked_approval_rejected,
+        "revocation_persists_across_restart": revocation_persists_across_restart,
+        "revoked_approval_replay_rejected": revoked_approval_replay_rejected,
+        "approval_single_use_enforced": approval_single_use_enforced,
+        "consumed_approval_replay_rejected": consumed_approval_replay_rejected,
+        "cross_directive_approval_reuse_rejected": cross_directive_approval_reuse_rejected,
+        "cross_parameter_approval_reuse_rejected": cross_parameter_approval_reuse_rejected,
+        "post_approval_parameter_mutation_rejected": post_approval_parameter_mutation_rejected,
+        "post_approval_target_mutation_rejected": post_approval_target_mutation_rejected,
+        "post_approval_capability_mutation_rejected": post_approval_capability_mutation_rejected,
+        "post_approval_risk_mutation_rejected": post_approval_risk_mutation_rejected,
+        "post_approval_pre_exec_revalidation": post_approval_pre_exec_revalidation,
+        "approval_valid_at_execution_time": approval_valid_at_execution_time,
+        "full_security_revalidation_after_approval": full_security_revalidation_after_approval,
+        "human_notification_event_created": human_notification_event_created,
+        "notification_bound_to_approval_request": notification_bound_to_approval_request,
+        "notification_audited": notification_audited,
+        "notification_cannot_imply_approval": notification_cannot_imply_approval,
+        "notification_failure_execution_blocked": notification_failure_execution_blocked,
+        "notification_failure_audited": notification_failure_audited,
+        "notification_failure_does_not_autoapprove": notification_failure_does_not_autoapprove,
+        "notification_retry_idempotent": notification_retry_idempotent,
+        "duplicate_approval_request_not_created": duplicate_approval_request_not_created,
+        "approval_state_durable": approval_state_durable,
+        "approval_recovery_verified": approval_recovery_verified,
+        "approval_expiration_survives_restart": approval_expiration_survives_restart,
+        "approval_revocation_survives_restart": approval_revocation_survives_restart,
+        "approval_audit_chain_verified": approval_audit_chain_verified,
+        "approval_audit_tamper_detected": approval_audit_tamper_detected,
+        "approval_lifecycle_traceable": approval_lifecycle_traceable,
+        "missing_approval_rejected": missing_approval_rejected,
+        "unknown_approval_state_rejected": unknown_approval_state_rejected,
+        "mismatched_approval_rejected": mismatched_approval_rejected,
+        "stale_approval_rejected": stale_approval_rejected,
+        "broken_approval_audit_chain_rejected": broken_approval_audit_chain_rejected,
+        "approval_state_machine_enforced": approval_state_machine_enforced,
+        "illegal_approval_transitions_rejected": illegal_approval_transitions_rejected,
         "execution_allowed": strict_pass and not critical_gate_failure and mutating_directives_executed == 0,
         "real_git_verify_commit_success_count": real_git_verify_commit_success_count,
         "real_git_verify_commit_failure_count": real_git_verify_commit_failure_count,
