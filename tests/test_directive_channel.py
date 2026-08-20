@@ -714,4 +714,40 @@ def test_queue_fsync_persistence_verified(tmp_path):
     assert queue_file.exists()
 
 
+# 39. Durable Queue Corruption After Restart Fail-Closed
+def test_queue_corrupted_after_restart_fail_closed(tmp_path):
+    queue_file = tmp_path / "execution_queue.jsonl"
+    queue_file.write_text("CORRUPTED INVALID JSON LINE\n", encoding="utf-8")
+
+    with pytest.raises(QueueCorruptionError):
+        DurableExecutionQueue(queue_file_path=queue_file)
+
+
+# 40. Durable Queue Persisted Readback Integrity After Restart
+def test_queue_integrity_after_restart(tmp_path):
+    queue_file = tmp_path / "execution_queue.jsonl"
+    queue1 = DurableExecutionQueue(queue_file_path=queue_file)
+
+    sample_dict = build_sample_directive(directive_id="restart-readback-001")
+    payload = DirectivePayload.from_dict(sample_dict)
+    envelope = DirectiveEnvelope.from_dict(sample_dict.get("envelope", {}))
+    auth_meta = {
+        "payload_sha256": envelope.payload_sha256,
+        "payload_blob_sha": envelope.payload_blob_sha,
+        "signer_identity": envelope.signer_identity
+    }
+
+    queue1.enqueue_payload(payload, envelope, auth_meta)
+
+    # Reopen after restart
+    queue2 = DurableExecutionQueue(queue_file_path=queue_file)
+    reloaded_item = queue2.get_queued_item("restart-readback-001")
+    assert reloaded_item is not None
+    assert reloaded_item.directive_id == "restart-readback-001"
+    assert reloaded_item.queue_state == "READY_FOR_FUTURE_EXECUTOR"
+    assert reloaded_item.directive_payload.get("directive_id") == "restart-readback-001"
+
+
+
+
 

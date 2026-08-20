@@ -58,8 +58,11 @@ def derive_security_gates(passed_test_names: Set[str], crypto_metrics: Dict[str,
         "test_accepted_queue_survives_restart" in passed_test_names and
         "test_accepted_item_not_lost_after_restart" in passed_test_names
     )
-    queue_corruption_fail_closed = "test_fail_closed_on_malformed_json" in passed_test_names
-    queue_record_readback_verified = "test_queue_and_replay_ledger_consistent" in passed_test_names
+    queue_corruption_fail_closed = "test_queue_corrupted_after_restart_fail_closed" in passed_test_names
+    queue_record_readback_verified = (
+        "test_queue_fsync_persistence_verified" in passed_test_names and
+        "test_queue_integrity_after_restart" in passed_test_names
+    )
 
     remote_fail_closed = "test_fail_closed_on_github_unavailable" in passed_test_names
     strict_remote_ancestry = "test_directive_commit_not_reachable_from_main_rejected" in passed_test_names
@@ -100,7 +103,8 @@ def audit_certification_generator_ast(gen_file: Path = None) -> bool:
     """
     AST Self-Auditing Scanner: Inspects generate_certification_02_5.py source code AST
     to verify no critical security variables are assigned literal constant values without computation,
-    and no critical dict entries in cert_data use hardcoded primitive literals.
+    no critical dict entries in cert_data use hardcoded primitive literals, and no dict.get()
+    calls introduce unsafe default primitive literals for critical fields.
     Returns True if NO critical certification fields are hardcoded.
     """
     if gen_file is None:
@@ -117,7 +121,9 @@ def audit_certification_generator_ast(gen_file: Path = None) -> bool:
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id in CRITICAL_CERTIFICATION_FIELDS:
                         if isinstance(node.value, (ast.Constant, ast.NameConstant)):
-                            return False
+                            val = getattr(node.value, "value", None)
+                            if val is not None and val != "UNKNOWN":
+                                return False
 
             # B. Dictionary literal keys in cert_data
             if isinstance(node, ast.Dict):
@@ -131,6 +137,29 @@ def audit_certification_generator_ast(gen_file: Path = None) -> bool:
                     if key_name and key_name in CRITICAL_CERTIFICATION_FIELDS:
                         if isinstance(val_node, (ast.Constant, ast.NameConstant)):
                             return False
+
+            # C. dict.get(key, DEFAULT) calls with unsafe defaults for critical crypto/backend fields
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Attribute) and node.func.attr == "get":
+                    if len(node.args) >= 2:
+                        first_arg = node.args[0]
+                        second_arg = node.args[1]
+                        key_str = None
+                        if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                            key_str = first_arg.value
+                        elif isinstance(first_arg, ast.Str):
+                            key_str = first_arg.s
+
+                        if key_str and key_str in ("backend", "real_crypto_test_backend"):
+                            if isinstance(second_arg, (ast.Constant, ast.NameConstant)):
+                                val = getattr(second_arg, "value", None)
+                                if val is not None:
+                                    return False
+                        elif key_str and key_str in CRITICAL_CERTIFICATION_FIELDS:
+                            if isinstance(second_arg, (ast.Constant, ast.NameConstant)):
+                                val = getattr(second_arg, "value", None)
+                                if val is True or val in ("PASS", "SSH", "AUTHENTIC"):
+                                    return False
 
         return True
     except Exception:
@@ -269,7 +298,7 @@ def generate_certification(
     crypto_evidence_file = reports_dir / "crypto_test_evidence.json"
     crypto_evidence_fresh = False
     crypto_evidence_run_id_match = False
-    real_crypto_test_backend = "SSH"
+    real_crypto_test_backend = None
     real_git_verify_commit_success_count = 0
     real_git_verify_commit_failure_count = 0
     test_fingerprints = set()
@@ -291,7 +320,7 @@ def generate_certification(
             evidence_data = json.loads(crypto_evidence_file.read_text(encoding="utf-8"))
             ev_run_id = evidence_data.get("certification_run_id")
             ev_gen_at = evidence_data.get("generated_at")
-            real_crypto_test_backend = evidence_data.get("backend", "SSH")
+            real_crypto_test_backend = evidence_data.get("backend")
 
             if ev_run_id == certification_run_id:
                 crypto_evidence_run_id_match = True

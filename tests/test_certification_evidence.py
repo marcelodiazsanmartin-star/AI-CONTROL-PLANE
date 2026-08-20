@@ -430,3 +430,48 @@ def test_block2_derive_security_gates_missing_remote_test():
     assert res["remote_fail_closed"] is False
     assert res["strict_remote_ancestry"] is False
 
+
+# BLOCK 2.1 REGRESSION TESTS (Sections 5, 6, 7)
+
+def test_real_generator_ast_scan_passes():
+    assert audit_certification_generator_ast() is True
+
+
+def test_block2_1_backend_hardcoded_assignment_detected(tmp_path):
+    gen_file = tmp_path / "generate_certification_02_5.py"
+    gen_file.write_text('real_crypto_test_backend = "SSH"\n', encoding="utf-8")
+    assert audit_certification_generator_ast(gen_file=gen_file) is False
+
+
+def test_block2_1_backend_get_without_default_allowed(tmp_path):
+    gen_file = tmp_path / "generate_certification_02_5.py"
+    gen_file.write_text('real_crypto_test_backend = evidence_data.get("backend")\n', encoding="utf-8")
+    assert audit_certification_generator_ast(gen_file=gen_file) is True
+
+
+def test_block2_1_backend_get_with_unsafe_default_detected(tmp_path):
+    gen_file = tmp_path / "generate_certification_02_5.py"
+    gen_file.write_text('real_crypto_test_backend = evidence_data.get("backend", "SSH")\n', encoding="utf-8")
+    assert audit_certification_generator_ast(gen_file=gen_file) is False
+
+
+def test_block2_1_malformed_inbox_alone_does_not_verify_queue_corruption():
+    res = derive_security_gates(passed_test_names={"test_fail_closed_on_malformed_json"}, crypto_metrics={})
+    assert res["queue_corruption_fail_closed"] is False
+
+
+def test_block2_1_real_queue_corruption_test_verifies_gate():
+    res = derive_security_gates(passed_test_names={"test_queue_corrupted_after_restart_fail_closed"}, crypto_metrics={})
+    assert res["queue_corruption_fail_closed"] is True
+
+
+def test_block2_1_queue_replay_consistency_alone_does_not_verify_readback():
+    res = derive_security_gates(passed_test_names={"test_queue_and_replay_ledger_consistent"}, crypto_metrics={})
+    assert res["queue_record_readback_verified"] is False
+
+
+def test_block2_1_fsync_and_restart_integrity_verifies_readback():
+    res = derive_security_gates(passed_test_names={"test_queue_fsync_persistence_verified", "test_queue_integrity_after_restart"}, crypto_metrics={})
+    assert res["queue_record_readback_verified"] is True
+
+

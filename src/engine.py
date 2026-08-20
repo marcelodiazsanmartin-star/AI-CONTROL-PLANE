@@ -99,6 +99,7 @@ class ControlPlaneEngine:
 
             # 3. Write individual local state file (state/oracle.json, state/micro.json)
             file_id = proj_cfg.get("id", proj_key.lower())
+            self.output_dir.mkdir(parents=True, exist_ok=True)
             proj_state_path = self.output_dir / f"{file_id}.json"
             with open(proj_state_path, "w", encoding="utf-8") as f:
                 json.dump(proj_dict, f, indent=2)
