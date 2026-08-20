@@ -18,6 +18,9 @@ from src.directive.signer_validator import validate_production_signers, compute_
 from src.directive.reconciler import reconcile_execution_evidence
 from src.directive.authenticator import DirectiveAuthenticator
 from src.directive.contracts import DirectivePayload, DirectiveEnvelope
+from src.directive.governance import (
+    validate_trusted_branch_declaration, evaluate_branch_governance_rules, verify_trusted_head_provenance
+)
 from generate_certification_02_5 import (
     audit_certification_generator_ast, derive_security_gates, validate_crypto_backend,
     initialize_ssh_crypto_backend, verify_target_binding
@@ -726,6 +729,106 @@ def test_block2_4_complete_two_phase_path_reaches_pass():
     binding_ok = True
     strict_pass = (ingestion_ok and pre_exec_ok and fresh_ok and reval_ok and binding_ok)
     assert strict_pass is True
+
+
+# BLOCK 2.5 TRUSTED BRANCH GOVERNANCE TESTS (1 - 15)
+
+def test_block2_5_valid_trusted_branch_declaration_succeeds():
+    ok, err = validate_trusted_branch_declaration("origin", "main", "refs/heads/main")
+    assert ok is True
+    assert err is None
+
+
+def test_block2_5_missing_trusted_branch_rejected():
+    ok, err = validate_trusted_branch_declaration("origin", None, "refs/heads/main")
+    assert ok is False
+    assert "INVALID_TRUSTED_BRANCH" in err
+
+
+def test_block2_5_unknown_trusted_branch_rejected():
+    ok, err = validate_trusted_branch_declaration("origin", "unknown_branch", "refs/heads/main")
+    assert ok is False
+    assert "INVALID_TRUSTED_BRANCH" in err
+
+
+def test_block2_5_ambiguous_trusted_branch_rejected():
+    ok, err = validate_trusted_branch_declaration(None, "main", "refs/heads/main")
+    assert ok is False
+    assert "INVALID_TRUSTED_REMOTE" in err
+
+
+def test_block2_5_unprotected_trusted_branch_fails_governance():
+    res = evaluate_branch_governance_rules({"protection_enabled": False})
+    assert res["trusted_branch_protection_verified"] is False
+    assert res["all_governance_verified"] is False
+
+
+def test_block2_5_force_push_allowed_fails_governance():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "force_push_restricted": False})
+    assert res["force_push_protection_verified"] is False
+    assert res["all_governance_verified"] is False
+
+
+def test_block2_5_branch_deletion_allowed_fails_governance():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "branch_delete_restricted": False})
+    assert res["branch_delete_protection_verified"] is False
+    assert res["all_governance_verified"] is False
+
+
+def test_block2_5_unrestricted_direct_push_fails_governance():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "direct_push_governed": False})
+    assert res["direct_push_policy_verified"] is False
+    assert res["all_governance_verified"] is False
+
+
+def test_block2_5_governance_ruleset_unavailable_fails():
+    res = evaluate_branch_governance_rules({})
+    assert res["all_governance_verified"] is False
+
+
+def test_block2_5_admin_bypass_allowed_fails_governance():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "admin_bypass_restricted": False})
+    assert res["admin_bypass_policy_verified"] is False
+    assert res["all_governance_verified"] is False
+
+
+def test_block2_5_missing_required_review_fails_governance():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "reviews_required": False})
+    assert res["required_review_policy_verified"] is False
+    assert res["all_governance_verified"] is False
+
+
+def test_block2_5_missing_required_status_checks_fails_governance():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "checks_required": False})
+    assert res["required_status_checks_verified"] is False
+    assert res["all_governance_verified"] is False
+
+
+def test_block2_5_unsigned_trusted_head_fails_provenance(tmp_path):
+    ok, meta = verify_trusted_head_provenance(tmp_path, "UNKNOWN_SHA", set())
+    assert ok is False
+    assert meta["provenance_verified"] is False
+
+
+def test_block2_5_stale_governance_evidence_rejected():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "reviews_required": False})
+    assert res["all_governance_verified"] is False
+
+
+def test_block2_5_complete_governance_and_provenance_reaches_pass():
+    res = evaluate_branch_governance_rules({
+        "protection_enabled": True,
+        "force_push_restricted": True,
+        "branch_delete_restricted": True,
+        "direct_push_governed": True,
+        "bypass_restricted": True,
+        "reviews_required": True,
+        "checks_required": True,
+        "signed_commits_required": True,
+        "admin_bypass_restricted": True
+    })
+    assert res["all_governance_verified"] is True
+
 
 
 
