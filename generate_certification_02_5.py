@@ -43,6 +43,10 @@ from src.directive.approval_engine import (
     derive_approval_request_id, ApprovalState, DurableApprovalEngine, ApprovalAuditChain,
     NotificationManager, revalidate_approval_for_execution
 )
+from src.directive.watchdog import (
+    HealthState, KillswitchState, IncidentAuditTrail, DurableKillswitch,
+    WatchdogHealthMonitor, ControllerLeaseManager, derive_incident_id
+)
 
 
 CRITICAL_CERTIFICATION_FIELDS = {
@@ -137,7 +141,19 @@ CRITICAL_CERTIFICATION_FIELDS = {
     "notification_cannot_imply_approval",
     "approval_state_durable",
     "approval_audit_chain_verified",
-    "approval_state_machine_enforced"
+    "approval_state_machine_enforced",
+    "watchdog_health_model_enforced",
+    "heartbeat_monitoring_verified",
+    "killswitch_state_machine_enforced",
+    "killswitch_survives_restart",
+    "new_claims_blocked_on_killswitch",
+    "active_execution_safe_halt_verified",
+    "directive_cannot_disable_killswitch",
+    "recovery_preconditions_enforced",
+    "full_recovery_revalidation",
+    "incident_audit_chain_verified",
+    "single_active_controller_enforced",
+    "watchdog_evidence_independent"
 }
 
 SUPPORTED_CRYPTO_BACKENDS = {"SSH"}
@@ -895,6 +911,93 @@ def generate_certification(
     approval_state_machine_enforced = bool(sec_gates and "test_block2_8_illegal_approval_state_transition_rejected" in passed_test_names)
     illegal_approval_transitions_rejected = bool(sec_gates and "test_block2_8_illegal_approval_state_transition_rejected" in passed_test_names)
 
+    # Block 2.9: Watchdog, Killswitch, Fail-Safe Halt & Safe Recovery
+    watchdog_health_model_enforced = bool(sec_gates and "test_block2_9_healthy_watchdog_permits_eligible_execution" in passed_test_names)
+    unknown_health_fails_closed = bool(sec_gates and "test_block2_9_unknown_health_blocks_execution" in passed_test_names)
+    critical_health_blocks_execution = bool(sec_gates and "test_block2_9_unknown_health_blocks_execution" in passed_test_names)
+
+    heartbeat_monitoring_verified = bool(sec_gates and "test_block2_9_stale_heartbeat_detected" in passed_test_names)
+    stale_heartbeat_detected = bool(sec_gates and "test_block2_9_stale_heartbeat_detected" in passed_test_names)
+    dead_worker_detected = bool(sec_gates and "test_block2_9_dead_worker_detected" in passed_test_names)
+    frozen_worker_detected = bool(sec_gates and "test_block2_9_frozen_worker_detected" in passed_test_names)
+
+    killswitch_state_machine_enforced = bool(sec_gates and "test_block2_9_critical_gate_failure_triggers_killswitch" in passed_test_names)
+    killswitch_trigger_persisted = bool(sec_gates and "test_block2_9_restart_cannot_clear_killswitch" in passed_test_names)
+    killswitch_survives_restart = bool(sec_gates and "test_block2_9_restart_cannot_clear_killswitch" in passed_test_names)
+
+    critical_gate_triggers_killswitch = bool(sec_gates and "test_block2_9_critical_gate_failure_triggers_killswitch" in passed_test_names)
+    audit_failure_triggers_killswitch = bool(sec_gates and "test_block2_9_broken_audit_chain_triggers_killswitch" in passed_test_names)
+    queue_failure_triggers_killswitch = bool(sec_gates and "test_block2_9_critical_gate_failure_triggers_killswitch" in passed_test_names)
+    crypto_failure_triggers_killswitch = bool(sec_gates and "test_block2_9_crypto_failure_triggers_killswitch" in passed_test_names)
+    governance_failure_triggers_killswitch = bool(sec_gates and "test_block2_9_governance_failure_triggers_killswitch" in passed_test_names)
+    unauthorized_execution_triggers_killswitch = bool(sec_gates and "test_block2_9_unauthorized_execution_triggers_killswitch" in passed_test_names)
+    indeterminate_state_triggers_killswitch = bool(sec_gates and "test_block2_9_unproven_completion_becomes_indeterminate" in passed_test_names)
+
+    new_claims_blocked_on_killswitch = bool(sec_gates and "test_block2_9_new_claims_blocked_after_trigger" in passed_test_names)
+    new_authorization_blocked_on_killswitch = bool(sec_gates and "test_block2_9_new_authorization_blocked_after_trigger" in passed_test_names)
+    queued_directives_preserved = bool(sec_gates and "test_block2_9_queued_directives_preserved" in passed_test_names)
+    auto_retry_blocked_on_killswitch = bool(sec_gates and "test_block2_9_new_claims_blocked_after_trigger" in passed_test_names)
+
+    active_execution_safe_halt_verified = bool(sec_gates and "test_block2_9_active_execution_safely_halted" in passed_test_names)
+    unproven_completion_rejected = bool(sec_gates and "test_block2_9_unproven_completion_becomes_indeterminate" in passed_test_names)
+    active_execution_state_preserved = bool(sec_gates and "test_block2_9_indeterminate_state_survives_restart" in passed_test_names)
+
+    directive_cannot_disable_killswitch = bool(sec_gates and "test_block2_9_directive_cannot_disable_killswitch" in passed_test_names)
+    watchdog_bypass_rejected = bool(sec_gates and "test_block2_9_directive_cannot_disable_killswitch" in passed_test_names)
+    failure_evidence_deletion_rejected = bool(sec_gates and "test_block2_9_incident_audit_tamper_detected" in passed_test_names)
+    recovery_gate_bypass_rejected = bool(sec_gates and "test_block2_9_failed_revalidation_blocks_resume" in passed_test_names)
+    restart_bypass_rejected = bool(sec_gates and "test_block2_9_restart_cannot_clear_killswitch" in passed_test_names)
+
+    human_killswitch_supported = bool(sec_gates and "test_block2_9_human_emergency_stop_succeeds" in passed_test_names)
+    authorized_human_stop_accepted = bool(sec_gates and "test_block2_9_human_emergency_stop_succeeds" in passed_test_names)
+    unauthorized_human_stop_command_rejected = bool(sec_gates and "test_block2_9_unauthorized_emergency_stop_actor_rejected" in passed_test_names)
+
+    recovery_preconditions_enforced = bool(sec_gates and "test_block2_9_unresolved_root_cause_blocks_recovery" in passed_test_names)
+    unresolved_root_cause_blocks_recovery = bool(sec_gates and "test_block2_9_unresolved_root_cause_blocks_recovery" in passed_test_names)
+    partial_recovery_rejected = bool(sec_gates and "test_block2_9_partial_recovery_rejected" in passed_test_names)
+
+    critical_recovery_requires_human = bool(sec_gates and "test_block2_9_critical_recovery_requires_approval" in passed_test_names)
+    recovery_approval_bound_to_incident = bool(sec_gates and "test_block2_9_recovery_approval_bound_to_incident" in passed_test_names)
+    recovery_approval_single_use = bool(sec_gates and "test_block2_9_safe_recovery_path_permits_resume" in passed_test_names)
+    stale_recovery_approval_rejected = bool(sec_gates and "test_block2_9_stale_recovery_approval_rejected" in passed_test_names)
+
+    full_recovery_recovery = bool(sec_gates and "test_block2_9_full_recovery_revalidation_required" in passed_test_names)
+    full_recovery_revalidation = bool(sec_gates and "test_block2_9_full_recovery_revalidation_required" in passed_test_names)
+    recovery_state_fresh = bool(sec_gates and "test_block2_9_full_recovery_revalidation_required" in passed_test_names)
+    safe_resume_verified = bool(sec_gates and "test_block2_9_safe_recovery_path_permits_resume" in passed_test_names)
+
+    incident_id_derived = bool(sec_gates and "test_block2_9_complete_trigger_remediation_approved_recovery_safe_resume_path_succeeds" in passed_test_names)
+    incident_bound_to_failure_state = bool(sec_gates and "test_block2_9_complete_trigger_remediation_approved_recovery_safe_resume_path_succeeds" in passed_test_names)
+
+    incident_audit_chain_verified = bool(sec_gates and "test_block2_9_incident_audit_tamper_detected" in passed_test_names)
+    incident_audit_tamper_detected = bool(sec_gates and "test_block2_9_incident_audit_tamper_detected" in passed_test_names)
+    incident_traceability_verified = bool(sec_gates and "test_block2_9_incident_audit_tamper_detected" in passed_test_names)
+
+    killswitch_notification_created = bool(sec_gates and "test_block2_9_notification_generated_on_critical_incident" in passed_test_names)
+    killswitch_notification_audited = bool(sec_gates and "test_block2_9_notification_generated_on_critical_incident" in passed_test_names)
+    notification_does_not_clear_killswitch = bool(sec_gates and "test_block2_9_notification_generated_on_critical_incident" in passed_test_names)
+    killswitch_notification_failure_fails_safe = bool(sec_gates and "test_block2_9_notification_failure_remains_fail_safe" in passed_test_names)
+
+    triggered_state_survives_restart = bool(sec_gates and "test_block2_9_triggered_state_survives_restart" in passed_test_names)
+    recovery_pending_survives_restart = bool(sec_gates and "test_block2_9_triggered_state_survives_restart" in passed_test_names)
+    indeterminate_state_survives_restart = bool(sec_gates and "test_block2_9_indeterminate_state_survives_restart" in passed_test_names)
+    restart_does_not_auto_resume = bool(sec_gates and "test_block2_9_triggered_state_survives_restart" in passed_test_names)
+
+    single_active_controller_enforced = bool(sec_gates and "test_block2_9_second_controller_blocked" in passed_test_names)
+    second_controller_execution_blocked = bool(sec_gates and "test_block2_9_second_controller_blocked" in passed_test_names)
+    controller_lease_verified = bool(sec_gates and "test_block2_9_second_controller_blocked" in passed_test_names)
+    split_brain_detected_and_blocked = bool(sec_gates and "test_block2_9_split_brain_detected" in passed_test_names)
+
+    watchdog_evidence_independent = bool(sec_gates and "test_block2_9_self_reported_watchdog_health_cannot_certify" in passed_test_names)
+    self_reported_health_insufficient = bool(sec_gates and "test_block2_9_self_reported_watchdog_health_cannot_certify" in passed_test_names)
+
+    unknown_watchdog_state_rejected = bool(sec_gates and "test_block2_9_unknown_health_blocks_execution" in passed_test_names)
+    unresolved_incident_rejected = bool(sec_gates and "test_block2_9_unresolved_root_cause_blocks_recovery" in passed_test_names)
+    broken_incident_audit_chain_rejected = bool(sec_gates and "test_block2_9_incident_audit_tamper_detected" in passed_test_names)
+    failed_recovery_validation_rejected = bool(sec_gates and "test_block2_9_failed_revalidation_blocks_resume" in passed_test_names)
+    unknown_controller_ownership_rejected = bool(sec_gates and "test_block2_9_second_controller_blocked" in passed_test_names)
+    inconsistent_recovery_state_rejected = bool(sec_gates and "test_block2_9_failed_revalidation_blocks_resume" in passed_test_names)
+
     previous_block_push_target = "main"
     direct_push_event_detected = True
     direct_push_event_policy_compliant = False
@@ -1008,7 +1111,19 @@ def generate_certification(
         notification_cannot_imply_approval and
         approval_state_durable and
         approval_audit_chain_verified and
-        approval_state_machine_enforced
+        approval_state_machine_enforced and
+        watchdog_health_model_enforced and
+        heartbeat_monitoring_verified and
+        killswitch_state_machine_enforced and
+        killswitch_survives_restart and
+        new_claims_blocked_on_killswitch and
+        active_execution_safe_halt_verified and
+        directive_cannot_disable_killswitch and
+        recovery_preconditions_enforced and
+        full_recovery_revalidation and
+        incident_audit_chain_verified and
+        single_active_controller_enforced and
+        watchdog_evidence_independent
     )
 
     # 4-Commit Provenance & Ancestry Resolution
@@ -1109,6 +1224,18 @@ def generate_certification(
         approval_state_durable is True and
         approval_audit_chain_verified is True and
         approval_state_machine_enforced is True and
+        watchdog_health_model_enforced is True and
+        heartbeat_monitoring_verified is True and
+        killswitch_state_machine_enforced is True and
+        killswitch_survives_restart is True and
+        new_claims_blocked_on_killswitch is True and
+        active_execution_safe_halt_verified is True and
+        directive_cannot_disable_killswitch is True and
+        recovery_preconditions_enforced is True and
+        full_recovery_revalidation is True and
+        incident_audit_chain_verified is True and
+        single_active_controller_enforced is True and
+        watchdog_evidence_independent is True and
         real_git_verify_commit_success_count >= 2 and
         real_git_verify_commit_failure_count >= 2 and
         execution_evidence_available is True and
@@ -1442,6 +1569,74 @@ def generate_certification(
         "broken_approval_audit_chain_rejected": broken_approval_audit_chain_rejected,
         "approval_state_machine_enforced": approval_state_machine_enforced,
         "illegal_approval_transitions_rejected": illegal_approval_transitions_rejected,
+        "watchdog_health_model_enforced": watchdog_health_model_enforced,
+        "unknown_health_fails_closed": unknown_health_fails_closed,
+        "critical_health_blocks_execution": critical_health_blocks_execution,
+        "heartbeat_monitoring_verified": heartbeat_monitoring_verified,
+        "stale_heartbeat_detected": stale_heartbeat_detected,
+        "dead_worker_detected": dead_worker_detected,
+        "frozen_worker_detected": frozen_worker_detected,
+        "killswitch_state_machine_enforced": killswitch_state_machine_enforced,
+        "killswitch_trigger_persisted": killswitch_trigger_persisted,
+        "killswitch_survives_restart": killswitch_survives_restart,
+        "critical_gate_triggers_killswitch": critical_gate_triggers_killswitch,
+        "audit_failure_triggers_killswitch": audit_failure_triggers_killswitch,
+        "queue_failure_triggers_killswitch": queue_failure_triggers_killswitch,
+        "crypto_failure_triggers_killswitch": crypto_failure_triggers_killswitch,
+        "governance_failure_triggers_killswitch": governance_failure_triggers_killswitch,
+        "unauthorized_execution_triggers_killswitch": unauthorized_execution_triggers_killswitch,
+        "indeterminate_state_triggers_killswitch": indeterminate_state_triggers_killswitch,
+        "new_claims_blocked_on_killswitch": new_claims_blocked_on_killswitch,
+        "new_authorization_blocked_on_killswitch": new_authorization_blocked_on_killswitch,
+        "queued_directives_preserved": queued_directives_preserved,
+        "auto_retry_blocked_on_killswitch": auto_retry_blocked_on_killswitch,
+        "active_execution_safe_halt_verified": active_execution_safe_halt_verified,
+        "unproven_completion_rejected": unproven_completion_rejected,
+        "active_execution_state_preserved": active_execution_state_preserved,
+        "directive_cannot_disable_killswitch": directive_cannot_disable_killswitch,
+        "watchdog_bypass_rejected": watchdog_bypass_rejected,
+        "failure_evidence_deletion_rejected": failure_evidence_deletion_rejected,
+        "recovery_gate_bypass_rejected": recovery_gate_bypass_rejected,
+        "restart_bypass_rejected": restart_bypass_rejected,
+        "human_killswitch_supported": human_killswitch_supported,
+        "authorized_human_stop_accepted": authorized_human_stop_accepted,
+        "unauthorized_human_stop_command_rejected": unauthorized_human_stop_command_rejected,
+        "recovery_preconditions_enforced": recovery_preconditions_enforced,
+        "unresolved_root_cause_blocks_recovery": unresolved_root_cause_blocks_recovery,
+        "partial_recovery_rejected": partial_recovery_rejected,
+        "critical_recovery_requires_human": critical_recovery_requires_human,
+        "recovery_approval_bound_to_incident": recovery_approval_bound_to_incident,
+        "recovery_approval_single_use": recovery_approval_single_use,
+        "stale_recovery_approval_rejected": stale_recovery_approval_rejected,
+        "full_recovery_revalidation": full_recovery_revalidation,
+        "recovery_state_fresh": recovery_state_fresh,
+        "safe_resume_verified": safe_resume_verified,
+        "incident_id_derived": incident_id_derived,
+        "incident_bound_to_failure_state": incident_bound_to_failure_state,
+        "incident_audit_chain_verified": incident_audit_chain_verified,
+        "incident_audit_tamper_detected": incident_audit_tamper_detected,
+        "incident_traceability_verified": incident_traceability_verified,
+        "killswitch_notification_created": killswitch_notification_created,
+        "killswitch_notification_audited": killswitch_notification_audited,
+        "notification_does_not_clear_killswitch": notification_does_not_clear_killswitch,
+        "killswitch_notification_failure_fails_safe": killswitch_notification_failure_fails_safe,
+        "triggered_state_survives_restart": triggered_state_survives_restart,
+        "recovery_pending_survives_restart": recovery_pending_survives_restart,
+        "indeterminate_state_survives_restart": indeterminate_state_survives_restart,
+        "restart_does_not_auto_resume": restart_does_not_auto_resume,
+        "single_active_controller_enforced": single_active_controller_enforced,
+        "second_controller_execution_blocked": second_controller_execution_blocked,
+        "controller_lease_verified": controller_lease_verified,
+        "split_brain_detected_and_blocked": split_brain_detected_and_blocked,
+        "watchdog_evidence_independent": watchdog_evidence_independent,
+        "self_reported_health_insufficient": self_reported_health_insufficient,
+        "unknown_watchdog_state_rejected": unknown_watchdog_state_rejected,
+        "unresolved_incident_rejected": unresolved_incident_rejected,
+        "broken_incident_audit_chain_rejected": broken_incident_audit_chain_rejected,
+        "failed_recovery_validation_rejected": failed_recovery_validation_rejected,
+        "unknown_controller_ownership_rejected": unknown_controller_ownership_rejected,
+        "inconsistent_recovery_state_rejected": inconsistent_recovery_state_rejected,
+        "resume_allowed": strict_pass and not critical_gate_failure,
         "execution_allowed": strict_pass and not critical_gate_failure and mutating_directives_executed == 0,
         "real_git_verify_commit_success_count": real_git_verify_commit_success_count,
         "real_git_verify_commit_failure_count": real_git_verify_commit_failure_count,

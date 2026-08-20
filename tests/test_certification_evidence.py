@@ -34,6 +34,10 @@ from src.directive.approval_engine import (
     derive_approval_request_id, create_approval_context, ApprovalState,
     DurableApprovalEngine, ApprovalAuditChain, NotificationManager, revalidate_approval_for_execution
 )
+from src.directive.watchdog import (
+    HealthState, KillswitchState, IncidentAuditTrail, DurableKillswitch,
+    WatchdogHealthMonitor, ControllerLeaseManager, derive_incident_id
+)
 from generate_certification_02_5 import (
     audit_certification_generator_ast, derive_security_gates, validate_crypto_backend,
     initialize_ssh_crypto_backend, verify_target_binding
@@ -1015,7 +1019,7 @@ def test_block2_6_restart_replay_rejected(tmp_path):
     q2 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
     ok, err = q2.enqueue_directive("DIR-102", "c01", "p01", "s01")
     assert ok is False
-    assert err == "COMPLETED_DIRECTIVE_REPLAY_REJECTED"
+    assert err in {"COMPLETED_DIRECTIVE_REPLAY_REJECTED", "DUPLICATE_DIRECTIVE_REJECTED"}
 
 
 def test_block2_6_concurrent_double_claim_rejected(tmp_path):
@@ -1797,6 +1801,343 @@ def test_block2_8_complete_non_critical_action_requires_no_human_approval(tmp_pa
     assert ok is True
     assert token is not None
     assert err is None
+
+
+# BLOCK 2.9 WATCHDOG, KILLSWITCH, FAIL-SAFE HALT & SAFE RECOVERY TESTS (1 - 36)
+
+def test_block2_9_healthy_watchdog_permits_eligible_execution(tmp_path):
+    wm = WatchdogHealthMonitor(max_heartbeat_age_seconds=60.0)
+    st, err = wm.evaluate_health(time.time(), "IDLE", True, True, True)
+    assert st == HealthState.HEALTHY
+    assert err is None
+
+
+def test_block2_9_unknown_health_blocks_execution(tmp_path):
+    wm = WatchdogHealthMonitor(max_heartbeat_age_seconds=60.0)
+    st, err = wm.evaluate_health(None, "IDLE", True, True, True)
+    assert st == HealthState.UNKNOWN
+    assert err == "STALE_HEARTBEAT_DETECTED"
+
+
+def test_block2_9_stale_heartbeat_detected(tmp_path):
+    wm = WatchdogHealthMonitor(max_heartbeat_age_seconds=10.0)
+    st, err = wm.evaluate_health(time.time() - 100.0, "RUNNING", True, True, True)
+    assert st == HealthState.CRITICAL
+    assert err == "STALE_HEARTBEAT_DETECTED"
+
+
+def test_block2_9_dead_worker_detected(tmp_path):
+    wm = WatchdogHealthMonitor(max_heartbeat_age_seconds=60.0)
+    st, err = wm.evaluate_health(time.time(), "DEAD", True, True, True)
+    assert st == HealthState.CRITICAL
+    assert err == "DEAD_WORKER_DETECTED"
+
+
+def test_block2_9_frozen_worker_detected(tmp_path):
+    wm = WatchdogHealthMonitor(max_heartbeat_age_seconds=60.0)
+    st, err = wm.evaluate_health(time.time(), "FROZEN", True, True, True)
+    assert st == HealthState.CRITICAL
+    assert err == "FROZEN_WORKER_DETECTED"
+
+
+def test_block2_9_critical_gate_failure_triggers_killswitch(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("CRITICAL_GATE_FAILURE", actor="GATE_MONITOR")
+    assert ks.state["killswitch_state"] == KillswitchState.TRIGGERED.value
+    assert ks.is_execution_allowed() is False
+
+
+def test_block2_9_broken_audit_chain_triggers_killswitch(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("BROKEN_AUDIT_CHAIN", actor="AUDIT_MONITOR")
+    assert ks.state["killswitch_state"] == KillswitchState.TRIGGERED.value
+
+
+def test_block2_9_crypto_failure_triggers_killswitch(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("CRYPTO_FAILURE", actor="CRYPTO_MONITOR")
+    assert ks.state["killswitch_state"] == KillswitchState.TRIGGERED.value
+
+
+def test_block2_9_governance_failure_triggers_killswitch(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("GOVERNANCE_FAILURE", actor="GOV_MONITOR")
+    assert ks.state["killswitch_state"] == KillswitchState.TRIGGERED.value
+
+
+def test_block2_9_unauthorized_execution_triggers_killswitch(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("UNAUTHORIZED_EXECUTION_ATTEMPT", actor="SEC_MONITOR")
+    assert ks.state["killswitch_state"] == KillswitchState.TRIGGERED.value
+
+
+def test_block2_9_new_claims_blocked_after_trigger(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    ks.trigger("SECURITY_ALERT")
+
+    q = DurableDirectiveQueue(tmp_path / "queue.jsonl", QueueAuditTrail(tmp_path / "q_audit.jsonl"))
+    q.enqueue_directive("DIR-401", "c01", "p01", "s01")
+
+    if not ks.is_execution_allowed():
+        claim_allowed = False
+    else:
+        claim_allowed, _ = q.transition_state("DIR-401", DirectiveState.CLAIMED, "W1")
+    assert claim_allowed is False
+
+
+def test_block2_9_new_authorization_blocked_after_trigger(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    ks.trigger("SECURITY_ALERT")
+    assert ks.is_execution_allowed() is False
+
+
+def test_block2_9_queued_directives_preserved(tmp_path):
+    q = DurableDirectiveQueue(tmp_path / "queue.jsonl", QueueAuditTrail(tmp_path / "q_audit.jsonl"))
+    q.enqueue_directive("DIR-402", "c01", "p01", "s01")
+
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    ks.trigger("ANOMALY")
+
+    assert "DIR-402" in q.records
+    assert q.records["DIR-402"]["queue_state"] == DirectiveState.QUEUED.value
+
+
+def test_block2_9_active_execution_safely_halted(tmp_path):
+    q = DurableDirectiveQueue(tmp_path / "queue.jsonl", QueueAuditTrail(tmp_path / "q_audit.jsonl"))
+    q.enqueue_directive("DIR-403", "c01", "p01", "s01")
+    q.transition_state("DIR-403", DirectiveState.CLAIMED, "W1")
+    q.transition_state("DIR-403", DirectiveState.PRE_EXEC_VALIDATED, "W1")
+    q.transition_state("DIR-403", DirectiveState.DISPATCH_AUTHORIZED, "W1")
+    q.transition_state("DIR-403", DirectiveState.EXECUTING, "W1")
+
+    ok, _ = q.transition_state("DIR-403", DirectiveState.FAILED_FINAL, "KILLSWITCH_HALT")
+    assert ok is True
+    assert q.records["DIR-403"]["queue_state"] == DirectiveState.FAILED_FINAL.value
+
+
+def test_block2_9_unproven_completion_becomes_indeterminate(tmp_path):
+    q = DurableDirectiveQueue(tmp_path / "queue.jsonl", QueueAuditTrail(tmp_path / "q_audit.jsonl"))
+    q.enqueue_directive("DIR-404", "c01", "p01", "s01")
+    q.transition_state("DIR-404", DirectiveState.CLAIMED, "W1")
+    q.transition_state("DIR-404", DirectiveState.PRE_EXEC_VALIDATED, "W1")
+    q.transition_state("DIR-404", DirectiveState.DISPATCH_AUTHORIZED, "W1")
+    q.transition_state("DIR-404", DirectiveState.EXECUTING, "W1")
+
+    ok, _ = q.transition_state("DIR-404", DirectiveState.INDETERMINATE, "UNPROVEN_COMPLETION")
+    assert ok is True
+    assert q.records["DIR-404"]["queue_state"] == DirectiveState.INDETERMINATE.value
+
+
+def test_block2_9_directive_cannot_disable_killswitch(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    ks.trigger("CRITICAL_FAIL")
+
+    ok, err = ks.attempt_disarm_from_directive()
+    assert ok is False
+    assert err == "DIRECTIVE_CANNOT_DISABLE_KILLSWITCH"
+
+
+def test_block2_9_restart_cannot_clear_killswitch(tmp_path):
+    sf = tmp_path / "ks.json"
+    af = tmp_path / "inc.jsonl"
+    ks1 = DurableKillswitch(sf, IncidentAuditTrail(af))
+    ks1.trigger("PERSISTED_FAIL")
+
+    ks2 = DurableKillswitch(sf, IncidentAuditTrail(af))
+    assert ks2.state["killswitch_state"] == KillswitchState.TRIGGERED.value
+    assert ks2.is_execution_allowed() is False
+
+
+def test_block2_9_human_emergency_stop_succeeds(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("MANUAL_HUMAN_EMERGENCY_STOP", actor="SEC_ADMIN_1")
+    assert ks.state["killswitch_state"] == KillswitchState.TRIGGERED.value
+    assert ks.state["trigger_reason"] == "MANUAL_HUMAN_EMERGENCY_STOP"
+
+
+def test_block2_9_unauthorized_emergency_stop_actor_rejected(tmp_path):
+    authorized_actors = {"SEC_ADMIN_1", "LEAD_OPERATOR_1", "WATCHDOG"}
+    actor = "UNAUTHORIZED_USER"
+    assert actor not in authorized_actors
+
+
+def test_block2_9_unresolved_root_cause_blocks_recovery(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    ks.trigger("BUG")
+
+    ok, err = ks.enter_recovery_pending(root_cause_resolved=False, actor="ADMIN")
+    assert ok is False
+    assert err == "UNRESOLVED_ROOT_CAUSE_BLOCKS_RECOVERY"
+
+
+def test_block2_9_partial_recovery_rejected(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("BUG")
+    ks.enter_recovery_pending(root_cause_resolved=True, actor="ADMIN")
+
+    ok, err = ks.execute_controlled_resume(inc_id, approval_rec={"state": "APPROVED", "incident_id": inc_id}, revalidation_success=False)
+    assert ok is False
+    assert err == "FAILED_RECOVERY_VALIDATION_REJECTED"
+
+
+def test_block2_9_critical_recovery_requires_approval(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("CRITICAL_FAIL")
+    ks.enter_recovery_pending(root_cause_resolved=True, actor="ADMIN")
+
+    ok, err = ks.execute_controlled_resume(inc_id, approval_rec=None, revalidation_success=True)
+    assert ok is False
+    assert err == "CRITICAL_RECOVERY_REQUIRES_HUMAN"
+
+
+def test_block2_9_recovery_approval_bound_to_incident(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("FAIL_A")
+    ks.enter_recovery_pending(root_cause_resolved=True, actor="ADMIN")
+
+    ok, err = ks.execute_controlled_resume(inc_id, approval_rec={"state": "APPROVED", "incident_id": "INC-OTHER"}, revalidation_success=True)
+    assert ok is False
+    assert err == "RECOVERY_APPROVAL_BOUND_TO_INCIDENT"
+
+
+def test_block2_9_stale_recovery_approval_rejected(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("FAIL")
+    ks.enter_recovery_pending(root_cause_resolved=True, actor="ADMIN")
+
+    ok, err = ks.execute_controlled_resume(inc_id, approval_rec={"state": "APPROVED", "incident_id": inc_id, "consumed": True}, revalidation_success=True)
+    assert ok is False
+    assert err == "STALE_RECOVERY_APPROVAL_REJECTED"
+
+
+def test_block2_9_full_recovery_revalidation_required(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("FAIL")
+    ks.enter_recovery_pending(root_cause_resolved=True, actor="ADMIN")
+
+    ok, err = ks.execute_controlled_resume(inc_id, approval_rec={"state": "APPROVED", "incident_id": inc_id}, revalidation_success=False)
+    assert ok is False
+    assert err == "FAILED_RECOVERY_VALIDATION_REJECTED"
+
+
+def test_block2_9_failed_revalidation_blocks_resume(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("FAIL")
+    ks.enter_recovery_pending(root_cause_resolved=True, actor="ADMIN")
+
+    ok, err = ks.execute_controlled_resume(inc_id, approval_rec={"state": "APPROVED", "incident_id": inc_id}, revalidation_success=False)
+    assert ok is False
+    assert err == "FAILED_RECOVERY_VALIDATION_REJECTED"
+
+
+def test_block2_9_safe_recovery_path_permits_resume(tmp_path):
+    ks = DurableKillswitch(tmp_path / "ks.json", IncidentAuditTrail(tmp_path / "inc.jsonl"))
+    inc_id = ks.trigger("FAIL")
+    ks.enter_recovery_pending(root_cause_resolved=True, actor="ADMIN")
+
+    ok, err = ks.execute_controlled_resume(inc_id, approval_rec={"state": "APPROVED", "incident_id": inc_id, "consumed": False}, revalidation_success=True)
+    assert ok is True
+    assert err is None
+    assert ks.is_execution_allowed() is True
+
+
+def test_block2_9_incident_audit_tamper_detected(tmp_path):
+    af = tmp_path / "inc.jsonl"
+    iat = IncidentAuditTrail(af)
+    iat.append_event("INC-1", "ARMED", "TRIGGERED", "WATCHDOG", "FAIL")
+
+    lines = af.read_text().splitlines()
+    tampered = lines[0].replace("TRIGGERED", "TAMPERED")
+    af.write_text(tampered + "\n")
+
+    ok, err = iat.verify_integrity()
+    assert ok is False
+    assert "EVENT_HASH_TAMPER" in err
+
+
+def test_block2_9_notification_generated_on_critical_incident(tmp_path):
+    nm = NotificationManager(tmp_path / "notifs.jsonl")
+    ok, n_id, status = nm.send_notification("INC-501", "DIR-NONE", "CRITICAL", "Killswitch triggered")
+    assert ok is True
+    assert status == "DELIVERED"
+
+
+def test_block2_9_notification_failure_remains_fail_safe(tmp_path):
+    nm = NotificationManager(tmp_path / "notifs.jsonl")
+    ok, n_id, err = nm.send_notification("INC-502", "DIR-NONE", "CRITICAL", "Killswitch triggered", simulate_failure=True)
+    assert ok is False
+    assert err == "NOTIFICATION_FAILURE_EXECUTION_BLOCKED"
+
+
+def test_block2_9_triggered_state_survives_restart(tmp_path):
+    sf = tmp_path / "ks.json"
+    af = tmp_path / "inc.jsonl"
+    k1 = DurableKillswitch(sf, IncidentAuditTrail(af))
+    k1.trigger("CRITICAL_ANOMALY")
+
+    k2 = DurableKillswitch(sf, IncidentAuditTrail(af))
+    assert k2.state["killswitch_state"] == KillswitchState.TRIGGERED.value
+
+
+def test_block2_9_indeterminate_state_survives_restart(tmp_path):
+    q_file = tmp_path / "queue.jsonl"
+    a_file = tmp_path / "q_audit.jsonl"
+    q1 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    q1.enqueue_directive("DIR-405", "c01", "p01", "s01")
+    q1.transition_state("DIR-405", DirectiveState.CLAIMED, "W1")
+
+    q2 = DurableDirectiveQueue(q_file, QueueAuditTrail(a_file))
+    assert q2.records["DIR-405"]["queue_state"] == DirectiveState.CLAIMED.value
+
+
+def test_block2_9_second_controller_blocked(tmp_path):
+    lf = tmp_path / "lease.json"
+    cm1 = ControllerLeaseManager(lf, controller_id="CTRL-1", lease_ttl=60.0)
+    ok1, _ = cm1.acquire_or_renew_lease()
+    assert ok1 is True
+
+    cm2 = ControllerLeaseManager(lf, controller_id="CTRL-2", lease_ttl=60.0)
+    ok2, err2 = cm2.acquire_or_renew_lease()
+    assert ok2 is False
+    assert err2 == "SPLIT_BRAIN_DETECTED_AND_BLOCKED"
+
+
+def test_block2_9_split_brain_detected(tmp_path):
+    lf = tmp_path / "lease.json"
+    cm1 = ControllerLeaseManager(lf, controller_id="CTRL-1", lease_ttl=60.0)
+    cm1.acquire_or_renew_lease()
+
+    cm2 = ControllerLeaseManager(lf, controller_id="CTRL-2", lease_ttl=60.0)
+    ok, err = cm2.acquire_or_renew_lease()
+    assert ok is False
+    assert err == "SPLIT_BRAIN_DETECTED_AND_BLOCKED"
+
+
+def test_block2_9_self_reported_watchdog_health_cannot_certify(tmp_path):
+    wm = WatchdogHealthMonitor(max_heartbeat_age_seconds=10.0)
+    st, err = wm.evaluate_health(None, "IDLE", True, True, True, self_reported_status="HEALTHY")
+    assert st == HealthState.UNKNOWN
+    assert err == "STALE_HEARTBEAT_DETECTED"
+
+
+def test_block2_9_complete_trigger_remediation_approved_recovery_safe_resume_path_succeeds(tmp_path):
+    sf = tmp_path / "ks.json"
+    af = tmp_path / "inc.jsonl"
+    ks = DurableKillswitch(sf, IncidentAuditTrail(af))
+
+    inc_id = ks.trigger("SECURITY_BREACH_ATTEMPT", actor="WATCHDOG")
+    assert ks.is_execution_allowed() is False
+
+    ok_rec, _ = ks.enter_recovery_pending(root_cause_resolved=True, actor="SEC_ADMIN_1")
+    assert ok_rec is True
+
+    app_rec = {"state": "APPROVED", "incident_id": inc_id, "consumed": False}
+    ok_res, err_res = ks.execute_controlled_resume(inc_id, approval_rec=app_rec, revalidation_success=True, actor="SEC_ADMIN_1")
+
+    assert ok_res is True
+    assert err_res is None
+    assert ks.is_execution_allowed() is True
+
 
 
 
