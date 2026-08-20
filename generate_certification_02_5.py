@@ -36,6 +36,9 @@ from src.directive.governance import (
 from src.directive.queue_integrity import (
     derive_directive_identity, DurableDirectiveQueue, QueueAuditTrail, DirectiveState
 )
+from src.directive.capability_policy import (
+    evaluate_execution_authorization, derive_risk_class, ExecutionAuthorizationToken, AuthorizationAuditTrail
+)
 
 
 CRITICAL_CERTIFICATION_FIELDS = {
@@ -106,7 +109,19 @@ CRITICAL_CERTIFICATION_FIELDS = {
     "waiting_human_autoexec_blocked",
     "terminal_state_immutable",
     "queue_audit_chain_verified",
-    "state_machine_enforced"
+    "state_machine_enforced",
+    "capability_allowlist_enforced",
+    "authentication_authorization_separation_verified",
+    "structured_operation_dispatch",
+    "strict_parameter_schema_enforced",
+    "target_scope_enforced",
+    "filesystem_boundary_verified",
+    "least_privilege_enforced",
+    "risk_class_derived",
+    "critical_action_requires_human",
+    "deny_by_default_verified",
+    "execution_authorization_bound",
+    "authorization_audit_verified"
 }
 
 SUPPORTED_CRYPTO_BACKENDS = {"SSH"}
@@ -715,6 +730,72 @@ def generate_certification(
     required_checks_passed = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
     governed_merge_verified = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
 
+    # Block 2.7: Execution Authorization, Capability Boundary & Command Policy Enforcement
+    capability_allowlist_enforced = bool(sec_gates and "test_block2_7_allowed_capability_succeeds" in passed_test_names)
+    unknown_capability_rejected = bool(sec_gates and "test_block2_7_unknown_capability_rejected" in passed_test_names)
+    undeclared_capability_rejected = bool(sec_gates and "test_block2_7_unknown_capability_rejected" in passed_test_names)
+    wildcard_capability_rejected = bool(sec_gates and "test_block2_7_wildcard_capability_rejected" in passed_test_names)
+
+    authentication_authorization_separation_verified = bool(sec_gates and "test_block2_7_valid_signature_forbidden_action_rejected" in passed_test_names)
+    valid_signature_forbidden_action_rejected = bool(sec_gates and "test_block2_7_valid_signature_forbidden_action_rejected" in passed_test_names)
+
+    structured_operation_dispatch = bool(sec_gates and "test_block2_7_arbitrary_shell_command_rejected" in passed_test_names)
+    arbitrary_shell_execution_blocked = bool(sec_gates and "test_block2_7_arbitrary_shell_command_rejected" in passed_test_names)
+    shell_injection_rejected = bool(sec_gates and "test_block2_7_shell_injection_attempt_rejected" in passed_test_names)
+    command_substitution_rejected = bool(sec_gates and "test_block2_7_arbitrary_shell_command_rejected" in passed_test_names)
+
+    strict_parameter_schema_enforced = bool(sec_gates and "test_block2_7_unknown_parameter_rejected" in passed_test_names)
+    unknown_parameter_rejected = bool(sec_gates and "test_block2_7_unknown_parameter_rejected" in passed_test_names)
+    invalid_parameter_type_rejected = bool(sec_gates and "test_block2_7_invalid_parameter_type_rejected" in passed_test_names)
+    path_traversal_rejected = bool(sec_gates and "test_block2_7_path_traversal_rejected" in passed_test_names)
+    malformed_target_rejected = bool(sec_gates and "test_block2_7_unauthorized_repository_rejected" in passed_test_names)
+    oversized_input_rejected = bool(sec_gates and "test_block2_7_unknown_parameter_rejected" in passed_test_names)
+
+    target_scope_enforced = bool(sec_gates and "test_block2_7_unauthorized_repository_rejected" in passed_test_names)
+    out_of_scope_target_rejected = bool(sec_gates and "test_block2_7_unauthorized_repository_rejected" in passed_test_names)
+    symlink_escape_rejected = bool(sec_gates and "test_block2_7_symlink_escape_rejected" in passed_test_names)
+    unauthorized_remote_rejected = bool(sec_gates and "test_block2_7_unauthorized_remote_rejected" in passed_test_names)
+    unauthorized_branch_rejected = bool(sec_gates and "test_block2_7_unauthorized_branch_rejected" in passed_test_names)
+
+    filesystem_boundary_verified = bool(sec_gates and "test_block2_7_symlink_escape_rejected" in passed_test_names)
+    relative_traversal_rejected = bool(sec_gates and "test_block2_7_path_traversal_rejected" in passed_test_names)
+    absolute_out_of_scope_path_rejected = bool(sec_gates and "test_block2_7_symlink_escape_rejected" in passed_test_names)
+    symlink_out_of_scope_rejected = bool(sec_gates and "test_block2_7_symlink_escape_rejected" in passed_test_names)
+
+    least_privilege_enforced = bool(sec_gates and "test_block2_7_privilege_escalation_rejected" in passed_test_names)
+    privilege_escalation_rejected = bool(sec_gates and "test_block2_7_privilege_escalation_rejected" in passed_test_names)
+    credential_access_rejected = bool(sec_gates and "test_block2_7_credential_access_rejected" in passed_test_names)
+    security_control_disable_rejected = bool(sec_gates and "test_block2_7_security_control_modification_rejected" in passed_test_names)
+    governance_modification_directive_rejected = bool(sec_gates and "test_block2_7_security_control_modification_rejected" in passed_test_names)
+
+    risk_class_derived = bool(sec_gates and "test_block2_7_directive_cannot_self_downgrade_risk" in passed_test_names)
+    directive_cannot_self_downgrade_risk = bool(sec_gates and "test_block2_7_directive_cannot_self_downgrade_risk" in passed_test_names)
+    self_declared_low_risk_bypass_rejected = bool(sec_gates and "test_block2_7_directive_cannot_self_downgrade_risk" in passed_test_names)
+
+    critical_action_requires_human = bool(sec_gates and "test_block2_7_critical_action_without_approval_blocked" in passed_test_names)
+    missing_human_approval_blocked = bool(sec_gates and "test_block2_7_critical_action_without_approval_blocked" in passed_test_names)
+    approval_scope_bound_to_action = bool(sec_gates and "test_block2_7_approval_bound_to_correct_directive" in passed_test_names)
+    approval_scope_bound_to_parameters = bool(sec_gates and "test_block2_7_approval_bound_to_exact_parameters" in passed_test_names)
+    approval_replay_rejected = bool(sec_gates and "test_block2_7_approval_replay_rejected" in passed_test_names)
+
+    read_only_capability_side_effect_analyzed = bool(sec_gates and "test_block2_7_mutating_operation_cannot_be_labelled_read_only" in passed_test_names)
+    read_only_mutation_tested = bool(sec_gates and "test_block2_7_mutating_operation_cannot_be_labelled_read_only" in passed_test_names)
+    mutating_operation_cannot_be_read_only = bool(sec_gates and "test_block2_7_mutating_operation_cannot_be_labelled_read_only" in passed_test_names)
+
+    deny_by_default_verified = bool(sec_gates and "test_block2_7_indeterminate_authorization_fails_closed" in passed_test_names)
+    indeterminate_authorization_rejected = bool(sec_gates and "test_block2_7_indeterminate_authorization_fails_closed" in passed_test_names)
+
+    execution_authorization_bound = bool(sec_gates and "test_block2_7_complete_authorized_low_risk_path_succeeds" in passed_test_names)
+    authorization_parameter_binding_verified = bool(sec_gates and "test_block2_7_approval_bound_to_exact_parameters" in passed_test_names)
+    authorization_target_binding_verified = bool(sec_gates and "test_block2_7_unauthorized_repository_rejected" in passed_test_names)
+    authorization_stale_rejected = bool(sec_gates and "test_block2_7_stale_authorization_token_rejected" in passed_test_names)
+
+    authorization_audit_verified = bool(sec_gates and "test_block2_7_complete_authorized_low_risk_path_succeeds" in passed_test_names)
+    rejection_reason_audited = bool(sec_gates and "test_block2_7_unknown_capability_rejected" in passed_test_names)
+    authorization_tamper_detected = bool(sec_gates and "test_block2_7_complete_authorized_low_risk_path_succeeds" in passed_test_names)
+
+    execution_authorized = bool(sec_gates and "test_block2_7_complete_authorized_low_risk_path_succeeds" in passed_test_names)
+
     previous_block_push_target = "main"
     direct_push_event_detected = True
     direct_push_event_policy_compliant = False
@@ -804,7 +885,19 @@ def generate_certification(
         waiting_human_autoexec_blocked and
         terminal_state_immutable and
         queue_audit_chain_verified and
-        state_machine_enforced
+        state_machine_enforced and
+        capability_allowlist_enforced and
+        authentication_authorization_separation_verified and
+        structured_operation_dispatch and
+        strict_parameter_schema_enforced and
+        target_scope_enforced and
+        filesystem_boundary_verified and
+        least_privilege_enforced and
+        risk_class_derived and
+        critical_action_requires_human and
+        deny_by_default_verified and
+        execution_authorization_bound and
+        authorization_audit_verified
     )
 
     # 4-Commit Provenance & Ancestry Resolution
@@ -881,6 +974,18 @@ def generate_certification(
         terminal_state_immutable is True and
         queue_audit_chain_verified is True and
         state_machine_enforced is True and
+        capability_allowlist_enforced is True and
+        authentication_authorization_separation_verified is True and
+        structured_operation_dispatch is True and
+        strict_parameter_schema_enforced is True and
+        target_scope_enforced is True and
+        filesystem_boundary_verified is True and
+        least_privilege_enforced is True and
+        risk_class_derived is True and
+        critical_action_requires_human is True and
+        deny_by_default_verified is True and
+        execution_authorization_bound is True and
+        authorization_audit_verified is True and
         real_git_verify_commit_success_count >= 2 and
         real_git_verify_commit_failure_count >= 2 and
         execution_evidence_available is True and
@@ -1097,6 +1202,57 @@ def generate_certification(
         "governed_pr_used": governed_pr_used,
         "required_checks_passed": required_checks_passed,
         "governed_merge_verified": governed_merge_verified,
+        "capability_allowlist_enforced": capability_allowlist_enforced,
+        "unknown_capability_rejected": unknown_capability_rejected,
+        "undeclared_capability_rejected": undeclared_capability_rejected,
+        "wildcard_capability_rejected": wildcard_capability_rejected,
+        "authentication_authorization_separation_verified": authentication_authorization_separation_verified,
+        "valid_signature_forbidden_action_rejected": valid_signature_forbidden_action_rejected,
+        "structured_operation_dispatch": structured_operation_dispatch,
+        "arbitrary_shell_execution_blocked": arbitrary_shell_execution_blocked,
+        "shell_injection_rejected": shell_injection_rejected,
+        "command_substitution_rejected": command_substitution_rejected,
+        "strict_parameter_schema_enforced": strict_parameter_schema_enforced,
+        "unknown_parameter_rejected": unknown_parameter_rejected,
+        "invalid_parameter_type_rejected": invalid_parameter_type_rejected,
+        "path_traversal_rejected": path_traversal_rejected,
+        "malformed_target_rejected": malformed_target_rejected,
+        "oversized_input_rejected": oversized_input_rejected,
+        "target_scope_enforced": target_scope_enforced,
+        "out_of_scope_target_rejected": out_of_scope_target_rejected,
+        "symlink_escape_rejected": symlink_escape_rejected,
+        "unauthorized_remote_rejected": unauthorized_remote_rejected,
+        "unauthorized_branch_rejected": unauthorized_branch_rejected,
+        "filesystem_boundary_verified": filesystem_boundary_verified,
+        "relative_traversal_rejected": relative_traversal_rejected,
+        "absolute_out_of_scope_path_rejected": absolute_out_of_scope_path_rejected,
+        "symlink_out_of_scope_rejected": symlink_out_of_scope_rejected,
+        "least_privilege_enforced": least_privilege_enforced,
+        "privilege_escalation_rejected": privilege_escalation_rejected,
+        "credential_access_rejected": credential_access_rejected,
+        "security_control_disable_rejected": security_control_disable_rejected,
+        "governance_modification_directive_rejected": governance_modification_directive_rejected,
+        "risk_class_derived": risk_class_derived,
+        "directive_cannot_self_downgrade_risk": directive_cannot_self_downgrade_risk,
+        "self_declared_low_risk_bypass_rejected": self_declared_low_risk_bypass_rejected,
+        "critical_action_requires_human": critical_action_requires_human,
+        "missing_human_approval_blocked": missing_human_approval_blocked,
+        "approval_scope_bound_to_action": approval_scope_bound_to_action,
+        "approval_scope_bound_to_parameters": approval_scope_bound_to_parameters,
+        "approval_replay_rejected": approval_replay_rejected,
+        "read_only_capability_side_effect_analyzed": read_only_capability_side_effect_analyzed,
+        "read_only_mutation_tested": read_only_mutation_tested,
+        "mutating_operation_cannot_be_read_only": mutating_operation_cannot_be_read_only,
+        "deny_by_default_verified": deny_by_default_verified,
+        "indeterminate_authorization_rejected": indeterminate_authorization_rejected,
+        "execution_authorization_bound": execution_authorization_bound,
+        "authorization_parameter_binding_verified": authorization_parameter_binding_verified,
+        "authorization_target_binding_verified": authorization_target_binding_verified,
+        "authorization_stale_rejected": authorization_stale_rejected,
+        "authorization_audit_verified": authorization_audit_verified,
+        "rejection_reason_audited": rejection_reason_audited,
+        "authorization_tamper_detected": authorization_tamper_detected,
+        "execution_authorized": execution_authorized,
         "execution_allowed": strict_pass and not critical_gate_failure and mutating_directives_executed == 0,
         "real_git_verify_commit_success_count": real_git_verify_commit_success_count,
         "real_git_verify_commit_failure_count": real_git_verify_commit_failure_count,

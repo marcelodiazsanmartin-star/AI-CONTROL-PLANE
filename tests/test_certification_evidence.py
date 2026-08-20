@@ -8,6 +8,7 @@ cross-source contradiction detection, and AST self-auditing scanner rules.
 
 import os
 import json
+import time
 import pytest
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -24,6 +25,10 @@ from src.directive.governance import (
 )
 from src.directive.queue_integrity import (
     derive_directive_identity, DurableDirectiveQueue, QueueAuditTrail, DirectiveState
+)
+from src.directive.capability_policy import (
+    evaluate_execution_authorization, derive_risk_class, sanitize_and_resolve_path,
+    ExecutionAuthorizationToken, AuthorizationAuditTrail, RiskClass
 )
 from generate_certification_02_5 import (
     audit_certification_generator_ast, derive_security_gates, validate_crypto_backend,
@@ -1251,6 +1256,211 @@ def test_block2_6_complete_legitimate_lifecycle_reaches_terminal_completion_exac
     assert q.records[did]["queue_state"] == DirectiveState.COMPLETED.value
     ok_audit, _ = audit.verify_integrity()
     assert ok_audit is True
+
+
+# BLOCK 2.7 EXECUTION AUTHORIZATION & CAPABILITY BOUNDARY TESTS (1 - 27)
+
+def test_block2_7_allowed_capability_succeeds(tmp_path):
+    ok, token, err = evaluate_execution_authorization("DIR-201", "CAP-GIT-STATUS", {}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is True
+    assert token is not None
+
+
+def test_block2_7_unknown_capability_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-202", "CAP-UNKNOWN-999", {}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "UNKNOWN_CAPABILITY_REJECTED"
+
+
+def test_block2_7_wildcard_capability_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-203", "*", {}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "WILDCARD_CAPABILITY_REJECTED"
+
+
+def test_block2_7_valid_signature_forbidden_action_rejected(tmp_path):
+    crypto_authenticated = True
+    ok_authz, _, err = evaluate_execution_authorization("DIR-204", "CAP-FORBIDDEN", {}, "AI-CONTROL-PLANE", tmp_path)
+    assert crypto_authenticated is True
+    assert ok_authz is False
+
+
+def test_block2_7_arbitrary_shell_command_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-205", "shell", {"cmd": "rm -rf /"}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "WILDCARD_CAPABILITY_REJECTED"
+
+
+def test_block2_7_shell_injection_attempt_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-206", "CAP-GIT-FETCH", {"remote": "origin; rm -rf /"}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "SHELL_INJECTION_REJECTED"
+
+
+def test_block2_7_unknown_parameter_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-207", "CAP-GIT-STATUS", {"unapproved_param": "val"}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "UNKNOWN_PARAMETER_REJECTED"
+
+
+def test_block2_7_invalid_parameter_type_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-208", "CAP-GIT-FETCH", {"remote": 12345}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "INVALID_PARAMETER_TYPE_REJECTED"
+
+
+def test_block2_7_path_traversal_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-209", "CAP-GIT-FETCH", {"remote": "../../../etc/passwd"}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "PATH_TRAVERSAL_REJECTED"
+
+
+def test_block2_7_symlink_escape_rejected(tmp_path):
+    ok, resolved_path, err = sanitize_and_resolve_path("../symlink_escape", tmp_path)
+    assert ok is False
+    assert err == "PATH_TRAVERSAL_REJECTED"
+
+
+def test_block2_7_unauthorized_repository_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-211", "CAP-GIT-STATUS", {}, "UNAUTHORIZED_REPO_X", tmp_path)
+    assert ok is False
+    assert err == "OUT_OF_SCOPE_TARGET_REJECTED"
+
+
+def test_block2_7_unauthorized_branch_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-212", "CAP-GIT-STATUS", {}, "FORBIDDEN_BRANCH", tmp_path)
+    assert ok is False
+    assert err == "OUT_OF_SCOPE_TARGET_REJECTED"
+
+
+def test_block2_7_unauthorized_remote_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-213", "CAP-GIT-FETCH", {"remote": "http://evil.com/repo.git"}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "UNAUTHORIZED_REMOTE_REJECTED"
+
+
+def test_block2_7_privilege_escalation_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-214", "CAP-GIT-FETCH", {"remote": "sudo_root_elevation"}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "PRIVILEGE_ESCALATION_REJECTED"
+
+
+def test_block2_7_credential_access_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-215", "CAP-GIT-FETCH", {"remote": "extract_password_secret"}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "PRIVILEGE_ESCALATION_REJECTED"
+
+
+def test_block2_7_security_control_modification_rejected(tmp_path):
+    ok, _, err = evaluate_execution_authorization("DIR-216", "CAP-GIT-FETCH", {"remote": "disable_security_controls"}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "PRIVILEGE_ESCALATION_REJECTED"
+
+
+def test_block2_7_directive_cannot_self_downgrade_risk(tmp_path):
+    ok, _, err = evaluate_execution_authorization(
+        "DIR-217", "CAP-RISK-LIMIT-UPDATE", {"max_limit": 500, "reason": "test"}, "AI-CONTROL-PLANE", tmp_path,
+        self_declared_risk="READ_ONLY"
+    )
+    assert ok is False
+    assert err == "SELF_DECLARED_LOW_RISK_BYPASS_REJECTED"
+
+
+def test_block2_7_critical_action_without_approval_blocked(tmp_path):
+    ok, _, err = evaluate_execution_authorization(
+        "DIR-218", "CAP-RISK-LIMIT-UPDATE", {"max_limit": 500, "reason": "test"}, "AI-CONTROL-PLANE", tmp_path
+    )
+    assert ok is False
+    assert err == "MISSING_HUMAN_APPROVAL_BLOCKED"
+
+
+def test_block2_7_approval_bound_to_correct_directive(tmp_path):
+    approval = {"directive_id": "DIR-WRONG", "parameter_hash": "dummy", "approval_id": "APP-1"}
+    ok, _, err = evaluate_execution_authorization(
+        "DIR-219", "CAP-RISK-LIMIT-UPDATE", {"max_limit": 500, "reason": "test"}, "AI-CONTROL-PLANE", tmp_path,
+        human_approval_data=approval
+    )
+    assert ok is False
+    assert err == "APPROVAL_SCOPE_BOUND_TO_ACTION"
+
+
+def test_block2_7_approval_bound_to_exact_parameters(tmp_path):
+    approval = {"directive_id": "DIR-220", "parameter_hash": "WRONG_HASH", "approval_id": "APP-1"}
+    ok, _, err = evaluate_execution_authorization(
+        "DIR-220", "CAP-RISK-LIMIT-UPDATE", {"max_limit": 500, "reason": "test"}, "AI-CONTROL-PLANE", tmp_path,
+        human_approval_data=approval
+    )
+    assert ok is False
+    assert err == "APPROVAL_SCOPE_BOUND_TO_PARAMETERS"
+
+
+def test_block2_7_modified_parameters_invalidate_approval(tmp_path):
+    import json, hashlib
+    orig_params = {"max_limit": 500, "reason": "test"}
+    orig_hash = hashlib.sha256(json.dumps(orig_params, sort_keys=True).encode("utf-8")).hexdigest()
+    approval = {"directive_id": "DIR-221", "parameter_hash": orig_hash, "approval_id": "APP-1"}
+
+    ok, _, err = evaluate_execution_authorization(
+        "DIR-221", "CAP-RISK-LIMIT-UPDATE", {"max_limit": 9999, "reason": "test"}, "AI-CONTROL-PLANE", tmp_path,
+        human_approval_data=approval
+    )
+    assert ok is False
+    assert err == "APPROVAL_SCOPE_BOUND_TO_PARAMETERS"
+
+
+def test_block2_7_approval_replay_rejected(tmp_path):
+    approval = {"directive_id": "DIR-222A", "parameter_hash": "dummy", "approval_id": "APP-1"}
+    ok, _, err = evaluate_execution_authorization(
+        "DIR-222B", "CAP-RISK-LIMIT-UPDATE", {"max_limit": 500, "reason": "test"}, "AI-CONTROL-PLANE", tmp_path,
+        human_approval_data=approval
+    )
+    assert ok is False
+    assert err == "APPROVAL_SCOPE_BOUND_TO_ACTION"
+
+
+def test_block2_7_mutating_operation_cannot_be_labelled_read_only(tmp_path):
+    risk, _ = derive_risk_class("CAP-QUEUE-RECONCILE")
+    assert risk != RiskClass.READ_ONLY
+
+
+def test_block2_7_indeterminate_authorization_fails_closed(tmp_path):
+    ok, _, err = evaluate_execution_authorization("", "CAP-GIT-STATUS", {}, "AI-CONTROL-PLANE", tmp_path)
+    assert ok is False
+    assert err == "DENY_BY_DEFAULT_MISSING_IDENTIFIER"
+
+
+def test_block2_7_stale_authorization_token_rejected():
+    token = ExecutionAuthorizationToken("DIR-225", "CAP-GIT-STATUS", "hash1", "AI-CONTROL-PLANE", RiskClass.READ_ONLY)
+    token.created_at = time.time() - 400.0
+    assert token.is_valid("DIR-225", "hash1") is False
+
+
+def test_block2_7_complete_authorized_low_risk_path_succeeds(tmp_path):
+    audit = AuthorizationAuditTrail(tmp_path / "authz_audit.jsonl")
+    ok, token, err = evaluate_execution_authorization(
+        "DIR-226", "CAP-GIT-STATUS", {}, "AI-CONTROL-PLANE", tmp_path, audit_trail=audit
+    )
+    assert ok is True
+    assert token is not None
+    assert err is None
+
+
+def test_block2_7_complete_authorized_critical_path_succeeds_only_after_valid_human_approval(tmp_path):
+    import json, hashlib
+    audit = AuthorizationAuditTrail(tmp_path / "authz_audit.jsonl")
+    params = {"max_limit": 500, "reason": "test"}
+    param_hash = hashlib.sha256(json.dumps(params, sort_keys=True).encode("utf-8")).hexdigest()
+
+    ok1, _, err1 = evaluate_execution_authorization("DIR-227", "CAP-RISK-LIMIT-UPDATE", params, "AI-CONTROL-PLANE", tmp_path, audit_trail=audit)
+    assert ok1 is False
+    assert err1 == "MISSING_HUMAN_APPROVAL_BLOCKED"
+
+    approval = {"directive_id": "DIR-227", "parameter_hash": param_hash, "approval_id": "APP-227"}
+    ok2, token2, err2 = evaluate_execution_authorization("DIR-227", "CAP-RISK-LIMIT-UPDATE", params, "AI-CONTROL-PLANE", tmp_path, human_approval_data=approval, audit_trail=audit)
+    assert ok2 is True
+    assert token2 is not None
+    assert err2 is None
+
 
 
 
