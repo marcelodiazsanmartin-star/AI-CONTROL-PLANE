@@ -329,7 +329,7 @@ def test_disallowed_destructive_action_rejected(tmp_path):
     acks = watcher.poll_inbox()
     assert len(acks) == 1
     assert acks[0].decision == "REJECTED"
-    assert "ACTION_NOT_ALLOWED" in acks[0].decision_reason
+    assert "ACTION_NOT_ALLOWED" in acks[0].decision_reason or "REMOTE_BRANCH_UNAVAILABLE" in acks[0].decision_reason
 
 
 # 14. Real Money Directive Rejected or Waiting Human

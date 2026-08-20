@@ -342,3 +342,127 @@ class DirectiveAuthenticator:
             return ValidationStatus.AUTHENTIC, f"WAITING_HUMAN: Directive requires human approval for action '{action_type}'", True, auth_metadata
 
         return ValidationStatus.AUTHENTIC, "AUTHENTIC: Directive source authenticated and validated successfully", False, auth_metadata
+
+    def revalidate_before_execution(
+        self,
+        payload: DirectivePayload,
+        envelope: DirectiveEnvelope,
+        ingestion_snapshot: Dict[str, Any],
+        directive_file_path: Optional[Path] = None,
+        force_fresh_fetch: bool = True
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Phase B — Pre-Execution TOCTOU Revalidation.
+        Executes immediately before directive dispatch/execution.
+        Performs fresh git fetch/ls-remote, re-resolves remote head, re-verifies commit signature,
+        re-validates authorized key, re-calculates payload hash, re-verifies ancestry reachability,
+        and compares against ingestion_snapshot.
+        """
+        repo_path = self.repo_root
+        if not (repo_path / ".git").exists() and (settings.CONTROL_PLANE_ROOT / ".git").exists():
+            repo_path = settings.CONTROL_PLANE_ROOT
+
+        reval_meta: Dict[str, Any] = {
+            "fresh_fetch_performed": False,
+            "remote_head_resolved": False,
+            "remote_head_sha": "UNKNOWN",
+            "commit_reachable": False,
+            "signature_valid": False,
+            "signer_allowed": False,
+            "signer_identity": "",
+            "payload_sha256": "UNKNOWN",
+            "payload_hash_match": False,
+            "snapshot_match": False,
+            "execution_binding_verified": False
+        }
+
+        # 1. Fresh Remote Fetch / Resolution
+        if force_fresh_fetch:
+            try:
+                subprocess.run(
+                    ["git", "-C", str(repo_path), "fetch", "origin", settings.APPROVED_SOURCE_BRANCH],
+                    capture_output=True,
+                    text=True,
+                    timeout=10.0
+                )
+                reval_meta["fresh_fetch_performed"] = True
+            except Exception:
+                pass
+
+        remote_head_sha, remote_err = self.query_remote_branch_head(repo_path)
+        if not remote_head_sha:
+            return False, f"REMOTE_UNRESOLVED: {remote_err or 'Remote branch head unavailable'}", reval_meta
+
+        reval_meta["remote_head_resolved"] = True
+        reval_meta["remote_head_sha"] = remote_head_sha
+
+        commit_sha = envelope.payload_commit_sha
+
+        # 2. Verify commit still exists and is reachable from freshly fetched remote_head_sha
+        reachability_ok = False
+        try:
+            res_reach = subprocess.run(
+                ["git", "-C", str(repo_path), "merge-base", "--is-ancestor", commit_sha, remote_head_sha],
+                capture_output=True,
+                text=True,
+                timeout=5.0
+            )
+            if res_reach.returncode == 0:
+                reachability_ok = True
+        except Exception:
+            pass
+
+        if not reachability_ok:
+            return False, f"FORCE_PUSH_OR_UNREACHABLE: Commit {commit_sha[:7]} is not reachable from remote head {remote_head_sha[:7]}", reval_meta
+
+        reval_meta["commit_reachable"] = True
+
+        # 3. Cryptographic Signature Revalidation (Fresh execution, zero caching)
+        sig_present, sig_valid, signer_id, signer_ok = self.verify_commit_signature(repo_path, commit_sha)
+        reval_meta["signature_valid"] = sig_valid
+        reval_meta["signer_allowed"] = signer_ok
+        reval_meta["signer_identity"] = signer_id
+
+        if settings.REQUIRE_COMMIT_SIGNATURE_VERIFICATION:
+            if not sig_present or not sig_valid:
+                return False, f"SIGNATURE_INVALID: Pre-execution signature revalidation failed for {commit_sha[:7]}", reval_meta
+            if not signer_ok:
+                return False, f"KEY_REVOKED_OR_UNAUTHORIZED: Pre-execution signer '{signer_id}' is not allowed", reval_meta
+
+        # 4. Re-calculate payload hash from committed blob
+        filename = directive_file_path.name if directive_file_path else f"{payload.directive_id}.json"
+        rel_git_path = f"directives/inbox/{filename}"
+
+        try:
+            res_show = subprocess.run(
+                ["git", "-C", str(repo_path), "show", f"{commit_sha}:{rel_git_path}"],
+                capture_output=True,
+                timeout=5.0
+            )
+            if res_show.returncode != 0:
+                return False, f"BLOB_ABSENT: Directive file absent in commit {commit_sha[:7]}", reval_meta
+
+            _, pre_exec_sha256, _ = compute_payload_bytes_and_hash(res_show.stdout)
+            reval_meta["payload_sha256"] = pre_exec_sha256
+        except Exception as e:
+            return False, f"BLOB_EXTRACTION_FAILED: {str(e)}", reval_meta
+
+        # Compare against ingestion payload_sha256
+        ingestion_hash = ingestion_snapshot.get("payload_sha256")
+        if ingestion_hash and ingestion_hash != "UNKNOWN_HASH" and pre_exec_sha256 != ingestion_hash:
+            return False, f"PAYLOAD_HASH_MISMATCH: Pre-execution hash {pre_exec_sha256[:10]} != Ingestion hash {ingestion_hash[:10]}", reval_meta
+
+        reval_meta["payload_hash_match"] = True
+
+        # 5. Snapshot Comparison (Commit SHA, Signer, Branch)
+        if ingestion_snapshot.get("payload_commit_sha") and ingestion_snapshot["payload_commit_sha"] != commit_sha:
+            return False, "COMMIT_SUBSTITUTION_DETECTED", reval_meta
+
+        if ingestion_snapshot.get("signer_identity") and ingestion_snapshot["signer_identity"] != signer_id:
+            return False, "SIGNER_MISMATCH_DETECTED", reval_meta
+
+        reval_meta["snapshot_match"] = True
+        reval_meta["execution_binding_verified"] = True
+
+        return True, "PRE_EXECUTION_REVALIDATED: Directive pre-execution TOCTOU revalidation passed", reval_meta
+

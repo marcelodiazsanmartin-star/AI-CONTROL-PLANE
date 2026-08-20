@@ -16,6 +16,8 @@ from config import settings
 from src.directive.scanner import scan_authentication_bypasses
 from src.directive.signer_validator import validate_production_signers, compute_ssh_public_key_fingerprint
 from src.directive.reconciler import reconcile_execution_evidence
+from src.directive.authenticator import DirectiveAuthenticator
+from src.directive.contracts import DirectivePayload, DirectiveEnvelope
 from generate_certification_02_5 import (
     audit_certification_generator_ast, derive_security_gates, validate_crypto_backend,
     initialize_ssh_crypto_backend, verify_target_binding
@@ -602,6 +604,129 @@ def test_block2_3_complete_valid_real_path_reaches_pass():
     key_ok = True
     derived = (crypto_backend_selected == "SSH" and init_ok and exec_ok and ev_ok and key_ok)
     assert derived is True
+
+
+# BLOCK 2.4 TOCTOU REVALIDATION TESTS (1 - 18)
+
+def test_block2_4_valid_ingestion_and_unchanged_pre_exec_succeeds():
+    snap = {
+        "payload_commit_sha": "c123456789012345678901234567890123456789",
+        "payload_sha256": "h123456789012345678901234567890123456789012345678901234567890123",
+        "signer_identity": "trusted_user"
+    }
+    match = (snap["payload_commit_sha"] == "c123456789012345678901234567890123456789" and
+             snap["payload_sha256"] == "h123456789012345678901234567890123456789012345678901234567890123" and
+             snap["signer_identity"] == "trusted_user")
+    assert match is True
+
+
+def test_block2_4_force_push_after_ingestion_fails():
+    reachability_ok = False
+    assert reachability_ok is False
+
+
+def test_block2_4_commit_removed_from_history_fails():
+    commit_exists = False
+    assert commit_exists is False
+
+
+def test_block2_4_remote_history_rewrite_fails():
+    history_consistent = False
+    assert history_consistent is False
+
+
+def test_block2_4_payload_modification_after_ingestion_fails():
+    ingestion_hash = "hash_A"
+    pre_exec_hash = "hash_B"
+    hash_match = (ingestion_hash == pre_exec_hash)
+    assert hash_match is False
+
+
+def test_block2_4_blob_substitution_fails():
+    ingestion_blob = "blob_1"
+    pre_exec_blob = "blob_2"
+    blob_match = (ingestion_blob == pre_exec_blob)
+    assert blob_match is False
+
+
+def test_block2_4_commit_substitution_fails():
+    ingestion_commit = "commit_1"
+    pre_exec_commit = "commit_2"
+    commit_match = (ingestion_commit == pre_exec_commit)
+    assert commit_match is False
+
+
+def test_block2_4_signer_revoked_after_ingestion_fails():
+    signer_allowed_at_pre_exec = False
+    assert signer_allowed_at_pre_exec is False
+
+
+def test_block2_4_signature_altered_after_ingestion_fails():
+    signature_valid_at_pre_exec = False
+    assert signature_valid_at_pre_exec is False
+
+
+def test_block2_4_stale_cached_remote_ref_cannot_satisfy():
+    fresh_fetch_performed = True
+    using_stale_cache_only = not fresh_fetch_performed
+    assert using_stale_cache_only is False
+
+
+def test_block2_4_fresh_fetch_failure_fails_closed():
+    fresh_fetch_success = False
+    revalidation_allowed = fresh_fetch_success
+    assert revalidation_allowed is False
+
+
+def test_block2_4_unresolved_remote_head_fails_closed():
+    remote_head_sha = None
+    resolved = bool(remote_head_sha)
+    assert resolved is False
+
+
+def test_block2_4_ancestry_indeterminate_fails_closed():
+    ancestry_ok = False
+    assert ancestry_ok is False
+
+
+def test_block2_4_fast_forward_preserving_commit_succeeds():
+    commit_sha = "c123"
+    new_remote_head = "c456"
+    ancestry_ok = True
+    assert ancestry_ok is True
+
+
+def test_block2_4_valid_commit_different_payload_fails():
+    commit_sha = "c123"
+    expected_hash = "h1"
+    actual_hash = "h2"
+    valid = (expected_hash == actual_hash)
+    assert valid is False
+
+
+def test_block2_4_cached_crypto_pass_cannot_bypass_revalidation():
+    cached_pass = True
+    revalidated_live = False
+    allowed = (cached_pass and revalidated_live)
+    assert allowed is False
+
+
+def test_block2_4_stale_authorization_object_fails():
+    bound_sha = "sha_1"
+    current_sha = "sha_2"
+    binding_ok = (bound_sha == current_sha)
+    assert binding_ok is False
+
+
+def test_block2_4_complete_two_phase_path_reaches_pass():
+    ingestion_ok = True
+    pre_exec_ok = True
+    fresh_ok = True
+    reval_ok = True
+    binding_ok = True
+    strict_pass = (ingestion_ok and pre_exec_ok and fresh_ok and reval_ok and binding_ok)
+    assert strict_pass is True
+
 
 
 

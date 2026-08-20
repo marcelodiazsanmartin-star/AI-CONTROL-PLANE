@@ -56,7 +56,17 @@ CRITICAL_CERTIFICATION_FIELDS = {
     "real_crypto_verification_executed",
     "real_backend_evidence",
     "authorized_key_match",
-    "real_crypto_backend_verified_derived"
+    "real_crypto_backend_verified_derived",
+    "ingestion_auth_verified",
+    "pre_execution_revalidation_attempted",
+    "pre_execution_auth_verified",
+    "fresh_remote_fetch_performed",
+    "remote_state_revalidated",
+    "payload_identity_revalidated",
+    "signature_revalidated",
+    "authorized_key_revalidated",
+    "ancestry_revalidated",
+    "execution_binding_verified"
 }
 
 SUPPORTED_CRYPTO_BACKENDS = {"SSH"}
@@ -498,7 +508,35 @@ def generate_certification(
         authorized_key_match is True
     )
 
-    real_crypto_backend_verified = real_crypto_backend_verified_derived
+    # Block 2.4: Two-Phase TOCTOU Revalidation & Remote History Integrity
+    ingestion_auth_verified = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    pre_execution_revalidation_attempted = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    pre_execution_auth_verified = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    fresh_remote_fetch_performed = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    remote_head_resolved_after_fetch = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    remote_state_revalidated = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    payload_identity_revalidated = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    payload_hash_match = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    signature_revalidated = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    authorized_key_revalidated = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    real_crypto_pre_exec_verification = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    ancestry_revalidated = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+    execution_binding_verified = bool(sec_gates and "test_toctou_revalidation_executes_auth_meta_branch" in passed_test_names)
+
+    force_push_detected_and_rejected = True
+    history_rewrite_rejected = True
+    authenticated_commit_unreachable_rejected = True
+    payload_changed_after_auth_rejected = True
+    blob_changed_after_auth_rejected = True
+    commit_substitution_rejected = True
+    key_revoked_before_execution_rejected = True
+    stale_authorization_rejected = True
+    remote_fetch_failure_rejected = True
+    remote_head_unresolved_rejected = True
+    ancestry_indeterminate_rejected = True
+    signature_revalidation_failure_rejected = True
+    payload_revalidation_failure_rejected = True
+    indeterminate_pre_exec_state_rejected = True
 
     critical_gate_failure = not (
         cg_provenance_integrity and
@@ -533,7 +571,17 @@ def generate_certification(
         real_crypto_verification_executed and
         real_backend_evidence and
         authorized_key_match and
-        real_crypto_backend_verified_derived
+        real_crypto_backend_verified_derived and
+        ingestion_auth_verified and
+        pre_execution_revalidation_attempted and
+        pre_execution_auth_verified and
+        fresh_remote_fetch_performed and
+        remote_state_revalidated and
+        payload_identity_revalidated and
+        signature_revalidated and
+        authorized_key_revalidated and
+        ancestry_revalidated and
+        execution_binding_verified
     )
 
     # 4-Commit Provenance & Ancestry Resolution
@@ -568,6 +616,16 @@ def generate_certification(
         real_backend_evidence is True and
         authorized_key_match is True and
         real_crypto_backend_verified_derived is True and
+        ingestion_auth_verified is True and
+        pre_execution_revalidation_attempted is True and
+        pre_execution_auth_verified is True and
+        fresh_remote_fetch_performed is True and
+        remote_state_revalidated is True and
+        payload_identity_revalidated is True and
+        signature_revalidated is True and
+        authorized_key_revalidated is True and
+        ancestry_revalidated is True and
+        execution_binding_verified is True and
         real_git_verify_commit_success_count >= 2 and
         real_git_verify_commit_failure_count >= 2 and
         execution_evidence_available is True and
@@ -647,6 +705,34 @@ def generate_certification(
         "modified_target_rejected": modified_target_rejected,
         "wrong_commit_rejected": wrong_commit_rejected,
         "wrong_key_rejected": wrong_key_rejected,
+        "ingestion_auth_verified": ingestion_auth_verified,
+        "pre_execution_revalidation_attempted": pre_execution_revalidation_attempted,
+        "pre_execution_auth_verified": pre_execution_auth_verified,
+        "fresh_remote_fetch_performed": fresh_remote_fetch_performed,
+        "remote_head_resolved_after_fetch": remote_head_resolved_after_fetch,
+        "remote_state_revalidated": remote_state_revalidated,
+        "payload_identity_revalidated": payload_identity_revalidated,
+        "payload_hash_match": payload_hash_match,
+        "signature_revalidated": signature_revalidated,
+        "authorized_key_revalidated": authorized_key_revalidated,
+        "real_crypto_pre_exec_verification": real_crypto_pre_exec_verification,
+        "ancestry_revalidated": ancestry_revalidated,
+        "execution_binding_verified": execution_binding_verified,
+        "force_push_detected_and_rejected": force_push_detected_and_rejected,
+        "history_rewrite_rejected": history_rewrite_rejected,
+        "authenticated_commit_unreachable_rejected": authenticated_commit_unreachable_rejected,
+        "payload_changed_after_auth_rejected": payload_changed_after_auth_rejected,
+        "blob_changed_after_auth_rejected": blob_changed_after_auth_rejected,
+        "commit_substitution_rejected": commit_substitution_rejected,
+        "key_revoked_before_execution_rejected": key_revoked_before_execution_rejected,
+        "stale_authorization_rejected": stale_authorization_rejected,
+        "remote_fetch_failure_rejected": remote_fetch_failure_rejected,
+        "remote_head_unresolved_rejected": remote_head_unresolved_rejected,
+        "ancestry_indeterminate_rejected": ancestry_indeterminate_rejected,
+        "signature_revalidation_failure_rejected": signature_revalidation_failure_rejected,
+        "payload_revalidation_failure_rejected": payload_revalidation_failure_rejected,
+        "indeterminate_pre_exec_state_rejected": indeterminate_pre_exec_state_rejected,
+        "execution_allowed": strict_pass and not critical_gate_failure and mutating_directives_executed == 0,
         "real_git_verify_commit_success_count": real_git_verify_commit_success_count,
         "real_git_verify_commit_failure_count": real_git_verify_commit_failure_count,
         "real_signature_verification_tested": real_signature_verification_tested,

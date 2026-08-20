@@ -35,5 +35,6 @@ class AuditLogger:
             "evidence_sources": state.evidence_sources
         }
 
+        self.audit_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.audit_file_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(event) + "\n")

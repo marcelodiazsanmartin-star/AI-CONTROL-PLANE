@@ -344,6 +344,7 @@ class DirectiveWatcher:
                 )
                 acks.append(ack)
 
+                self.waiting_human_dir.mkdir(parents=True, exist_ok=True)
                 dest_waiting = self.waiting_human_dir / file_path.name
                 shutil.move(str(file_path), str(dest_waiting))
                 continue
