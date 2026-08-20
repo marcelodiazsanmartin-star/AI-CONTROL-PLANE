@@ -16,7 +16,7 @@ from config import settings
 from src.directive.scanner import scan_authentication_bypasses
 from src.directive.signer_validator import validate_production_signers, compute_ssh_public_key_fingerprint
 from src.directive.reconciler import reconcile_execution_evidence
-from generate_certification_02_5 import audit_certification_generator_ast, derive_security_gates
+from generate_certification_02_5 import audit_certification_generator_ast, derive_security_gates, validate_crypto_backend
 
 
 # A. TEST_INJECTED_SHA_BYPASS_DETECTED
@@ -473,5 +473,33 @@ def test_block2_1_queue_replay_consistency_alone_does_not_verify_readback():
 def test_block2_1_fsync_and_restart_integrity_verifies_readback():
     res = derive_security_gates(passed_test_names={"test_queue_fsync_persistence_verified", "test_queue_integrity_after_restart"}, crypto_metrics={})
     assert res["queue_record_readback_verified"] is True
+
+
+# BLOCK 2.2 PRODUCTION LOGIC TESTS (A - F)
+
+def test_block2_2_missing_backend_rejected():
+    assert validate_crypto_backend(None) is False
+
+
+def test_block2_2_empty_backend_rejected():
+    assert validate_crypto_backend("") is False
+
+
+def test_block2_2_unknown_backend_rejected():
+    assert validate_crypto_backend("UNKNOWN") is False
+
+
+def test_block2_2_ssh_backend_accepted():
+    assert validate_crypto_backend("SSH") is True
+
+
+def test_block2_2_unsupported_backend_rejected():
+    assert validate_crypto_backend("GPG") is False
+
+
+def test_block2_2_missing_backend_fails_certification():
+    assert validate_crypto_backend(None) is False
+    assert validate_crypto_backend(None) is not True
+
 
 

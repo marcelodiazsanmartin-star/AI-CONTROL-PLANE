@@ -17,7 +17,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Set, Dict, Any, List
+from typing import Set, Dict, Any, List, Optional
 
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
@@ -35,6 +35,7 @@ CRITICAL_CERTIFICATION_FIELDS = {
     "production_placeholder_signer_count",
     "test_keys_isolated_from_production",
     "real_crypto_test_backend",
+    "real_crypto_backend_verified",
     "real_signature_verification_tested",
     "mutating_directives_executed",
     "queue_fsync_verified",
@@ -50,6 +51,14 @@ CRITICAL_CERTIFICATION_FIELDS = {
     "execution_ledger_consistent",
     "critical_gate_failure"
 }
+
+SUPPORTED_CRYPTO_BACKENDS = {"SSH"}
+
+
+def validate_crypto_backend(backend: Optional[str]) -> bool:
+    if not backend or not isinstance(backend, str):
+        return False
+    return backend in SUPPORTED_CRYPTO_BACKENDS
 
 
 def derive_security_gates(passed_test_names: Set[str], crypto_metrics: Dict[str, Any]) -> Dict[str, Any]:
@@ -432,7 +441,7 @@ def generate_certification(
     remote_fail_closed = sec_gates["remote_fail_closed"]
     strict_remote_ancestry = sec_gates["strict_remote_ancestry"]
     worktree_fallback = sec_gates["worktree_fallback"]
-    real_signature_verification_tested = sec_gates["real_signature_verification_tested"]
+    real_crypto_backend_verified = validate_crypto_backend(real_crypto_test_backend)
 
     critical_gate_failure = not (
         cg_provenance_integrity and
@@ -462,7 +471,8 @@ def generate_certification(
         strict_remote_ancestry and
         not worktree_fallback and
         toctou_revalidation_verified and
-        real_signature_verification_tested
+        real_signature_verification_tested and
+        real_crypto_backend_verified
     )
 
     # 4-Commit Provenance & Ancestry Resolution
@@ -492,6 +502,7 @@ def generate_certification(
         production_signer_public_key_verified is True and
         crypto_evidence_fresh is True and
         crypto_evidence_run_id_match is True and
+        real_crypto_backend_verified is True and
         real_git_verify_commit_success_count >= 2 and
         real_git_verify_commit_failure_count >= 2 and
         execution_evidence_available is True and
@@ -554,6 +565,7 @@ def generate_certification(
         "crypto_evidence_fresh": crypto_evidence_fresh,
         "crypto_evidence_run_id_match": crypto_evidence_run_id_match,
         "real_crypto_test_backend": real_crypto_test_backend,
+        "real_crypto_backend_verified": real_crypto_backend_verified,
         "real_git_verify_commit_success_count": real_git_verify_commit_success_count,
         "real_git_verify_commit_failure_count": real_git_verify_commit_failure_count,
         "real_signature_verification_tested": real_signature_verification_tested,
