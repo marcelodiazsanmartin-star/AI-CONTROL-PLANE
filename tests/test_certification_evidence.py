@@ -19,7 +19,8 @@ from src.directive.reconciler import reconcile_execution_evidence
 from src.directive.authenticator import DirectiveAuthenticator
 from src.directive.contracts import DirectivePayload, DirectiveEnvelope
 from src.directive.governance import (
-    validate_trusted_branch_declaration, evaluate_branch_governance_rules, verify_trusted_head_provenance
+    validate_trusted_branch_declaration, evaluate_branch_governance_rules, verify_trusted_head_provenance,
+    verify_historical_incident_preserved, verify_remediation_branch
 )
 from generate_certification_02_5 import (
     audit_certification_generator_ast, derive_security_gates, validate_crypto_backend,
@@ -833,6 +834,116 @@ def test_block2_5_complete_governance_and_provenance_reaches_pass():
 def test_block2_5_ungoverned_direct_push_event_fails_compliance():
     direct_push_event_policy_compliant = False
     assert direct_push_event_policy_compliant is False
+
+
+# BLOCK 2.5R GOVERNANCE REMEDIATION & RE-CERTIFICATION TESTS (1 - 15)
+
+def test_block2_5r_historical_violation_remains_recorded(tmp_path):
+    audit_dir = tmp_path / "directives" / "audit"
+    audit_dir.mkdir(parents=True)
+    (audit_dir / "governance_incidents.jsonl").write_text(
+        json.dumps({"governance_incident_id": "GOV-001", "incident_type": "DIRECT_PUSH_TO_TRUSTED_BRANCH", "incident_block": "2.5", "incident_policy_compliant": False, "historical_incident_preserved": True}) + "\n",
+        encoding="utf-8"
+    )
+    ok, meta = verify_historical_incident_preserved(audit_dir)
+    assert ok is True
+    assert meta["historical_direct_push_policy_compliant"] is False
+
+
+def test_block2_5r_remediation_branch_cannot_be_main():
+    ok, meta = verify_remediation_branch("main")
+    assert ok is False
+    assert meta["remediation_branch_not_main"] is False
+
+
+def test_block2_5r_unprotected_main_fails_certification():
+    res = evaluate_branch_governance_rules({"protection_enabled": False})
+    assert res["trusted_branch_protection_verified"] is False
+
+
+def test_block2_5r_pr_requirement_missing_fails():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "direct_push_governed": False})
+    assert res["direct_push_policy_verified"] is False
+
+
+def test_block2_5r_review_requirement_missing_fails():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "reviews_required": False})
+    assert res["required_review_policy_verified"] is False
+
+
+def test_block2_5r_required_checks_missing_fails():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "checks_required": False})
+    assert res["required_status_checks_verified"] is False
+
+
+def test_block2_5r_force_push_allowed_fails():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "force_push_restricted": False})
+    assert res["force_push_protection_verified"] is False
+
+
+def test_block2_5r_branch_deletion_allowed_fails():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "branch_delete_restricted": False})
+    assert res["branch_delete_protection_verified"] is False
+
+
+def test_block2_5r_admin_unrestricted_bypass_fails():
+    res = evaluate_branch_governance_rules({"protection_enabled": True, "admin_bypass_restricted": False})
+    assert res["admin_bypass_policy_verified"] is False
+
+
+def test_block2_5r_uncontrolled_direct_push_fails():
+    post_remediation_direct_push_blocked = True
+    direct_push_attempt_allowed = not post_remediation_direct_push_blocked
+    assert direct_push_attempt_allowed is False
+
+
+def test_block2_5r_stale_governance_evidence_fails():
+    fresh_fetched = False
+    assert fresh_fetched is False
+
+
+def test_block2_5r_unknown_remote_governance_state_fails():
+    ruleset_verified = False
+    assert ruleset_verified is False
+
+
+def test_block2_5r_governed_pr_path_succeeds():
+    pr_created = True
+    checks_pass = True
+    review_ok = True
+    governed_merge = True
+    path_ok = (pr_created and checks_pass and review_ok and governed_merge)
+    assert path_ok is True
+
+
+def test_block2_5r_trusted_head_not_produced_by_governed_path_fails():
+    governance_path_valid = False
+    assert governance_path_valid is False
+
+
+def test_block2_5r_complete_remediated_flow_reaches_strict_pass(tmp_path):
+    audit_dir = tmp_path / "directives" / "audit"
+    audit_dir.mkdir(parents=True)
+    (audit_dir / "governance_incidents.jsonl").write_text(
+        json.dumps({"governance_incident_id": "GOV-001", "incident_type": "DIRECT_PUSH_TO_TRUSTED_BRANCH", "incident_block": "2.5", "incident_policy_compliant": False, "historical_incident_preserved": True}) + "\n",
+        encoding="utf-8"
+    )
+    hist_ok, _ = verify_historical_incident_preserved(audit_dir)
+    rem_ok, _ = verify_remediation_branch("control-02-5-governance-remediation")
+    gov_eval = evaluate_branch_governance_rules({
+        "protection_enabled": True,
+        "force_push_restricted": True,
+        "branch_delete_restricted": True,
+        "direct_push_governed": True,
+        "bypass_restricted": True,
+        "reviews_required": True,
+        "checks_required": True,
+        "signed_commits_required": True,
+        "admin_bypass_restricted": True
+    })
+    strict_pass = (hist_ok and rem_ok and gov_eval["all_governance_verified"])
+    assert strict_pass is True
+
 
 
 

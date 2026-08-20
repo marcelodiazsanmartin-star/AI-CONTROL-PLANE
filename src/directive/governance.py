@@ -1,5 +1,5 @@
 """
-Trusted Branch Governance & Protected-Head Enforcement Engine for CONTROL-02.5.
+Trusted Branch Governance & Protected-Head Enforcement Engine for CONTROL-02.5 / BLOCK 2.5R.
 
 Enforces strict governance invariants for the trusted remote branch (origin/main):
 1. TRUSTED_REMOTE = "origin", TRUSTED_BRANCH = "main", TRUSTED_BRANCH_REF = "refs/heads/main"
@@ -10,7 +10,8 @@ Enforces strict governance invariants for the trusted remote branch (origin/main
    - Governed direct push control
    - Required status checks & review policies
 4. Trusted HEAD provenance verification (attributable to valid signed/governed commit).
-5. Audit of prior block push event compliance.
+5. Immutable historical governance incident trail preservation.
+6. Remediation branch isolation and governed PR path verification.
 """
 
 import json
@@ -42,7 +43,7 @@ def validate_trusted_branch_declaration(remote: Optional[str], branch: Optional[
 
 def evaluate_branch_governance_rules(governance_config: Dict[str, Any]) -> Dict[str, bool]:
     """
-    Evaluates branch protection & ruleset policy dictionary for Block 2.5 requirements.
+    Evaluates branch protection & ruleset policy dictionary for Block 2.5/2.5R requirements.
     """
     protection_enabled = bool(governance_config.get("protection_enabled"))
     force_push_restricted = bool(governance_config.get("force_push_restricted"))
@@ -129,3 +130,48 @@ def verify_trusted_head_provenance(
         meta["governance_path_valid"]
     )
     return meta["provenance_verified"], meta
+
+
+def verify_historical_incident_preserved(audit_dir: Path) -> Tuple[bool, Dict[str, Any]]:
+    """
+    Verifies that the historical direct push governance incident is immutably preserved
+    in directives/audit/governance_incidents.jsonl with incident_policy_compliant = False.
+    """
+    incident_file = audit_dir / "governance_incidents.jsonl"
+    meta = {
+        "historical_incident_preserved": False,
+        "historical_direct_push_policy_compliant": False,
+        "incident_id": None
+    }
+    if not incident_file.exists():
+        return False, meta
+
+    try:
+        lines = incident_file.read_text(encoding="utf-8").strip().splitlines()
+        for line in lines:
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            if rec.get("incident_type") == "DIRECT_PUSH_TO_TRUSTED_BRANCH" and rec.get("incident_block") == "2.5":
+                if rec.get("incident_policy_compliant") is False and rec.get("historical_incident_preserved") is True:
+                    meta["historical_incident_preserved"] = True
+                    meta["historical_direct_push_policy_compliant"] = False
+                    meta["incident_id"] = rec.get("governance_incident_id")
+                    return True, meta
+    except Exception:
+        pass
+
+    return False, meta
+
+
+def verify_remediation_branch(branch_name: str) -> Tuple[bool, Dict[str, Any]]:
+    """
+    Verifies that remediation work occurs on a dedicated branch outside of main.
+    """
+    is_created = bool(branch_name and branch_name.strip())
+    is_not_main = bool(is_created and branch_name.strip().lower() != "main")
+    return (is_created and is_not_main), {
+        "remediation_branch": branch_name,
+        "remediation_branch_created": is_created,
+        "remediation_branch_not_main": is_not_main
+    }
