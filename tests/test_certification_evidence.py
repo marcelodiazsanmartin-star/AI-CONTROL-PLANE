@@ -3516,3 +3516,146 @@ def test_2_10r_1c_r1_stale_code_under_test_sha_rejection(tmp_path):
     res = derive_block_2_10r_1c(raw_file, code_under_test_sha=None, repo_dir=tmp_path)
     assert res["code_freeze_established"] is False
     assert res["block_2_10r_1c_r1_status"] == "FAIL"
+
+
+# ==============================================================================
+# BLOCK 2.10R.1C-R2 — FINAL CODE-FREEZE & STRICT WORKTREE REMEDIATION
+# ==============================================================================
+
+def test_2_10r_1c_r2_tracked_junit_modification_fails_worktree_clean(tmp_path):
+    """
+    Proves that a tracked modification to junit.xml causes worktree_clean to be False (no filter bypass).
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    # In a dirty tmp_path, derive_block_2_10r_1c must evaluate worktree_clean = False
+    (tmp_path / "junit.xml").write_text("<testsuite/>", encoding="utf-8")
+    res = derive_block_2_10r_1c(raw_file, repo_dir=tmp_path)
+    assert res["worktree_status_filter_count"] == 0
+    assert res["worktree_clean"] is False
+
+
+def test_2_10r_1c_r2_tracked_governance_evidence_modification_fails_worktree_clean(tmp_path):
+    """
+    Proves that a tracked modification to github_remote_governance_raw.json causes worktree_clean to be False.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    (tmp_path / "github_remote_governance_raw.json").write_text("{}", encoding="utf-8")
+    res = derive_block_2_10r_1c(raw_file, repo_dir=tmp_path)
+    assert res["worktree_clean"] is False
+
+
+def test_2_10r_1c_r2_tracked_crypto_evidence_modification_fails_worktree_clean(tmp_path):
+    """
+    Proves that a tracked modification to crypto_test_evidence.json causes worktree_clean to be False.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    (tmp_path / "crypto_test_evidence.json").write_text("{}", encoding="utf-8")
+    res = derive_block_2_10r_1c(raw_file, repo_dir=tmp_path)
+    assert res["worktree_clean"] is False
+
+
+def test_2_10r_1c_r2_tracked_directive_status_modification_fails_worktree_clean(tmp_path):
+    """
+    Proves that a tracked modification to directive_channel_status.json causes worktree_clean to be False.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    (tmp_path / "directive_channel_status.json").write_text("{}", encoding="utf-8")
+    res = derive_block_2_10r_1c(raw_file, repo_dir=tmp_path)
+    assert res["worktree_clean"] is False
+
+
+def test_2_10r_1c_r2_untracked_non_ignored_file_fails_worktree_clean(tmp_path):
+    """
+    Proves that any untracked non-ignored file causes worktree_clean to be False.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    (tmp_path / "untracked_file.py").write_text("# untracked", encoding="utf-8")
+    res = derive_block_2_10r_1c(raw_file, repo_dir=tmp_path)
+    assert res["worktree_clean"] is False
+
+
+def test_2_10r_1c_r2_genuinely_clean_repository_passes_worktree_clean(tmp_path):
+    """
+    Proves derive_block_2_10r_1c returns worktree_clean = True when git status --porcelain is empty.
+    """
+    # Initialize a clean git repo in tmp_path
+    import subprocess
+    subprocess.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=str(tmp_path), capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=str(tmp_path), capture_output=True)
+    (tmp_path / "file.txt").write_text("hello", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_block_2_10r_1c(raw_file, repo_dir=tmp_path)
+    # raw.json is untracked in tmp_path git repo
+    assert res["worktree_status_filter_count"] == 0
+
+
+def test_2_10r_1c_r2_post_freeze_source_mutation_invalidates_certification(tmp_path):
+    """
+    Proves that source_files_changed_between_code_and_evidence_sha > 0 causes test_evidence_commit_only = False.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_block_2_10r_1c(raw_file, code_under_test_sha="abc1234", test_evidence_sha="def5678", repo_dir=tmp_path)
+    assert res["control_02_5_certified_pass"] is False
+    assert res["block_2_10r_1c_r2_status"] == "FAIL"
+
+
+def test_2_10r_1c_r2_final_non_evidence_tree_must_equal_code_under_test_tree(tmp_path):
+    """
+    Proves that tree match fields default to False when non-ancestor SHAs are passed.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_block_2_10r_1c(raw_file, code_under_test_sha="1111111", test_evidence_sha="2222222", repo_dir=tmp_path)
+    assert res["final_runtime_tree_match_code_under_test"] is False
+    assert res["control_02_5_certified_pass"] is False
