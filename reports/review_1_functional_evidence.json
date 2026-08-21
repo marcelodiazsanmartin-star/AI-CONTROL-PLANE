@@ -1,7 +1,7 @@
 {
   "review_type": "FUNCTIONAL_REVIEW",
-  "block": "CONTROL-03",
+  "block": "CONTROL-04",
   "status": "PASS",
   "reviewer": "security_architect_agent",
-  "comments": "Verified strict canonical block set validation for CONTROL-03 and CONTROL-03R.1 (no open prefix matching), strict allowed_roots (reports/ and state/ only), AGENTS.md participation in tree equivalence from base SHA a25f18c, and 466/466 tests PASS."
+  "comments": "Verified Independent Red Team engine implementation, attack surfaces A through J (20 attacks executed, 20 blocked, 0 bypasses), tamper-evident audit ledger, strict allowed_roots (reports/ and state/ only), AGENTS.md participation in tree equivalence from base SHA 04101f1, and 483/483 tests PASS."
 }

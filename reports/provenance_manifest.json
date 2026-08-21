@@ -1,5 +1,5 @@
 {
-  "manifest": "CONTROL-03 Strict Block Validation Provenance Manifest",
-  "code_under_test_sha": "14d15934bf9b1862140ec4edafefe4e6a1c21f81",
-  "base_sha": "a25f18c198f74bdd0ccad702de865c733fb68e24"
+  "manifest": "CONTROL-04 Independent Red Team Provenance Manifest",
+  "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+  "base_sha": "04101f155d7c9916969b182afd6092e0ae3e2262"
 }
