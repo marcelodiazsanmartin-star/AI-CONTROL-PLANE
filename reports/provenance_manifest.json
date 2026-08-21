@@ -1,5 +1,5 @@
 {
-  "manifest": "CONTROL-03 Recertification Provenance Manifest",
-  "code_under_test_sha": "6a981e07a9a1ac9565b3b4657885299b46d264a0",
-  "base_sha": "1913529569669099e7f8516318fb6607943bff82"
+  "manifest": "CONTROL-03R.1 Provenance Manifest",
+  "code_under_test_sha": "8b9b190374ef847bcbd2a34ee84b37db74467da1",
+  "base_sha": "e6fb842ba89937aa2c4898a299b4491c00aa730e"
 }

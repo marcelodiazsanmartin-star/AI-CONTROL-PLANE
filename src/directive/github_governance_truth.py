@@ -648,7 +648,7 @@ def derive_block_2_10r_1c(
 
     # 5. Global Non-Evidence Tree Equivalence Comparisons
     # Allowlist ONLY: reports/ and state/
-    allowed_roots = ("reports/", "state/", "reports\\", "state\\", "AGENTS.md")
+    allowed_roots = ("reports/", "state/", "reports\\", "state\\")
 
     if code_under_test_sha and test_evidence_sha:
         try:
