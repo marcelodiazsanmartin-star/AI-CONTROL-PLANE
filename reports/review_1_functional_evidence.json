@@ -1,7 +1,7 @@
 {
   "review_type": "FUNCTIONAL_REVIEW",
-  "block": "CONTROL-03R.1",
+  "block": "CONTROL-03",
   "status": "PASS",
   "reviewer": "security_architect_agent",
-  "comments": "Verified review evidence block matching for CONTROL-03 subcontrols, strict evidence allowed_roots (reports/ and state/ only), AGENTS.md participation in tree equivalence from base SHA 4c181b4, and 462/462 tests PASS."
+  "comments": "Verified strict canonical block set validation for CONTROL-03 and CONTROL-03R.1 (no open prefix matching), strict allowed_roots (reports/ and state/ only), AGENTS.md participation in tree equivalence from base SHA a25f18c, and 466/466 tests PASS."
 }
