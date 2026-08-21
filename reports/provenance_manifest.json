@@ -1,0 +1,7 @@
+{
+  "manifest": "BLOCK 2.10R.1C-R1 Provenance Manifest",
+  "previous_1c_certification_revoked": true,
+  "revocation_reason": "Squash merge destroyed TEST_EVIDENCE_SHA ancestry in main HEAD; critical fields were direct-assigned.",
+  "code_under_test_sha": "6424f856b6803f8b95327af8b38d4297d0e652d8",
+  "base_sha": "abe6716d1e2b5a1ccc623a195b1db563cc85bdb1"
+}
