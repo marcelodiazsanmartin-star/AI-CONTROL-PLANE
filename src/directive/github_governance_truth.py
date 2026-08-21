@@ -849,7 +849,7 @@ def derive_control_03(
     if r1_file.exists() and r1_file.stat().st_size > 0:
         try:
             r1_obj = json.loads(r1_file.read_text(encoding="utf-8"))
-            if r1_obj.get("status") == "PASS" and r1_obj.get("block") == "CONTROL-03":
+            if r1_obj.get("status") == "PASS" and (r1_obj.get("block") or "").startswith("CONTROL-03"):
                 r1_pass = True
         except Exception:
             pass
@@ -859,7 +859,7 @@ def derive_control_03(
     if r2_file.exists() and r2_file.stat().st_size > 0:
         try:
             r2_obj = json.loads(r2_file.read_text(encoding="utf-8"))
-            if r2_obj.get("status") == "PASS" and r2_obj.get("block") == "CONTROL-03":
+            if r2_obj.get("status") == "PASS" and (r2_obj.get("block") or "").startswith("CONTROL-03"):
                 r2_pass = True
         except Exception:
             pass
