@@ -3914,3 +3914,89 @@ def test_control_03_invalid_block_identifiers_rejected(tmp_path, invalid_block):
     assert res["review_1_functional"] is False
     assert res["review_2_adversarial"] is False
     assert res["control_03_status"] in ("FAIL", "CORRECTION_REQUIRED")
+
+
+# ==============================================================================
+# CONTROL-04 — INDEPENDENT RED TEAM GOVERNANCE DERIVATION TESTS
+# ==============================================================================
+
+def test_derive_control_04_missing_red_team_files_fails(tmp_path):
+    """
+    Proves that derive_control_04 fails closed if Red Team module or test files are missing.
+    """
+    from src.directive.github_governance_truth import derive_control_04
+
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_control_04(
+        raw_file,
+        code_under_test_sha="1111111111111111111111111111111111111111",
+        test_evidence_sha="2222222222222222222222222222222222222222",
+        repo_dir=tmp_path,
+        reports_dir=tmp_path / "reports"
+    )
+
+    assert res["control_04_status"] in ("FAIL", "CORRECTION_REQUIRED")
+    assert res["independent_red_team_implemented"] is False
+    assert res["critical_gate_failure"] is True
+
+
+def test_derive_control_04_critical_bypasses_or_tampered_ledger_fails(tmp_path):
+    """
+    Proves that derive_control_04 fails closed if critical bypasses are detected or attack ledger is tampered.
+    """
+    from src.directive.github_governance_truth import derive_control_04
+
+    # Setup dummy red_team_engine.py and test_red_team_engine.py
+    src_dir = tmp_path / "src" / "directive"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / "red_team_engine.py").write_text("# dummy", encoding="utf-8")
+
+    test_dir = tmp_path / "tests"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    (test_dir / "test_red_team_engine.py").write_text("# dummy", encoding="utf-8")
+
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write review evidence files
+    (reports_dir / "review_1_functional_evidence.json").write_text(json.dumps({
+        "review_type": "FUNCTIONAL_REVIEW", "block": "CONTROL-04", "status": "PASS"
+    }), encoding="utf-8")
+    (reports_dir / "review_2_adversarial_evidence.json").write_text(json.dumps({
+        "review_type": "ADVERSARIAL_REVIEW", "block": "CONTROL-04", "status": "PASS"
+    }), encoding="utf-8")
+
+    # Write tampered attack ledger with critical bypass
+    (reports_dir / "red_team_attack_ledger.json").write_text(json.dumps({
+        "ledger_type": "RED_TEAM_ATTACK_LEDGER",
+        "integrity_verified": False,
+        "records": [
+            {"record": {"result": "PASSED_BYPASS_DETECTED"}},
+            {"record": {"result": "BLOCKED"}}
+        ]
+    }), encoding="utf-8")
+
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_control_04(
+        raw_file,
+        code_under_test_sha="1111111111111111111111111111111111111111",
+        test_evidence_sha="2222222222222222222222222222222222222222",
+        repo_dir=tmp_path,
+        reports_dir=reports_dir
+    )
+
+    assert res["control_04_status"] in ("FAIL", "CORRECTION_REQUIRED")
+    assert res["critical_bypasses_found"] > 0
+    assert res["critical_gate_failure"] is True
