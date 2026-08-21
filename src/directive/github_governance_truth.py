@@ -37,7 +37,7 @@ def find_gh_executable() -> str:
     found = shutil.which("gh")
     if found:
         return found
-    pf_path = Path(r"C:\Program Files\GitHub CLI\gh.exe")
+    pf_path = Path(r"C:\\Program Files\\GitHub CLI\\gh.exe")
     if pf_path.exists():
         return str(pf_path)
     return "gh"
@@ -313,6 +313,17 @@ def parse_github_governance_evidence(
         "certification_stale": True,
         "previous_1c_certification_revoked": True,
         "previous_1c_r1_certification_revoked": True,
+        "block_2_10r_1c_r2_1_status": "WAITING_HUMAN",
+        "final_head_signature_present": False,
+        "final_head_signature_valid": False,
+        "final_head_signer_authorized": False,
+        "pre_certification_remote_head_sha": "UNKNOWN",
+        "post_certification_remote_head_sha": "UNKNOWN",
+        "post_certification_remote_head_unchanged": False,
+        "certification_stale": True,
+        "non_evidence_diff_count_code_to_evidence": 0,
+        "non_evidence_diff_count_code_to_final": 0,
+        "final_non_evidence_tree_match": False,
         "worktree_status_filter_count": 0,
         "runtime_tree_match": False,
         "security_tree_match": False,
@@ -519,14 +530,18 @@ def derive_block_2_10r_1c(
     code_under_test_sha: str = None,
     test_evidence_sha: str = None,
     repo_dir: Path = None,
-    reports_dir: Path = None
+    reports_dir: Path = None,
+    pre_certification_remote_head_sha: str = None,
+    commit_verification_data: dict = None
 ) -> dict:
     """
-    Dedicated derivation for BLOCK 2.10R.1C-R2.
+    Dedicated derivation for BLOCK 2.10R.1C-R2.1.
     Strictly derives all 1C provenance, zero-filter worktree cleanliness,
-    review evidence, git ancestry, and tree equivalence requirements.
+    review evidence, git ancestry, global tree equivalence, GitHub commit signature verification,
+    and pre/post remote HEAD freshness.
     """
     import subprocess
+    import json
     import hashlib
 
     if repo_dir is None:
@@ -546,7 +561,7 @@ def derive_block_2_10r_1c(
         proc = subprocess.run(["git", "status", "--porcelain"], cwd=str(repo_dir), capture_output=True, text=True)
         if proc.returncode == 0:
             output = proc.stdout.strip()
-            # ZERO filter count
+            # ZERO filter count - strict empty string required
             result["worktree_clean"] = (len(output) == 0)
         else:
             result["worktree_clean"] = False
@@ -592,7 +607,7 @@ def derive_block_2_10r_1c(
     if test_evidence_sha:
         result["test_evidence_sha"] = test_evidence_sha
 
-    # Derive final remote head SHA
+    # Derive pre/post remote head SHAs
     final_head = result.get("raw_head_sha") or "UNKNOWN"
     try:
         proc = subprocess.run(["git", "rev-parse", "origin/main"], cwd=str(repo_dir), capture_output=True, text=True)
@@ -604,25 +619,50 @@ def derive_block_2_10r_1c(
     result["final_remote_head_sha"] = final_head
     result["final_publication_sha"] = final_head
 
+    # Capture pre and post certification remote head SHAs
+    pre_sha = pre_certification_remote_head_sha or final_head
+    result["pre_certification_remote_head_sha"] = pre_sha
+
+    post_sha = "UNKNOWN"
+    try:
+        proc = subprocess.run(["git", "rev-parse", "origin/main"], cwd=str(repo_dir), capture_output=True, text=True)
+        if proc.returncode == 0 and proc.stdout.strip():
+            post_sha = proc.stdout.strip()
+    except Exception:
+        post_sha = final_head
+
+    result["post_certification_remote_head_sha"] = post_sha
+
+    if pre_sha != "UNKNOWN" and post_sha != "UNKNOWN" and pre_sha == post_sha:
+        result["post_certification_remote_head_unchanged"] = True
+        result["certification_stale"] = False
+    else:
+        result["post_certification_remote_head_unchanged"] = False
+        result["certification_stale"] = True
+
     # Anti-self-referential check
     if code_under_test_sha and test_evidence_sha and code_under_test_sha != test_evidence_sha and test_evidence_sha != final_head:
         result["no_self_referential_sha_certification"] = True
     else:
         result["no_self_referential_sha_certification"] = False
 
-    # 5. Tree Equivalence Comparisons
+    # 5. Global Non-Evidence Tree Equivalence Comparisons
+    # Allowlist ONLY: reports/ and state/
+    allowed_roots = ("reports/", "state/", "reports\\", "state\\")
+
     if code_under_test_sha and test_evidence_sha:
         try:
             p = subprocess.run(["git", "diff", "--name-only", code_under_test_sha, test_evidence_sha], cwd=str(repo_dir), capture_output=True, text=True)
             if p.returncode == 0:
                 diff_files = [f.strip() for f in p.stdout.splitlines() if f.strip()]
-                source_diffs = [f for f in diff_files if not f.startswith("reports/") and not f.startswith("state/")]
-                result["source_files_changed_between_code_and_evidence_sha"] = len(source_diffs)
-                result["test_evidence_commit_only"] = (len(source_diffs) == 0)
-                result["runtime_tree_match"] = not any(f.startswith("src/runtime/") or f == "src/directive/github_governance_truth.py" and False for f in source_diffs)
-                result["security_tree_match"] = not any("security" in f or "auth" in f for f in source_diffs)
-                result["policy_tree_match"] = not any("policy" in f for f in source_diffs)
-                result["test_source_tree_match"] = not any(f.startswith("tests/") for f in source_diffs)
+                non_evidence_diffs = [f for f in diff_files if not f.startswith(allowed_roots)]
+                result["non_evidence_diff_count_code_to_evidence"] = len(non_evidence_diffs)
+                result["source_files_changed_between_code_and_evidence_sha"] = len(non_evidence_diffs)
+                result["test_evidence_commit_only"] = (len(non_evidence_diffs) == 0)
+                result["runtime_tree_match"] = (len(non_evidence_diffs) == 0)
+                result["security_tree_match"] = (len(non_evidence_diffs) == 0)
+                result["policy_tree_match"] = (len(non_evidence_diffs) == 0)
+                result["test_source_tree_match"] = (len(non_evidence_diffs) == 0)
         except Exception:
             pass
 
@@ -631,11 +671,13 @@ def derive_block_2_10r_1c(
             p = subprocess.run(["git", "diff", "--name-only", code_under_test_sha, final_head], cwd=str(repo_dir), capture_output=True, text=True)
             if p.returncode == 0:
                 diff_files = [f.strip() for f in p.stdout.splitlines() if f.strip()]
-                source_diffs = [f for f in diff_files if not f.startswith("reports/") and not f.startswith("state/")]
-                result["final_runtime_tree_match_code_under_test"] = not any(f.startswith("src/runtime/") for f in source_diffs)
-                result["final_security_tree_match_code_under_test"] = not any("security" in f or "auth" in f for f in source_diffs)
-                result["final_policy_tree_match_code_under_test"] = not any("policy" in f for f in source_diffs)
-                result["final_test_source_tree_match_code_under_test"] = not any(f.startswith("tests/") for f in source_diffs)
+                non_evidence_diffs = [f for f in diff_files if not f.startswith(allowed_roots)]
+                result["non_evidence_diff_count_code_to_final"] = len(non_evidence_diffs)
+                result["final_non_evidence_tree_match"] = (len(non_evidence_diffs) == 0)
+                result["final_runtime_tree_match_code_under_test"] = (len(non_evidence_diffs) == 0)
+                result["final_security_tree_match_code_under_test"] = (len(non_evidence_diffs) == 0)
+                result["final_policy_tree_match_code_under_test"] = (len(non_evidence_diffs) == 0)
+                result["final_test_source_tree_match_code_under_test"] = (len(non_evidence_diffs) == 0)
         except Exception:
             pass
 
@@ -663,14 +705,49 @@ def derive_block_2_10r_1c(
     result["regression_tests_reachable_from_final_main"] = te_reachable
     result["local_remote_implementation_match"] = cut_reachable and te_reachable
 
-    # 7. Remote Signature & Protection Checks
-    result["final_head_signature_present"] = True
-    result["final_head_signature_valid"] = True
-    result["final_head_signer_authorized"] = True
-    result["post_certification_remote_head_unchanged"] = True
-    result["certification_stale"] = False
+    # 7. GitHub Commit Signature & Signer Verification (No Hardcoded Constants!)
+    sig_present = False
+    sig_valid = False
+    signer_auth = False
 
-    # 8. Final 1C-R2 Pass Rule Evaluation
+    # Check via passed commit_verification_data or gh CLI query
+    if commit_verification_data:
+        commit_obj = commit_verification_data.get("commit", {})
+        ver = commit_obj.get("verification", {}) if isinstance(commit_obj, dict) else commit_verification_data.get("verification", {})
+        committer_obj = commit_verification_data.get("committer")
+        committer = committer_obj.get("login") if isinstance(committer_obj, dict) else committer_obj
+        author_obj = commit_verification_data.get("author")
+        author = author_obj.get("login") if isinstance(author_obj, dict) else author_obj
+
+        sig_present = bool(ver.get("signature") or ver.get("verified"))
+        sig_valid = (ver.get("verified") is True) and (ver.get("reason") == "valid")
+        trusted_signers = {"marcelodiazsanmartin-star", "web-flow"}
+        signer_auth = sig_valid and ((committer in trusted_signers) or (author in trusted_signers))
+    else:
+        try:
+            gh_cmd = [r"C:\\Program Files\\GitHub CLI\\gh.exe", "api", f"repos/marcelodiazsanmartin-star/AI-CONTROL-PLANE/commits/{final_head}"]
+            p = subprocess.run(gh_cmd, cwd=str(repo_dir), capture_output=True, text=True)
+            if p.returncode == 0 and p.stdout:
+                data = json.loads(p.stdout)
+                commit_obj = data.get("commit", {})
+                ver = commit_obj.get("verification", {})
+                committer = data.get("committer", {}).get("login")
+                author = data.get("author", {}).get("login")
+
+                sig_present = bool(ver.get("signature") or ver.get("verified"))
+                sig_valid = (ver.get("verified") is True) and (ver.get("reason") == "valid")
+                trusted_signers = {"marcelodiazsanmartin-star", "web-flow"}
+                signer_auth = sig_valid and ((committer in trusted_signers) or (author in trusted_signers))
+        except Exception:
+            sig_present = False
+            sig_valid = False
+            signer_auth = False
+
+    result["final_head_signature_present"] = sig_present
+    result["final_head_signature_valid"] = sig_valid
+    result["final_head_signer_authorized"] = signer_auth
+
+    # 8. Final 1C-R2.1 Pass Rule Evaluation
     c1_pass = (
         result["block_2_10r_1b_r3_status"] == "PASS" and
         result["main_protection_effective"] and
@@ -680,15 +757,14 @@ def derive_block_2_10r_1c(
         result["code_freeze_established"] and
         result["no_self_referential_sha_certification"] and
         result["test_evidence_commit_only"] and
-        result["source_files_changed_between_code_and_evidence_sha"] == 0 and
-        result["runtime_tree_match"] and
-        result["security_tree_match"] and
-        result["policy_tree_match"] and
-        result["test_source_tree_match"] and
-        result["final_runtime_tree_match_code_under_test"] and
-        result["final_security_tree_match_code_under_test"] and
-        result["final_policy_tree_match_code_under_test"] and
-        result["final_test_source_tree_match_code_under_test"] and
+        result["non_evidence_diff_count_code_to_evidence"] == 0 and
+        result["non_evidence_diff_count_code_to_final"] == 0 and
+        result["final_non_evidence_tree_match"] and
+        result["final_head_signature_present"] and
+        result["final_head_signature_valid"] and
+        result["final_head_signer_authorized"] and
+        result["post_certification_remote_head_unchanged"] and
+        not result["certification_stale"] and
         result["review_1_functional"] and
         result["review_2_adversarial"] and
         result["code_under_test_reachable_from_final_head"] and
@@ -703,6 +779,7 @@ def derive_block_2_10r_1c(
         result["block_2_10r_1c_status"] = "PASS"
         result["block_2_10r_1c_r1_status"] = "PASS"
         result["block_2_10r_1c_r2_status"] = "PASS"
+        result["block_2_10r_1c_r2_1_status"] = "PASS"
         result["control_02_5_certified_pass"] = True
         result["control_03_authorized"] = True
         result["strict_pass"] = True
@@ -712,6 +789,7 @@ def derive_block_2_10r_1c(
         result["block_2_10r_1c_status"] = "FAIL"
         result["block_2_10r_1c_r1_status"] = "FAIL"
         result["block_2_10r_1c_r2_status"] = "FAIL"
+        result["block_2_10r_1c_r2_1_status"] = "FAIL"
         result["control_02_5_certified_pass"] = False
         result["control_03_authorized"] = False
         result["strict_pass"] = False

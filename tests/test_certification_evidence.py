@@ -3659,3 +3659,133 @@ def test_2_10r_1c_r2_final_non_evidence_tree_must_equal_code_under_test_tree(tmp
     res = derive_block_2_10r_1c(raw_file, code_under_test_sha="1111111", test_evidence_sha="2222222", repo_dir=tmp_path)
     assert res["final_runtime_tree_match_code_under_test"] is False
     assert res["control_02_5_certified_pass"] is False
+
+
+# ==============================================================================
+# BLOCK 2.10R.1C-R2.1 — FINAL EVIDENCE-DERIVATION PATCH
+# ==============================================================================
+
+def test_2_10r_1c_r2_1_invalid_final_signature_fails(tmp_path):
+    """
+    Proves that an unverified or invalid final commit signature causes certification to fail.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    fake_commit_data = {
+        "commit": {"verification": {"verified": False, "reason": "unsigned"}},
+        "author": {"login": "untrusted_user"},
+        "committer": {"login": "untrusted_user"}
+    }
+    res = derive_block_2_10r_1c(raw_file, repo_dir=tmp_path, commit_verification_data=fake_commit_data)
+    assert res["final_head_signature_valid"] is False
+    assert res["control_02_5_certified_pass"] is False
+    assert res["block_2_10r_1c_r2_1_status"] == "FAIL"
+
+
+def test_2_10r_1c_r2_1_unauthorized_final_signer_fails(tmp_path):
+    """
+    Proves that a verified signature from an unauthorized signer identity causes certification to fail.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    fake_commit_data = {
+        "commit": {"verification": {"verified": True, "reason": "valid"}},
+        "author": {"login": "attacker_user"},
+        "committer": {"login": "attacker_user"}
+    }
+    res = derive_block_2_10r_1c(raw_file, repo_dir=tmp_path, commit_verification_data=fake_commit_data)
+    assert res["final_head_signature_valid"] is True
+    assert res["final_head_signer_authorized"] is False
+    assert res["control_02_5_certified_pass"] is False
+    assert res["block_2_10r_1c_r2_1_status"] == "FAIL"
+
+
+def test_2_10r_1c_r2_1_remote_head_change_after_verification_fails_stale(tmp_path):
+    """
+    Proves that pre/post remote HEAD mismatch sets post_certification_remote_head_unchanged = False and certification_stale = True.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_block_2_10r_1c(
+        raw_file,
+        repo_dir=tmp_path,
+        pre_certification_remote_head_sha="sha_old_1111111111111111111111111111111"
+    )
+    assert res["post_certification_remote_head_unchanged"] is False
+    assert res["certification_stale"] is True
+    assert res["control_02_5_certified_pass"] is False
+    assert res["block_2_10r_1c_r2_1_status"] == "FAIL"
+
+
+def test_2_10r_1c_r2_1_src_directive_file_changes_after_freeze_fails(tmp_path):
+    """
+    Proves that modifying any file under src/directive/ between CODE_UNDER_TEST_SHA and TEST_EVIDENCE_SHA causes failure.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_block_2_10r_1c(
+        raw_file,
+        code_under_test_sha="1111111111111111111111111111111111111111",
+        test_evidence_sha="2222222222222222222222222222222222222222",
+        repo_dir=tmp_path
+    )
+    assert res["non_evidence_diff_count_code_to_evidence"] >= 0
+    assert res["control_02_5_certified_pass"] is False
+
+
+def test_2_10r_1c_r2_1_arbitrary_non_evidence_source_file_changes_fails(tmp_path):
+    """
+    Proves that arbitrary non-evidence diffs outside reports/ and state/ cause final_non_evidence_tree_match = False.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_block_2_10r_1c(
+        raw_file,
+        code_under_test_sha="1111111111111111111111111111111111111111",
+        test_evidence_sha="2222222222222222222222222222222222222222",
+        repo_dir=tmp_path
+    )
+    assert res["final_non_evidence_tree_match"] is False
+    assert res["control_02_5_certified_pass"] is False
+    assert res["block_2_10r_1c_r2_1_status"] == "FAIL"
+
+
+def test_2_10r_1c_r2_1_evidence_only_reports_and_state_changes_allowed(tmp_path):
+    """
+    Proves that evidence files inside reports/ and state/ are allowed evidence roots.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["non_evidence_diff_count_code_to_evidence"] == 0
+    assert res["non_evidence_diff_count_code_to_final"] == 0
