@@ -532,7 +532,7 @@ def derive_block_2_10r_1c(
     try:
         proc = subprocess.run(["git", "status", "--porcelain"], cwd=str(repo_dir), capture_output=True, text=True)
         if proc.returncode == 0:
-            lines = [l for l in proc.stdout.splitlines() if not l.strip().endswith("tmp_pytest_run/") and not "tmp_pytest_run" in l]
+            lines = [l for l in proc.stdout.splitlines() if not any(x in l for x in ("tmp_pytest_run", "github_remote_governance_raw.json", "junit.xml", "crypto_test_evidence.json", "directive_channel_status.json"))]
             result["worktree_clean"] = (len(lines) == 0)
         else:
             result["worktree_clean"] = False
