@@ -215,6 +215,7 @@ class DirectiveWatcher:
                     executed=False
                 )
                 acks.append(ack)
+                self.rejected_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(file_path), str(self.rejected_dir / file_path.name))
                 continue
 
@@ -236,6 +237,7 @@ class DirectiveWatcher:
                     executed=False
                 )
                 acks.append(ack)
+                self.rejected_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(file_path), str(self.rejected_dir / file_path.name))
                 continue
 
@@ -274,6 +276,7 @@ class DirectiveWatcher:
                     executed=False
                 )
                 acks.append(ack)
+                self.rejected_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(file_path), str(self.rejected_dir / file_path.name))
                 continue
 
@@ -308,6 +311,7 @@ class DirectiveWatcher:
                     executed=False
                 )
                 acks.append(ack)
+                self.rejected_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(file_path), str(self.rejected_dir / file_path.name))
                 continue
 
@@ -346,6 +350,7 @@ class DirectiveWatcher:
 
                 self.waiting_human_dir.mkdir(parents=True, exist_ok=True)
                 dest_waiting = self.waiting_human_dir / file_path.name
+                self.waiting_human_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(file_path), str(dest_waiting))
                 continue
 
@@ -372,6 +377,7 @@ class DirectiveWatcher:
                     readback_verified=False
                 )
                 acks.append(ack)
+                self.rejected_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(file_path), str(self.rejected_dir / file_path.name))
                 continue
 
@@ -401,6 +407,7 @@ class DirectiveWatcher:
             acks.append(ack)
 
             dest_file = self.accepted_dir / file_path.name
+            self.accepted_dir.mkdir(parents=True, exist_ok=True)
             shutil.move(str(file_path), str(dest_file))
 
         self.update_channel_status()

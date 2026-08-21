@@ -79,6 +79,7 @@ class ReplayLedger:
         self.consumed_records[directive_id] = record
 
         try:
+            self.ledger_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.ledger_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record.to_dict()) + "\n")
                 f.flush()
