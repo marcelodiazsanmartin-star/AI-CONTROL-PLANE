@@ -3827,3 +3827,33 @@ def test_control_03_external_service_mutation_forbidden(tmp_path):
     res = derive_control_03(raw_file, repo_dir=tmp_path)
     res["external_services_mutated"] = True
     assert res["external_services_mutated"] is True
+
+
+# ==============================================================================
+# CONTROL-03R.1 — GOVERNANCE BASELINE INTEGRITY ADVERSARIAL TEST
+# ==============================================================================
+
+def test_control_03r_1_agents_md_modification_after_freeze_fails_certification(tmp_path):
+    """
+    Proves that AGENTS.md participates in NON_EVIDENCE_TREE_EQUIVALENCE.
+    Any post-freeze modification to AGENTS.md causes NON_EVIDENCE_DIFF_COUNT_CODE_TO_FINAL > 0
+    and fail-closed certification rejection.
+    """
+    from src.directive.github_governance_truth import derive_control_03
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    # In a repository with diffs outside reports/ and state/, tree match fails
+    res = derive_control_03(
+        raw_file,
+        code_under_test_sha="1111111111111111111111111111111111111111",
+        test_evidence_sha="2222222222222222222222222222222222222222",
+        repo_dir=tmp_path
+    )
+    assert res["final_non_evidence_tree_match"] is False
+    assert res["control_03_status"] in ("FAIL", "CORRECTION_REQUIRED")
+    assert res["human_action_required"] is True
