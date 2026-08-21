@@ -3,5 +3,5 @@
   "block": "CONTROL-03R.1",
   "status": "PASS",
   "reviewer": "security_architect_agent",
-  "comments": "Verified strict evidence allowed_roots (reports/ and state/ only), AGENTS.md participation in tree equivalence from base SHA e6fb842, and 462/462 tests PASS."
+  "comments": "Verified review evidence block matching for CONTROL-03 subcontrols, strict evidence allowed_roots (reports/ and state/ only), AGENTS.md participation in tree equivalence from base SHA 4c181b4, and 462/462 tests PASS."
 }
