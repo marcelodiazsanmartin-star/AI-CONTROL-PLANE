@@ -1,8 +1,7 @@
 {
-  "manifest": "BLOCK 2.10R.1C-R2 Provenance Manifest",
+  "manifest": "BLOCK 2.10R.1C-R2.1 Provenance Manifest",
   "previous_1c_certification_revoked": true,
   "previous_1c_r1_certification_revoked": true,
-  "revocation_reason": "PR #5 modified src/directive/github_governance_truth.py after CODE_UNDER_TEST_SHA freeze.",
-  "code_under_test_sha": "7b008b694bd02424873de88a2956e314811fdbda",
-  "base_sha": "9a568433cd373c33f14492cbed74d041f75bfc2e"
+  "code_under_test_sha": "60cff25aec08564e0eead411c6679ea2471f4dd6",
+  "base_sha": "387fa1f752153be2ff571090750c8d53d9f0cf67"
 }
