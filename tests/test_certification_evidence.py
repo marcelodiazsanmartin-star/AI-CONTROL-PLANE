@@ -2557,7 +2557,7 @@ def test_block2_10_complete_certified_pass_derivation():
 
 from src.directive.ast_hardcode_scanner import scan_ast_for_critical_hardcodes
 from src.directive.github_governance_truth import (
-    fetch_raw_github_governance_snapshot, parse_github_governance_evidence,
+    fetch_raw_github_governance_snapshot, parse_github_governance_evidence, derive_block_2_10r_1c,
     GOVERNANCE_TRUE_FALLBACK_COUNT, LS_REMOTE_GOVERNANCE_INFERENCE_DISABLED,
     REMOTE_GOVERNANCE_SELF_ATTESTATION_DISABLED
 )
@@ -3083,7 +3083,7 @@ def test_2_10r_1c_provenance_roles_distinct_and_reconciled(tmp_path):
     raw_file = tmp_path / "1c_roles.json"
     raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
 
-    res = parse_github_governance_evidence(raw_file)
+    res = derive_block_2_10r_1c(raw_file, code_under_test_sha="a6f7983cbcccf3c94a6c475ecf1d3c7e271862be", repo_dir=tmp_path)
     assert res["code_under_test_sha"] == "a6f7983cbcccf3c94a6c475ecf1d3c7e271862be"
     assert "test_evidence_sha" in res
     assert "final_publication_sha" in res
@@ -3108,12 +3108,12 @@ def test_2_10r_1c_anti_self_referential_sha_enforced(tmp_path):
     raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
 
     res = parse_github_governance_evidence(raw_file)
-    assert res["no_self_referential_sha_certification"] is True
+    assert res["no_self_referential_sha_certification"] is False
 
 
 def test_2_10r_1c_worktree_cleanliness_required(tmp_path):
     """
-    Proves worktree_clean defaults to True for clean certification.
+    Proves worktree_clean defaults to False without derivation and requires a clean repository worktree.
     """
     snapshot = {
         "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -3129,7 +3129,7 @@ def test_2_10r_1c_worktree_cleanliness_required(tmp_path):
     raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
 
     res = parse_github_governance_evidence(raw_file)
-    assert res["worktree_clean"] is True
+    assert res["worktree_clean"] is False
 
 
 def test_2_10r_1c_prerequisites_1a_1b_reverified(tmp_path):
@@ -3257,8 +3257,8 @@ def test_2_10r_1c_functional_and_adversarial_reviews_required(tmp_path):
     raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
 
     res = parse_github_governance_evidence(raw_file)
-    assert res["review_1_functional"] is True
-    assert res["review_2_adversarial"] is True
+    assert res["review_1_functional"] is False
+    assert res["review_2_adversarial"] is False
 
 
 def test_2_10r_1c_ruleset_non_mutation_enforced(tmp_path):
@@ -3328,7 +3328,7 @@ def test_2_10r_1c_signed_final_head_reachability_verified(tmp_path):
 
 def test_2_10r_1c_post_merge_evidence_reconciled(tmp_path):
     """
-    Proves complete 1C evidence reconciliation with full protection and PR payload.
+    Proves complete 1C evidence reconciliation with full protection and PR payload via derive_block_2_10r_1c.
     """
     snapshot = {
         "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -3355,8 +3355,164 @@ def test_2_10r_1c_post_merge_evidence_reconciled(tmp_path):
     raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
 
     res = parse_github_governance_evidence(raw_file)
-    assert res["block_2_10r_1c_status"] == "PASS"
-    assert res["control_02_5_certified_pass"] is True
-    assert res["strict_pass"] is True
-    assert res["critical_gate_failure"] is False
-    assert res["human_action_required"] is False
+    assert res["block_2_10r_1b_r3_status"] == "PASS"
+    assert res["block_2_10r_1c_status"] == "WAITING_HUMAN"
+    assert res["control_02_5_certified_pass"] is False
+
+
+# ==============================================================================
+# BLOCK 2.10R.1C-R1 — INDEPENDENT PROVENANCE & CERTIFICATION DERIVATION REMEDIATION
+# ==============================================================================
+
+def test_2_10r_1c_r1_block_1b_cannot_auto_certify_1c(tmp_path):
+    """
+    Proves that 1B PASS rule alone does NOT auto-certify 1C (block_1b_pass_cannot_auto_certify_1c = True).
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "ci_pr_created": True,
+        "remote_pr_existence_verified": True,
+        "ci_workflow_executed_on_github": True,
+        "ci_status_check_pass": True,
+        "api_data": {
+            "protection": {
+                "url": "https://api.github.com/repos/owner/repo/branches/main/protection",
+                "required_status_checks": {"strict": True},
+                "allow_force_pushes": {"enabled": False},
+                "allow_deletions": {"enabled": False},
+                "enforce_admins": {"enabled": True}
+            },
+            "pulls": [{"number": 1, "state": "closed", "merged_at": "2026-08-21T10:00:00Z", "head": {"ref": "control-02-10r-1b-ci-bootstrap"}}],
+            "runs": {"workflow_runs": [{"id": 32486177471, "head_branch": "control-02-10r-1b-ci-bootstrap", "conclusion": "success"}]}
+        }
+    }
+    raw_file = tmp_path / "1c_r1_1b_no_auto.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["block_2_10r_1b_r3_status"] == "PASS"
+    assert res["control_02_5_certified_pass"] is False
+    assert res["control_03_authorized"] is False
+    assert res["block_1b_pass_cannot_auto_certify_1c"] is True
+
+
+def test_2_10r_1c_r1_hardcoded_worktree_clean_detected(tmp_path):
+    """
+    Proves parse_github_governance_evidence defaults worktree_clean to False (no hardcoded True).
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }
+    raw_file = tmp_path / "1c_r1_worktree.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["worktree_clean"] is False
+
+
+def test_2_10r_1c_r1_hardcoded_review_pass_detected(tmp_path):
+    """
+    Proves review_1_functional and review_2_adversarial default to False without structured evidence files.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }
+    raw_file = tmp_path / "1c_r1_reviews.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["review_1_functional"] is False
+    assert res["review_2_adversarial"] is False
+
+
+def test_2_10r_1c_r1_hardcoded_certified_pass_detected(tmp_path):
+    """
+    Proves control_02_5_certified_pass defaults to False.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }
+    raw_file = tmp_path / "1c_r1_cert_pass.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["control_02_5_certified_pass"] is False
+
+
+def test_2_10r_1c_r1_hardcoded_c03_authorized_detected(tmp_path):
+    """
+    Proves control_03_authorized defaults to False.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }
+    raw_file = tmp_path / "1c_r1_c03_auth.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["control_03_authorized"] is False
+
+
+def test_2_10r_1c_r1_squash_merge_ancestry_rejection(tmp_path):
+    """
+    Proves derive_block_2_10r_1c fails closed when test_evidence_sha is not reachable from final_remote_head_sha.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }), encoding="utf-8")
+
+    # Pass dummy invalid SHAs
+    res = derive_block_2_10r_1c(raw_file, code_under_test_sha="0000000000000000000000000000000000000001", test_evidence_sha="0000000000000000000000000000000000000002", repo_dir=tmp_path)
+    assert res["test_evidence_reachable_from_final_head"] is False
+    assert res["block_2_10r_1c_r1_status"] == "FAIL"
+    assert res["control_02_5_certified_pass"] is False
+
+
+def test_2_10r_1c_r1_non_ancestor_test_evidence_sha_rejection(tmp_path):
+    """
+    Proves derive_block_2_10r_1c rejects non-ancestor TEST_EVIDENCE_SHA.
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_block_2_10r_1c(raw_file, code_under_test_sha="abc1234", test_evidence_sha="def5678", repo_dir=tmp_path)
+    assert res["code_under_test_reachable_from_final_head"] is False
+    assert res["control_02_5_certified_pass"] is False
+
+
+def test_2_10r_1c_r1_stale_code_under_test_sha_rejection(tmp_path):
+    """
+    Proves derive_block_2_10r_1c rejects missing code_under_test_sha (code_freeze_established = False).
+    """
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_block_2_10r_1c(raw_file, code_under_test_sha=None, repo_dir=tmp_path)
+    assert res["code_freeze_established"] is False
+    assert res["block_2_10r_1c_r1_status"] == "FAIL"
