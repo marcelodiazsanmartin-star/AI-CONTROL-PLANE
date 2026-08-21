@@ -1,5 +1,5 @@
 {
-  "manifest": "CONTROL-03R.1 Review Parsing Fix Provenance Manifest",
-  "code_under_test_sha": "b924f81d2f67242a6e37e958730150c2f19e0a17",
-  "base_sha": "4c181b498940296d96813b7102616f35394ee066"
+  "manifest": "CONTROL-03 Strict Block Validation Provenance Manifest",
+  "code_under_test_sha": "14d15934bf9b1862140ec4edafefe4e6a1c21f81",
+  "base_sha": "a25f18c198f74bdd0ccad702de865c733fb68e24"
 }

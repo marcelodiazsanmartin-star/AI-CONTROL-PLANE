@@ -3857,3 +3857,60 @@ def test_control_03r_1_agents_md_modification_after_freeze_fails_certification(t
     assert res["final_non_evidence_tree_match"] is False
     assert res["control_03_status"] in ("FAIL", "CORRECTION_REQUIRED")
     assert res["human_action_required"] is True
+
+
+# ==============================================================================
+# CONTROL-03 — STRICT CANONICAL BLOCK IDENTIFIER ADVERSARIAL TEST
+# ==============================================================================
+
+@pytest.mark.parametrize("invalid_block", [
+    "CONTROL-03-FAKE",
+    "CONTROL-030",
+    "CONTROL-03R.1-FAKE",
+    "CONTROL-04",
+])
+def test_control_03_invalid_block_identifiers_rejected(tmp_path, invalid_block):
+    """
+    Proves that derive_control_03 strictly rejects invalid or fake block identifiers
+    and does NOT allow open prefix matching like CONTROL-03-FAKE, CONTROL-030, CONTROL-03R.1-FAKE, or CONTROL-04.
+    """
+    from src.directive.github_governance_truth import derive_control_03
+
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    r1_file = reports_dir / "review_1_functional_evidence.json"
+    r2_file = reports_dir / "review_2_adversarial_evidence.json"
+
+    r1_file.write_text(json.dumps({
+        "review_type": "FUNCTIONAL_REVIEW",
+        "block": invalid_block,
+        "status": "PASS",
+        "reviewer": "security_architect_agent"
+    }), encoding="utf-8")
+
+    r2_file.write_text(json.dumps({
+        "review_type": "ADVERSARIAL_REVIEW",
+        "block": invalid_block,
+        "status": "PASS",
+        "reviewer": "red_team_auditor_agent"
+    }), encoding="utf-8")
+
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_control_03(
+        raw_file,
+        code_under_test_sha="1111111111111111111111111111111111111111",
+        test_evidence_sha="2222222222222222222222222222222222222222",
+        repo_dir=tmp_path,
+        reports_dir=reports_dir
+    )
+
+    assert res["review_1_functional"] is False
+    assert res["review_2_adversarial"] is False
+    assert res["control_03_status"] in ("FAIL", "CORRECTION_REQUIRED")
