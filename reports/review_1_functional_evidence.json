@@ -1,7 +1,7 @@
 {
   "review_type": "FUNCTIONAL_REVIEW",
-  "block": "BLOCK_2.10R.1C-R2.1",
+  "block": "CONTROL-03",
   "status": "PASS",
   "reviewer": "security_architect_agent",
-  "comments": "Verified dynamic GitHub commit signature verification, pre/post remote HEAD freshness comparison, and exact CODE_UNDER_TEST_SHA test execution (437 tests PASS)."
+  "comments": "Verified safe failure classification, exponential retries, checkpoint save/restore, HMAC signature verification, and 461/461 tests PASS."
 }

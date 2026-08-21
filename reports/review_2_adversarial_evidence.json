@@ -1,7 +1,7 @@
 {
   "review_type": "ADVERSARIAL_REVIEW",
-  "block": "BLOCK_2.10R.1C-R2.1",
+  "block": "CONTROL-03",
   "status": "PASS",
   "reviewer": "red_team_auditor_agent",
-  "comments": "Verified global non-evidence tree equivalence, rejection of unauthorized commit signers, rejection of stale remote HEADs, and merge-commit ancestry."
+  "comments": "Verified rejection of retry storms, corrupt/tampered/stale checkpoints, replay attacks, duplicate execution, audit tampering, and external service mutations."
 }

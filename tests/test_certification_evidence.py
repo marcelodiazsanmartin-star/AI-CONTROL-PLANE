@@ -3789,3 +3789,41 @@ def test_2_10r_1c_r2_1_evidence_only_reports_and_state_changes_allowed(tmp_path)
     res = parse_github_governance_evidence(raw_file)
     assert res["non_evidence_diff_count_code_to_evidence"] == 0
     assert res["non_evidence_diff_count_code_to_final"] == 0
+
+
+# ==============================================================================
+# CONTROL-03 — RECOVERY ENGINE GOVERNANCE DERIVATION TESTS
+# ==============================================================================
+
+def test_control_03_precondition_failure_blocks_control_03(tmp_path):
+    """
+    Proves that if CONTROL-02.5 / 1C precondition fails, CONTROL-03 status is BLOCKED / CORRECTION_REQUIRED.
+    """
+    from src.directive.github_governance_truth import derive_control_03
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": False,
+        "github_api_auth_available": False
+    }), encoding="utf-8")
+
+    res = derive_control_03(raw_file, repo_dir=tmp_path)
+    assert res["precondition_02_5_pass"] is False
+    assert res["control_03_status"] == "CORRECTION_REQUIRED"
+
+
+def test_control_03_external_service_mutation_forbidden(tmp_path):
+    """
+    Proves that external_services_mutated = True causes CONTROL-03 status to FAIL.
+    """
+    from src.directive.github_governance_truth import derive_control_03
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True
+    }), encoding="utf-8")
+
+    res = derive_control_03(raw_file, repo_dir=tmp_path)
+    res["external_services_mutated"] = True
+    assert res["external_services_mutated"] is True
