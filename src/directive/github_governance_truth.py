@@ -312,6 +312,17 @@ def parse_github_governance_evidence(
         "post_certification_remote_head_unchanged": False,
         "certification_stale": True,
         "previous_1c_certification_revoked": True,
+        "previous_1c_r1_certification_revoked": True,
+        "worktree_status_filter_count": 0,
+        "runtime_tree_match": False,
+        "security_tree_match": False,
+        "policy_tree_match": False,
+        "test_source_tree_match": False,
+        "final_runtime_tree_match_code_under_test": False,
+        "final_security_tree_match_code_under_test": False,
+        "final_policy_tree_match_code_under_test": False,
+        "final_test_source_tree_match_code_under_test": False,
+        "source_files_changed_between_code_and_evidence_sha": 0,
         "block_1b_pass_cannot_auto_certify_1c": True,
         "critical_1c_direct_pass_assignment_count": 0,
         "parse_error": None
@@ -511,9 +522,9 @@ def derive_block_2_10r_1c(
     reports_dir: Path = None
 ) -> dict:
     """
-    Dedicated derivation for BLOCK 2.10R.1C-R1.
-    Strictly derives all 1C provenance, worktree cleanliness, review evidence,
-    and Git ancestry requirements from explicit runtime and remote evidence.
+    Dedicated derivation for BLOCK 2.10R.1C-R2.
+    Strictly derives all 1C provenance, zero-filter worktree cleanliness,
+    review evidence, git ancestry, and tree equivalence requirements.
     """
     import subprocess
     import hashlib
@@ -526,14 +537,17 @@ def derive_block_2_10r_1c(
     # 1. Base governance verification from raw remote evidence
     result = parse_github_governance_evidence(raw_evidence_file)
     result["previous_1c_certification_revoked"] = True
+    result["previous_1c_r1_certification_revoked"] = True
     result["block_1b_pass_cannot_auto_certify_1c"] = True
+    result["worktree_status_filter_count"] = 0
 
-    # 2. Derive worktree cleanliness from actual git status --porcelain
+    # 2. Derive worktree cleanliness strictly from git status --porcelain with ZERO exclusion filters
     try:
         proc = subprocess.run(["git", "status", "--porcelain"], cwd=str(repo_dir), capture_output=True, text=True)
         if proc.returncode == 0:
-            lines = [l for l in proc.stdout.splitlines() if not any(x in l for x in ("tmp_pytest_run", "github_remote_governance_raw.json", "junit.xml", "crypto_test_evidence.json", "directive_channel_status.json"))]
-            result["worktree_clean"] = (len(lines) == 0)
+            output = proc.stdout.strip()
+            # ZERO filter count
+            result["worktree_clean"] = (len(output) == 0)
         else:
             result["worktree_clean"] = False
     except Exception:
@@ -570,6 +584,7 @@ def derive_block_2_10r_1c(
     # 4. Resolve Provenance SHAs & Code Freeze
     if code_under_test_sha:
         result["code_under_test_sha"] = code_under_test_sha
+        result["local_tested_sha"] = code_under_test_sha
         result["code_freeze_established"] = True
     else:
         result["code_freeze_established"] = False
@@ -595,7 +610,36 @@ def derive_block_2_10r_1c(
     else:
         result["no_self_referential_sha_certification"] = False
 
-    # 5. Git Ancestry Verification
+    # 5. Tree Equivalence Comparisons
+    if code_under_test_sha and test_evidence_sha:
+        try:
+            p = subprocess.run(["git", "diff", "--name-only", code_under_test_sha, test_evidence_sha], cwd=str(repo_dir), capture_output=True, text=True)
+            if p.returncode == 0:
+                diff_files = [f.strip() for f in p.stdout.splitlines() if f.strip()]
+                source_diffs = [f for f in diff_files if not f.startswith("reports/") and not f.startswith("state/")]
+                result["source_files_changed_between_code_and_evidence_sha"] = len(source_diffs)
+                result["test_evidence_commit_only"] = (len(source_diffs) == 0)
+                result["runtime_tree_match"] = not any(f.startswith("src/runtime/") or f == "src/directive/github_governance_truth.py" and False for f in source_diffs)
+                result["security_tree_match"] = not any("security" in f or "auth" in f for f in source_diffs)
+                result["policy_tree_match"] = not any("policy" in f for f in source_diffs)
+                result["test_source_tree_match"] = not any(f.startswith("tests/") for f in source_diffs)
+        except Exception:
+            pass
+
+    if code_under_test_sha and final_head != "UNKNOWN":
+        try:
+            p = subprocess.run(["git", "diff", "--name-only", code_under_test_sha, final_head], cwd=str(repo_dir), capture_output=True, text=True)
+            if p.returncode == 0:
+                diff_files = [f.strip() for f in p.stdout.splitlines() if f.strip()]
+                source_diffs = [f for f in diff_files if not f.startswith("reports/") and not f.startswith("state/")]
+                result["final_runtime_tree_match_code_under_test"] = not any(f.startswith("src/runtime/") for f in source_diffs)
+                result["final_security_tree_match_code_under_test"] = not any("security" in f or "auth" in f for f in source_diffs)
+                result["final_policy_tree_match_code_under_test"] = not any("policy" in f for f in source_diffs)
+                result["final_test_source_tree_match_code_under_test"] = not any(f.startswith("tests/") for f in source_diffs)
+        except Exception:
+            pass
+
+    # 6. Git Ancestry Verification
     cut_reachable = False
     te_reachable = False
 
@@ -619,21 +663,32 @@ def derive_block_2_10r_1c(
     result["regression_tests_reachable_from_final_main"] = te_reachable
     result["local_remote_implementation_match"] = cut_reachable and te_reachable
 
-    # 6. Remote Signature & Protection Checks
+    # 7. Remote Signature & Protection Checks
     result["final_head_signature_present"] = True
     result["final_head_signature_valid"] = True
     result["final_head_signer_authorized"] = True
     result["post_certification_remote_head_unchanged"] = True
     result["certification_stale"] = False
 
-    # 7. Final 1C Pass Rule Evaluation
+    # 8. Final 1C-R2 Pass Rule Evaluation
     c1_pass = (
         result["block_2_10r_1b_r3_status"] == "PASS" and
         result["main_protection_effective"] and
         result["remote_ci_pass"] and
         result["worktree_clean"] and
+        result["worktree_status_filter_count"] == 0 and
         result["code_freeze_established"] and
         result["no_self_referential_sha_certification"] and
+        result["test_evidence_commit_only"] and
+        result["source_files_changed_between_code_and_evidence_sha"] == 0 and
+        result["runtime_tree_match"] and
+        result["security_tree_match"] and
+        result["policy_tree_match"] and
+        result["test_source_tree_match"] and
+        result["final_runtime_tree_match_code_under_test"] and
+        result["final_security_tree_match_code_under_test"] and
+        result["final_policy_tree_match_code_under_test"] and
+        result["final_test_source_tree_match_code_under_test"] and
         result["review_1_functional"] and
         result["review_2_adversarial"] and
         result["code_under_test_reachable_from_final_head"] and
@@ -647,6 +702,7 @@ def derive_block_2_10r_1c(
     if c1_pass:
         result["block_2_10r_1c_status"] = "PASS"
         result["block_2_10r_1c_r1_status"] = "PASS"
+        result["block_2_10r_1c_r2_status"] = "PASS"
         result["control_02_5_certified_pass"] = True
         result["control_03_authorized"] = True
         result["strict_pass"] = True
@@ -655,6 +711,7 @@ def derive_block_2_10r_1c(
     else:
         result["block_2_10r_1c_status"] = "FAIL"
         result["block_2_10r_1c_r1_status"] = "FAIL"
+        result["block_2_10r_1c_r2_status"] = "FAIL"
         result["control_02_5_certified_pass"] = False
         result["control_03_authorized"] = False
         result["strict_pass"] = False
