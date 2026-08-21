@@ -845,11 +845,13 @@ def derive_control_03(
     r1_file = reports_dir / "review_1_functional_evidence.json"
     r2_file = reports_dir / "review_2_adversarial_evidence.json"
 
+    allowed_c3_blocks = {"CONTROL-03", "CONTROL-03R.1"}
+
     r1_pass = False
     if r1_file.exists() and r1_file.stat().st_size > 0:
         try:
             r1_obj = json.loads(r1_file.read_text(encoding="utf-8"))
-            if r1_obj.get("status") == "PASS" and (r1_obj.get("block") or "").startswith("CONTROL-03"):
+            if r1_obj.get("status") == "PASS" and r1_obj.get("block") in allowed_c3_blocks:
                 r1_pass = True
         except Exception:
             pass
@@ -859,7 +861,7 @@ def derive_control_03(
     if r2_file.exists() and r2_file.stat().st_size > 0:
         try:
             r2_obj = json.loads(r2_file.read_text(encoding="utf-8"))
-            if r2_obj.get("status") == "PASS" and (r2_obj.get("block") or "").startswith("CONTROL-03"):
+            if r2_obj.get("status") == "PASS" and r2_obj.get("block") in allowed_c3_blocks:
                 r2_pass = True
         except Exception:
             pass
