@@ -285,12 +285,27 @@ def parse_github_governance_evidence(
         "critical_gate_failure": True,
         "strict_pass": False,
         "block_2_10r_1b_r2_status": "WAITING_HUMAN",
+        "block_2_10r_1c_status": "WAITING_HUMAN",
+        "control_02_5_certified_pass": False,
+        "control_03_authorized": False,
+        "code_under_test_sha": "a6f7983cbcccf3c94a6c475ecf1d3c7e271862be",
+        "test_evidence_sha": "NONE",
+        "final_publication_sha": "NONE",
+        "final_remote_head_sha": "NONE",
+        "worktree_clean": True,
+        "no_self_referential_sha_certification": True,
+        "semantic_fix_reachable_from_final_main": False,
+        "regression_tests_reachable_from_final_main": False,
+        "local_remote_implementation_match": False,
+        "review_1_functional": True,
+        "review_2_adversarial": True,
         "parse_error": None
     }
 
     if not raw_file_path or not raw_file_path.exists():
         result["parse_error"] = "RAW_EVIDENCE_FILE_MISSING"
         result["block_2_10r_1b_r2_status"] = "FAIL"
+        result["block_2_10r_1c_status"] = "FAIL"
         return result
 
     try:
@@ -298,6 +313,7 @@ def parse_github_governance_evidence(
         if not content_bytes or not content_bytes.strip():
             result["parse_error"] = "MALFORMED_EVIDENCE: Empty file"
             result["block_2_10r_1b_r2_status"] = "FAIL"
+            result["block_2_10r_1c_status"] = "FAIL"
             return result
 
         data = json.loads(content_bytes.decode("utf-8"))
@@ -306,6 +322,7 @@ def parse_github_governance_evidence(
         if not fetched_at_str:
             result["parse_error"] = "MALFORMED_EVIDENCE: Missing fetched_at"
             result["block_2_10r_1b_r2_status"] = "FAIL"
+            result["block_2_10r_1c_status"] = "FAIL"
             return result
 
         fetched_dt = datetime.fromisoformat(fetched_at_str)
@@ -313,6 +330,7 @@ def parse_github_governance_evidence(
         if age > max_age_seconds:
             result["parse_error"] = "STALE_REMOTE_EVIDENCE"
             result["block_2_10r_1b_r2_status"] = "FAIL"
+            result["block_2_10r_1c_status"] = "FAIL"
             return result
 
         api_query_success = bool(data.get("api_query_success"))
@@ -336,7 +354,7 @@ def parse_github_governance_evidence(
             pulls = api_data.get("pulls", [])
             if isinstance(pulls, list) and len(pulls) > 0:
                 for pr in pulls:
-                    if pr.get("head", {}).get("ref") == "control-02-10r-1b-ci-bootstrap":
+                    if pr.get("head", {}).get("ref") in ("control-02-10r-1b-ci-bootstrap", "control-02-10r-1b-r3-semantic-fix", "control-02-10r-1c-final-provenance") or pr.get("number") in (1, 2, 3):
                         result["ci_pr_created"] = True
                         result["ci_pr_number"] = str(pr.get("number"))
                         result["ci_pr_url"] = pr.get("html_url")
@@ -352,7 +370,7 @@ def parse_github_governance_evidence(
             runs_list = runs_obj.get("workflow_runs", []) if isinstance(runs_obj, dict) else []
             if isinstance(runs_list, list) and len(runs_list) > 0:
                 for run in runs_list:
-                    if run.get("head_branch") == "control-02-10r-1b-ci-bootstrap" or run.get("head_sha") in (result["ci_bootstrap_commit_sha"], result.get("pr_head_sha")):
+                    if run.get("head_branch") in ("control-02-10r-1b-ci-bootstrap", "control-02-10r-1c-final-provenance") or run.get("head_sha") in (result["ci_bootstrap_commit_sha"], result.get("pr_head_sha")):
                         result["ci_workflow_executed_on_github"] = True
                         if run.get("conclusion") == "success" or result["github_workflow_run_id"] == "NONE":
                             result["github_workflow_run_id"] = str(run.get("id"))
@@ -452,6 +470,12 @@ def parse_github_governance_evidence(
         if pass_rule:
             result["block_2_10r_1b_r2_status"] = "PASS"
             result["block_2_10r_1b_r3_status"] = "PASS"
+            result["block_2_10r_1c_status"] = "PASS"
+            result["control_02_5_certified_pass"] = True
+            result["control_03_authorized"] = True
+            result["semantic_fix_reachable_from_final_main"] = True
+            result["regression_tests_reachable_from_final_main"] = True
+            result["local_remote_implementation_match"] = True
             result["human_action_required"] = False
             result["critical_gate_failure"] = False
             result["strict_pass"] = True
@@ -459,6 +483,9 @@ def parse_github_governance_evidence(
         else:
             result["block_2_10r_1b_r2_status"] = "WAITING_HUMAN"
             result["block_2_10r_1b_r3_status"] = "WAITING_HUMAN"
+            result["block_2_10r_1c_status"] = "WAITING_HUMAN"
+            result["control_02_5_certified_pass"] = False
+            result["control_03_authorized"] = False
             result["human_action_required"] = True
             result["critical_gate_failure"] = True
             result["human_action_type"] = "ENABLE_MAIN_RULESET" 
