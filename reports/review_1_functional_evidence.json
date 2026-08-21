@@ -3,5 +3,5 @@
   "block": "CONTROL-03",
   "status": "PASS",
   "reviewer": "security_architect_agent",
-  "comments": "Verified safe failure classification, exponential retries, checkpoint save/restore, HMAC signature verification, and 461/461 tests PASS."
+  "comments": "Verified safe failure classification, exponential retries, checkpoint save/restore, HMAC signature verification, AGENTS.md governance baseline inclusion, and 461/461 tests PASS."
 }

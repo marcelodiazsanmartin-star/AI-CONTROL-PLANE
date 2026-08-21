@@ -3,5 +3,5 @@
   "block": "CONTROL-03",
   "status": "PASS",
   "reviewer": "red_team_auditor_agent",
-  "comments": "Verified rejection of retry storms, corrupt/tampered/stale checkpoints, replay attacks, duplicate execution, audit tampering, and external service mutations."
+  "comments": "Verified rejection of retry storms, corrupt/tampered/stale checkpoints, replay attacks, duplicate execution, audit tampering, non-evidence tree diffs, and external service mutations."
 }
