@@ -797,3 +797,110 @@ def derive_block_2_10r_1c(
         result["human_action_required"] = True
 
     return result
+
+
+def derive_control_03(
+    raw_evidence_file: Path,
+    code_under_test_sha: str = None,
+    test_evidence_sha: str = None,
+    repo_dir: Path = None,
+    reports_dir: Path = None,
+    pre_certification_remote_head_sha: str = None,
+    commit_verification_data: dict = None
+) -> dict:
+    """
+    Canonical governance derivation engine for CONTROL-03 — Recovery Engine.
+    """
+    import subprocess
+    import json
+    import hashlib
+
+    if repo_dir is None:
+        repo_dir = Path(".")
+    if reports_dir is None:
+        reports_dir = Path("reports")
+
+    # 1. Base 1C / 02.5 derivation as mandatory precondition
+    c25_result = derive_block_2_10r_1c(
+        raw_evidence_file,
+        code_under_test_sha=code_under_test_sha,
+        test_evidence_sha=test_evidence_sha,
+        repo_dir=repo_dir,
+        reports_dir=reports_dir,
+        pre_certification_remote_head_sha=pre_certification_remote_head_sha,
+        commit_verification_data=commit_verification_data
+    )
+
+    result = dict(c25_result)
+    result["control_03_status"] = "WAITING_HUMAN"
+    result["precondition_02_5_pass"] = c25_result["control_02_5_certified_pass"]
+    result["external_services_mutated"] = False
+    result["control_04_started"] = False
+
+    # Check recovery_engine.py existence
+    rec_engine_file = repo_dir / "src" / "directive" / "recovery_engine.py"
+    result["recovery_engine_implemented"] = rec_engine_file.exists() and rec_engine_file.stat().st_size > 0
+
+    # Review Evidence Parsing
+    r1_file = reports_dir / "review_1_functional_evidence.json"
+    r2_file = reports_dir / "review_2_adversarial_evidence.json"
+
+    r1_pass = False
+    if r1_file.exists() and r1_file.stat().st_size > 0:
+        try:
+            r1_obj = json.loads(r1_file.read_text(encoding="utf-8"))
+            if r1_obj.get("status") == "PASS" and r1_obj.get("block") == "CONTROL-03":
+                r1_pass = True
+        except Exception:
+            pass
+    result["review_1_functional"] = r1_pass
+
+    r2_pass = False
+    if r2_file.exists() and r2_file.stat().st_size > 0:
+        try:
+            r2_obj = json.loads(r2_file.read_text(encoding="utf-8"))
+            if r2_obj.get("status") == "PASS" and r2_obj.get("block") == "CONTROL-03":
+                r2_pass = True
+        except Exception:
+            pass
+    result["review_2_adversarial"] = r2_pass
+
+    # CONTROL-03 Pass Rule Evaluation
+    c3_pass = (
+        result["precondition_02_5_pass"] and
+        result["recovery_engine_implemented"] and
+        result["main_protection_effective"] and
+        result["remote_ci_pass"] and
+        result["worktree_clean"] and
+        result["worktree_status_filter_count"] == 0 and
+        result["code_freeze_established"] and
+        result["no_self_referential_sha_certification"] and
+        result["test_evidence_commit_only"] and
+        result["non_evidence_diff_count_code_to_evidence"] == 0 and
+        result["non_evidence_diff_count_code_to_final"] == 0 and
+        result["final_non_evidence_tree_match"] and
+        result["final_head_signature_present"] and
+        result["final_head_signature_valid"] and
+        result["final_head_signer_authorized"] and
+        result["post_certification_remote_head_unchanged"] and
+        not result["certification_stale"] and
+        result["review_1_functional"] and
+        result["review_2_adversarial"] and
+        result["code_under_test_reachable_from_final_head"] and
+        result["test_evidence_reachable_from_final_head"] and
+        result["local_tests_failed"] == 0 and
+        result["local_tests_skipped"] == 0 and
+        not result["external_services_mutated"] and
+        not result["control_04_started"]
+    )
+
+    if c3_pass:
+        result["control_03_status"] = "PASS"
+        result["human_action_required"] = False
+        result["critical_gate_failure"] = False
+    else:
+        result["control_03_status"] = "CORRECTION_REQUIRED" if not result["precondition_02_5_pass"] else "FAIL"
+        result["human_action_required"] = True
+        result["critical_gate_failure"] = True
+
+    return result
