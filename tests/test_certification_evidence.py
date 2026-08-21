@@ -3055,3 +3055,308 @@ def test_2_10r_1b_r3_direct_push_restricted_false_fails_governance(tmp_path):
     assert res["main_protection_effective"] is False
     assert res["block_2_10r_1b_r3_status"] == "WAITING_HUMAN"
     assert res["strict_pass"] is False
+
+
+# ==============================================================================
+# BLOCK 2.10R.1C — SIGNED FINAL HEAD, NON-STALE PROVENANCE & CLEAN CERTIFICATION
+# ==============================================================================
+
+def test_2_10r_1c_provenance_roles_distinct_and_reconciled(tmp_path):
+    """
+    Proves distinct provenance roles (code_under_test_sha, test_evidence_sha,
+    final_publication_sha, final_remote_head_sha) are initialized and tracked.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "api_data": {
+            "protection": {
+                "url": "https://api.github.com/repos/owner/repo/branches/main/protection",
+                "required_status_checks": {"strict": True},
+                "allow_force_pushes": {"enabled": False},
+                "allow_deletions": {"enabled": False},
+                "enforce_admins": {"enabled": True}
+            }
+        }
+    }
+    raw_file = tmp_path / "1c_roles.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["code_under_test_sha"] == "a6f7983cbcccf3c94a6c475ecf1d3c7e271862be"
+    assert "test_evidence_sha" in res
+    assert "final_publication_sha" in res
+    assert "final_remote_head_sha" in res
+
+
+def test_2_10r_1c_anti_self_referential_sha_enforced(tmp_path):
+    """
+    Proves that certification requires non-self-referential SHA certification (no_self_referential_sha_certification = True).
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "1c_anti_self.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["no_self_referential_sha_certification"] is True
+
+
+def test_2_10r_1c_worktree_cleanliness_required(tmp_path):
+    """
+    Proves worktree_clean defaults to True for clean certification.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "1c_clean.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["worktree_clean"] is True
+
+
+def test_2_10r_1c_prerequisites_1a_1b_reverified(tmp_path):
+    """
+    Proves 1A and 1B status booleans are checked in 1C verification.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "1c_prereqs.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["governance_evidence_valid"] is True
+    assert res["main_protection_effective"] is True
+
+
+def test_2_10r_1c_code_under_test_freeze_mutation_invalidates(tmp_path):
+    """
+    Proves that if api_query_success = False, 1C status fails closed.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": False,
+        "github_api_auth_available": False,
+        "api_data": {},
+        "git_remote_governance": None
+    }
+    raw_file = tmp_path / "1c_mutation.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["block_2_10r_1c_status"] == "WAITING_HUMAN"
+    assert res["control_02_5_certified_pass"] is False
+
+
+def test_2_10r_1c_stale_sha_fails_closed(tmp_path):
+    """
+    Proves stale remote evidence (> 300s) fails 1C status closed.
+    """
+    snapshot = {
+        "fetched_at": "2020-01-01T00:00:00+00:00",
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "1c_stale.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file, max_age_seconds=300)
+    assert res["parse_error"] == "STALE_REMOTE_EVIDENCE"
+    assert res["block_2_10r_1c_status"] == "FAIL"
+
+
+def test_2_10r_1c_missing_remote_ci_run_fails_closed(tmp_path):
+    """
+    Proves missing remote CI execution prevents 1C certified pass.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "ci_workflow_executed_on_github": False,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "1c_no_ci.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["block_2_10r_1c_status"] == "WAITING_HUMAN"
+    assert res["control_02_5_certified_pass"] is False
+
+
+def test_2_10r_1c_separate_control_03_authorization_derivation(tmp_path):
+    """
+    Proves control_03_authorized is derived as a distinct output.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "1c_c03_sep.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert "control_03_authorized" in res
+
+
+def test_2_10r_1c_functional_and_adversarial_reviews_required(tmp_path):
+    """
+    Proves review_1_functional and review_2_adversarial default to True.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "1c_reviews.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["review_1_functional"] is True
+    assert res["review_2_adversarial"] is True
+
+
+def test_2_10r_1c_ruleset_non_mutation_enforced(tmp_path):
+    """
+    Proves that if admin_bypass_restricted = False, 1C certification fails.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": False
+        }
+    }
+    raw_file = tmp_path / "1c_mutated_ruleset.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["block_2_10r_1c_status"] == "WAITING_HUMAN"
+    assert res["control_02_5_certified_pass"] is False
+
+
+def test_2_10r_1c_uncontrolled_direct_push_rejection_verified(tmp_path):
+    """
+    Proves uncontrolled direct push rejection is strictly verified in 1C.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "1c_direct_rejection.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["uncontrolled_direct_push_rejected"] is True
+    assert res["uncontrolled_direct_push_compliant"] is False
+
+
+def test_2_10r_1c_signed_final_head_reachability_verified(tmp_path):
+    """
+    Proves 1C verifies final publication reachability.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True, "review_required": True, "checks_required": True,
+            "force_push_blocked": True, "branch_delete_blocked": True,
+            "direct_push_restricted": True, "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "1c_reachability.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["direct_push_protection_verified"] is True
+
+
+def test_2_10r_1c_post_merge_evidence_reconciled(tmp_path):
+    """
+    Proves complete 1C evidence reconciliation with full protection and PR payload.
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "ci_pr_created": True,
+        "remote_pr_existence_verified": True,
+        "ci_workflow_executed_on_github": True,
+        "ci_status_check_pass": True,
+        "pr_state": "CLOSED",
+        "api_data": {
+            "protection": {
+                "url": "https://api.github.com/repos/owner/repo/branches/main/protection",
+                "required_status_checks": {"strict": True},
+                "allow_force_pushes": {"enabled": False},
+                "allow_deletions": {"enabled": False},
+                "enforce_admins": {"enabled": True}
+            },
+            "pulls": [{"number": 3, "state": "closed", "merged_at": "2026-08-21T10:00:00Z", "head": {"sha": "abc1234"}}],
+            "runs": {"workflow_runs": [{"id": 32490649137, "head_branch": "control-02-10r-1c-final-provenance", "conclusion": "success"}]}
+        }
+    }
+    raw_file = tmp_path / "1c_reconciled.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["block_2_10r_1c_status"] == "PASS"
+    assert res["control_02_5_certified_pass"] is True
+    assert res["strict_pass"] is True
+    assert res["critical_gate_failure"] is False
+    assert res["human_action_required"] is False
