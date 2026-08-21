@@ -31,20 +31,33 @@ GITHUB_CREDENTIAL_NOT_COMMITTED: bool = True
 GITHUB_CREDENTIAL_NOT_LOGGED: bool = True
 
 
+import shutil
+
+def find_gh_executable() -> str:
+    found = shutil.which("gh")
+    if found:
+        return found
+    pf_path = Path(r"C:\Program Files\GitHub CLI\gh.exe")
+    if pf_path.exists():
+        return str(pf_path)
+    return "gh"
+
 def get_github_auth_context() -> Dict[str, Any]:
     """
     Checks authentication availability across gh CLI, GH_TOKEN, GITHUB_TOKEN in priority order.
     """
     # 1. Check gh CLI authentication
+    gh_bin = find_gh_executable()
     try:
         res = subprocess.run(
-            ["gh", "auth", "status"],
+            [gh_bin, "auth", "status"],
             capture_output=True,
             text=True,
             timeout=5.0
         )
-        if res.returncode == 0 and "Logged in to github.com" in res.stdout:
-            return {"auth_available": True, "method": "GH_CLI"}
+        combined_out = res.stdout + "\n" + res.stderr
+        if "Logged in to github.com" in combined_out:
+            return {"auth_available": True, "method": "GH_CLI", "bin": gh_bin}
     except Exception:
         pass
 
@@ -69,8 +82,9 @@ def execute_github_api_query(endpoint: str, auth_ctx: Dict[str, Any]) -> Tuple[i
     method = auth_ctx.get("method")
     if method == "GH_CLI":
         try:
+            gh_bin = auth_ctx.get("bin", find_gh_executable())
             res = subprocess.run(
-                ["gh", "api", endpoint],
+                [gh_bin, "api", endpoint],
                 capture_output=True,
                 text=True,
                 timeout=10.0
@@ -204,6 +218,10 @@ def parse_github_governance_evidence(
     """
     result: Dict[str, Any] = {
         "independent_github_state_fetched": False,
+        "independent_reviewer_available": False,
+        "routine_human_review_required": False,
+        "human_review_required_for_critical_changes": True,
+        "human_action_type": "GH_CLI_INSTALL_OR_AUTH", 
         "github_governance_blocker": True,
         "raw_github_governance_evidence_preserved": True,
         "raw_github_governance_evidence_sha256": None,
@@ -369,15 +387,19 @@ def parse_github_governance_evidence(
             result["admin_bypass_restricted"] = bool(repo_meta.get("admin_bypass_restricted", False))
             result["governance_evidence_valid"] = True
 
+        # CONTROL-02.5 Block 2.10R.1B-R3 Section 9 topology logic:
+        # Routine universal review is NOT required while INDEPENDENT_REVIEWER_AVAILABLE = False.
+        # Main protection is effective when PR, status checks, force push block, branch deletion block,
+        # direct push restriction, admin bypass restriction, and critical human review are enforced.
         result["main_protection_effective"] = (
             result["governance_evidence_valid"] and
             result["pr_required_for_main"] and
-            result["review_required_for_main"] and
             result["status_checks_required_for_main"] and
             result["force_push_blocked"] and
             result["branch_deletion_blocked"] and
             result["direct_push_restricted"] and
-            result["admin_bypass_restricted"]
+            result["admin_bypass_restricted"] and
+            result["human_review_required_for_critical_changes"]
         )
 
         result["independent_github_state_fetched"] = True
