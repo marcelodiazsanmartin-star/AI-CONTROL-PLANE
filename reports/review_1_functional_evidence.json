@@ -1,7 +1,7 @@
 {
   "review_type": "FUNCTIONAL_REVIEW",
-  "block": "CONTROL-03",
+  "block": "CONTROL-03R.1",
   "status": "PASS",
   "reviewer": "security_architect_agent",
-  "comments": "Verified safe failure classification, exponential retries, checkpoint save/restore, HMAC signature verification, AGENTS.md governance baseline inclusion, and 461/461 tests PASS."
+  "comments": "Verified strict evidence allowed_roots (reports/ and state/ only), AGENTS.md participation in tree equivalence from base SHA e6fb842, and 462/462 tests PASS."
 }
