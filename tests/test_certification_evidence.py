@@ -2993,3 +2993,65 @@ def test_2_10r_1a_real_unprotected_response_derives_fail(tmp_path):
     assert res["main_protection_effective"] is False
     assert res["github_governance_blocker"] is True
     assert res["human_action_required"] is True
+
+
+def test_2_10r_1b_r3_direct_push_restricted_true_derives_uncontrolled_push_rejected(tmp_path):
+    """
+    Proves that DIRECT_PUSH_RESTRICTED = TRUE derives:
+    UNCONTROLLED_DIRECT_PUSH_COMPLIANT = FALSE
+    UNCONTROLLED_DIRECT_PUSH_REJECTED = TRUE
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "api_data": {
+            "protection": {
+                "url": "https://api.github.com/repos/owner/repo/branches/main/protection",
+                "required_status_checks": {"strict": True},
+                "allow_force_pushes": {"enabled": False},
+                "allow_deletions": {"enabled": False},
+                "enforce_admins": {"enabled": True}
+            }
+        }
+    }
+    raw_file = tmp_path / "direct_push_restricted.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["direct_push_restricted"] is True
+    assert res["direct_push_protection_verified"] is True
+    assert res["uncontrolled_direct_push_compliant"] is False
+    assert res["uncontrolled_direct_push_rejected"] is True
+
+
+def test_2_10r_1b_r3_direct_push_restricted_false_fails_governance(tmp_path):
+    """
+    Proves that DIRECT_PUSH_RESTRICTED = FALSE causes governance certification to FAIL
+    (main_protection_effective = False, pass_rule = False, uncontrolled_direct_push_compliant = True).
+    """
+    snapshot = {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "api_query_success": True,
+        "github_api_auth_available": True,
+        "git_remote_governance": {
+            "pr_required": True,
+            "review_required": True,
+            "checks_required": True,
+            "force_push_blocked": True,
+            "branch_delete_blocked": True,
+            "direct_push_restricted": False,  # Direct push NOT restricted
+            "admin_bypass_restricted": True
+        }
+    }
+    raw_file = tmp_path / "direct_push_unrestricted.json"
+    raw_file.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    res = parse_github_governance_evidence(raw_file)
+    assert res["direct_push_restricted"] is False
+    assert res["direct_push_protection_verified"] is False
+    assert res["uncontrolled_direct_push_compliant"] is True
+    assert res["uncontrolled_direct_push_rejected"] is False
+    assert res["main_protection_effective"] is False
+    assert res["block_2_10r_1b_r3_status"] == "WAITING_HUMAN"
+    assert res["strict_pass"] is False

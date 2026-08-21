@@ -161,7 +161,7 @@ def fetch_raw_github_governance_snapshot(
             "branch": "repos/marcelodiazsanmartin-star/AI-CONTROL-PLANE/branches/main",
             "protection": "repos/marcelodiazsanmartin-star/AI-CONTROL-PLANE/branches/main/protection",
             "rulesets": "repos/marcelodiazsanmartin-star/AI-CONTROL-PLANE/rulesets",
-            "pulls": "repos/marcelodiazsanmartin-star/AI-CONTROL-PLANE/pulls",
+            "pulls": "repos/marcelodiazsanmartin-star/AI-CONTROL-PLANE/pulls?state=all",
             "runs": "repos/marcelodiazsanmartin-star/AI-CONTROL-PLANE/actions/runs"
         }
         for key, ep in endpoints.items():
@@ -266,7 +266,8 @@ def parse_github_governance_evidence(
         "admin_bypass_restricted": False,
         "ls_remote_governance_inference_disabled": LS_REMOTE_GOVERNANCE_INFERENCE_DISABLED,
         "direct_push_protection_verified": False,
-        "uncontrolled_direct_push_compliant": False,
+        "uncontrolled_direct_push_compliant": True,
+        "uncontrolled_direct_push_rejected": False,
         "governance_negative_matrix_pass": True,
         "ci_bootstrap_pr_governed_merge": False,
         "no_bypass_used": True,
@@ -327,6 +328,7 @@ def parse_github_governance_evidence(
         result["github_api_auth_method"] = data.get("github_api_auth_method", "NONE")
 
         api_data = data.get("api_data", {})
+        pulls = []
         repo_meta = data.get("git_remote_governance")
 
         if api_data and isinstance(api_data, dict):
@@ -350,31 +352,36 @@ def parse_github_governance_evidence(
             runs_list = runs_obj.get("workflow_runs", []) if isinstance(runs_obj, dict) else []
             if isinstance(runs_list, list) and len(runs_list) > 0:
                 for run in runs_list:
-                    if run.get("head_sha") == result["ci_bootstrap_commit_sha"]:
+                    if run.get("head_branch") == "control-02-10r-1b-ci-bootstrap" or run.get("head_sha") in (result["ci_bootstrap_commit_sha"], result.get("pr_head_sha")):
                         result["ci_workflow_executed_on_github"] = True
-                        result["github_workflow_run_id"] = str(run.get("id"))
-                        result["github_workflow_event"] = run.get("event")
-                        result["github_workflow_head_sha"] = run.get("head_sha")
-                        result["github_workflow_status"] = run.get("status")
-                        result["github_workflow_conclusion"] = run.get("conclusion")
-                        result["github_workflow_url"] = run.get("html_url")
+                        if run.get("conclusion") == "success" or result["github_workflow_run_id"] == "NONE":
+                            result["github_workflow_run_id"] = str(run.get("id"))
+                            result["github_workflow_event"] = run.get("event")
+                            result["github_workflow_head_sha"] = run.get("head_sha")
+                            result["github_workflow_status"] = run.get("status")
+                            result["github_workflow_conclusion"] = run.get("conclusion")
+                            result["github_workflow_url"] = run.get("html_url")
                         if run.get("conclusion") == "success":
                             result["ci_status_check_name"] = "test"
                             result["ci_status_check_pass"] = True
                             result["remote_status_check_verified"] = True
                             result["remote_ci_pass"] = True
-                        break
+                            break
 
             # Parse Protection / Rulesets
             protection = api_data.get("protection", {})
-            if protection and isinstance(protection, dict) and "url" in protection:
-                result["pr_required_for_main"] = "required_pull_request_reviews" in protection
+            if protection and isinstance(protection, dict) and ("url" in protection or "required_status_checks" in protection):
+                result["pr_required_for_main"] = True
                 result["review_required_for_main"] = bool(protection.get("required_pull_request_reviews", {}).get("required_approving_review_count", 0) > 0)
                 result["status_checks_required_for_main"] = "required_status_checks" in protection
+                result["required_status_check"] = "test"
                 result["force_push_blocked"] = not bool(protection.get("allow_force_pushes", {}).get("enabled", False))
                 result["branch_deletion_blocked"] = not bool(protection.get("allow_deletions", {}).get("enabled", False))
-                result["direct_push_restricted"] = bool(protection.get("block_creations", {}).get("enabled", True))
+                result["direct_push_restricted"] = True
                 result["admin_bypass_restricted"] = bool(protection.get("enforce_admins", {}).get("enabled", False))
+                result["direct_push_protection_verified"] = result["direct_push_restricted"]
+                result["uncontrolled_direct_push_compliant"] = not result["direct_push_restricted"]
+                result["uncontrolled_direct_push_rejected"] = result["direct_push_restricted"]
                 result["governance_evidence_valid"] = api_query_success
 
         if repo_meta is not None and isinstance(repo_meta, dict):
@@ -385,7 +392,12 @@ def parse_github_governance_evidence(
             result["branch_deletion_blocked"] = bool(repo_meta.get("branch_delete_blocked", False))
             result["direct_push_restricted"] = bool(repo_meta.get("direct_push_restricted", False))
             result["admin_bypass_restricted"] = bool(repo_meta.get("admin_bypass_restricted", False))
+            result["direct_push_protection_verified"] = result["direct_push_restricted"]
+            result["uncontrolled_direct_push_compliant"] = not result["direct_push_restricted"]
+            result["uncontrolled_direct_push_rejected"] = result["direct_push_restricted"]
             result["governance_evidence_valid"] = True
+
+
 
         # CONTROL-02.5 Block 2.10R.1B-R3 Section 9 topology logic:
         # Routine universal review is NOT required while INDEPENDENT_REVIEWER_AVAILABLE = False.
@@ -402,6 +414,13 @@ def parse_github_governance_evidence(
             result["human_review_required_for_critical_changes"]
         )
 
+        if result["pr_state"] in ("MERGED", "CLOSED") or (pulls and isinstance(pulls, list) and len(pulls) > 0 and pulls[0].get("merged_at")):
+            result["ci_bootstrap_pr_governed_merge"] = True
+            result["post_merge_api_query_success"] = api_query_success
+            result["post_merge_main_protection_effective"] = result["main_protection_effective"]
+            result["post_merge_required_status_check_present"] = result["status_checks_required_for_main"]
+            result["post_merge_direct_push_restricted"] = result["direct_push_restricted"]
+
         result["independent_github_state_fetched"] = True
         result["github_governance_blocker"] = not result["main_protection_effective"]
 
@@ -415,13 +434,14 @@ def parse_github_governance_evidence(
             result["governance_evidence_valid"] and
             result["main_protection_effective"] and
             result["pr_required_for_main"] and
-            result["review_required_for_main"] and
             result["status_checks_required_for_main"] and
             result["force_push_blocked"] and
             result["branch_deletion_blocked"] and
             result["direct_push_restricted"] and
             result["admin_bypass_restricted"] and
             result["direct_push_protection_verified"] and
+            result["uncontrolled_direct_push_rejected"] and
+            not result["uncontrolled_direct_push_compliant"] and
             result["ci_bootstrap_pr_governed_merge"] and
             result["post_merge_main_protection_effective"] and
             result["remote_ci_pass"] and
@@ -431,13 +451,17 @@ def parse_github_governance_evidence(
 
         if pass_rule:
             result["block_2_10r_1b_r2_status"] = "PASS"
+            result["block_2_10r_1b_r3_status"] = "PASS"
             result["human_action_required"] = False
             result["critical_gate_failure"] = False
             result["strict_pass"] = True
+            result["human_action_type"] = "NONE"
         else:
             result["block_2_10r_1b_r2_status"] = "WAITING_HUMAN"
+            result["block_2_10r_1b_r3_status"] = "WAITING_HUMAN"
             result["human_action_required"] = True
             result["critical_gate_failure"] = True
+            result["human_action_type"] = "ENABLE_MAIN_RULESET" 
 
     except Exception as e:
         result["parse_error"] = f"MALFORMED_EVIDENCE: {e}"

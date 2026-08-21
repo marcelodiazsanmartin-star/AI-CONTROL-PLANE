@@ -141,6 +141,7 @@ class DurableExecutionQueue:
 
         # 1. WRITE -> FLUSH -> FSYNC -> CLOSE
         try:
+            self.queue_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.queue_file, "a", encoding="utf-8") as f:
                 f.write(record_json_str)
                 f.flush()
