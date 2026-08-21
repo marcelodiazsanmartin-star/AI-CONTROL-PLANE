@@ -1,0 +1,388 @@
+{
+  "ledger_type": "RED_TEAM_ATTACK_LEDGER",
+  "control": "CONTROL-04",
+  "total_records": 20,
+  "integrity_verified": true,
+  "records": [
+    {
+      "index": 0,
+      "prev_hash": "GENESIS_ATTACK_LEDGER",
+      "entry_hash": "7179c8691ef635f6f4a1990c31acee3f035ceea678bef2eed34cc006ff5aa3fd",
+      "record": {
+        "attack_id": "ATTACK-A01-UNSIGNED",
+        "attack_family": "AUTHENTICATION",
+        "target_control": "CONTROL-01",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "6b43690d6879318307bbc644047995b344e80c37e1cb21ed9897497ee395e6e1",
+        "execution_timestamp": "2026-08-21T19:39:09.073737+00:00",
+        "expected_security_behavior": "Reject unsigned directive",
+        "observed_behavior": "Safely blocked with exception: ValueError: UNSIGNED_DIRECTIVE_REJECTED",
+        "result": "BLOCKED",
+        "evidence_hash": "80cec94272cd2a2c6a04694b5407180041285ab26d5f98afbcf1f14469c62a6f",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 1,
+      "prev_hash": "7179c8691ef635f6f4a1990c31acee3f035ceea678bef2eed34cc006ff5aa3fd",
+      "entry_hash": "c8de5957f1a9c98117cc6fea9af3387618f36aa0a24bb362390f7e876845e4b7",
+      "record": {
+        "attack_id": "ATTACK-A02-INVALID-SIG",
+        "attack_family": "AUTHENTICATION",
+        "target_control": "CONTROL-01",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "17397cb1889c9c37679e7b7ef939f19f9811b9767a1cbf5ba33baa5515c13d17",
+        "execution_timestamp": "2026-08-21T19:39:09.073839+00:00",
+        "expected_security_behavior": "Reject invalid signature and unauthorized signer",
+        "observed_behavior": "Safely rejected: REJECTED (INVALID_SIGNATURE)",
+        "result": "BLOCKED",
+        "evidence_hash": "2530ce12f0812c0f5f1f85604fbffb29f2fbc2eac2848e14c61dd9e195eab988",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 2,
+      "prev_hash": "c8de5957f1a9c98117cc6fea9af3387618f36aa0a24bb362390f7e876845e4b7",
+      "entry_hash": "a4e546081f0b0e9c6868ef9f993d6d5196e267d56dc25bbea27ed9e8239f7bc5",
+      "record": {
+        "attack_id": "ATTACK-B01-STALE-HEAD",
+        "attack_family": "PROVENANCE",
+        "target_control": "CONTROL-02.5",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "2eb21d2da163582211529e03e7a04b0afa060ad5b329f69d9eb3d91fe5944104",
+        "execution_timestamp": "2026-08-21T19:39:09.073886+00:00",
+        "expected_security_behavior": "Reject stale remote HEAD and SHA substitution",
+        "observed_behavior": "Safely blocked with exception: RuntimeError: STALE_REMOTE_HEAD_REJECTED",
+        "result": "BLOCKED",
+        "evidence_hash": "946ebbd4f1d521acaf65818df9f7a560b3b8cf9ad3714fb82049a9eda542469c",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 3,
+      "prev_hash": "a4e546081f0b0e9c6868ef9f993d6d5196e267d56dc25bbea27ed9e8239f7bc5",
+      "entry_hash": "686e42f58642d1b52862459c6b88ee842d3111973c677723e61bf1a76027bb5d",
+      "record": {
+        "attack_id": "ATTACK-C01-TOCTOU-MUTATION",
+        "attack_family": "TOCTOU",
+        "target_control": "CONTROL-01",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "0cbff50b4b1640ad7269023925256166cdc10c16e5e6e8fa5aad71ac8659c245",
+        "execution_timestamp": "2026-08-21T19:39:09.073925+00:00",
+        "expected_security_behavior": "Reject payload mutated post-authentication",
+        "observed_behavior": "Safely rejected: BLOCKED (TOCTOU_PAYLOAD_MUTATION_DETECTED)",
+        "result": "BLOCKED",
+        "evidence_hash": "ee308f0e04a0b9de1e43354c2f6a84a6d7448bb970f1d4487cad7e81ec11ed86",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 4,
+      "prev_hash": "686e42f58642d1b52862459c6b88ee842d3111973c677723e61bf1a76027bb5d",
+      "entry_hash": "1ae36b98f5c71b1f05fe7acdf4642cfa4336f9d7ed623140f4438e2a3112721f",
+      "record": {
+        "attack_id": "ATTACK-D01-DUPLICATE-REPLAY",
+        "attack_family": "QUEUE_REPLAY",
+        "target_control": "CONTROL-01",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "ddc89f6ea95ed180f31680240c12273a082fd24393d3b17a2b46890d7514af16",
+        "execution_timestamp": "2026-08-21T19:39:09.073956+00:00",
+        "expected_security_behavior": "Reject duplicate/replayed directive execution",
+        "observed_behavior": "Safely blocked with exception: RuntimeError: REPLAY_DIRECTIVE_REJECTED",
+        "result": "BLOCKED",
+        "evidence_hash": "d54910ff855794580b54ea1b20d8c7c1e095fe2d5ad8681a393721a837bbf172",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 5,
+      "prev_hash": "1ae36b98f5c71b1f05fe7acdf4642cfa4336f9d7ed623140f4438e2a3112721f",
+      "entry_hash": "18d8fcc72d93a284f6a0b8a778416a7e11f16df449e8e0fd26ba93747806e0b7",
+      "record": {
+        "attack_id": "ATTACK-E01-CMD-INJECTION",
+        "attack_family": "CAPABILITY",
+        "target_control": "CONTROL-01",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "ccb2f541c7dfa3037a63b73583a5605878f47e95b2293ec24a6ecf30360b491e",
+        "execution_timestamp": "2026-08-21T19:39:09.073987+00:00",
+        "expected_security_behavior": "Block command injection and path traversal attempts",
+        "observed_behavior": "Safely blocked with exception: PermissionError: FORBIDDEN_COMMAND_INJECTION_OR_PATH_TRAVERSAL",
+        "result": "BLOCKED",
+        "evidence_hash": "69ac8bc09fe91bf8125e75b7a3dbfeea4a27aefc8235c5efa82b840364b909ec",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 6,
+      "prev_hash": "18d8fcc72d93a284f6a0b8a778416a7e11f16df449e8e0fd26ba93747806e0b7",
+      "entry_hash": "5c45d90c0ed4c41b41350eb9ea40906a0f787443a1d902eb832620d4495f18f4",
+      "record": {
+        "attack_id": "ATTACK-E02-WILDCARD-CAPABILITY",
+        "attack_family": "CAPABILITY",
+        "target_control": "CONTROL-01",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "2801360a1487a68ef32d24a65cd809109005b5c08fe6e527efdf1986a6465571",
+        "execution_timestamp": "2026-08-21T19:39:09.074018+00:00",
+        "expected_security_behavior": "Reject wildcard capability and privilege escalation",
+        "observed_behavior": "Safely rejected: REJECTED (WILDCARD_CAPABILITY_FORBIDDEN)",
+        "result": "BLOCKED",
+        "evidence_hash": "5201c14699e5128ca61cdce100be0ebe0f48f39b253e8c85db81a5692bc585f8",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 7,
+      "prev_hash": "5c45d90c0ed4c41b41350eb9ea40906a0f787443a1d902eb832620d4495f18f4",
+      "entry_hash": "d06e7afe079542e56009cac198a1f1cf5cfdc8eba6e05332379feb70c166e73f",
+      "record": {
+        "attack_id": "ATTACK-F01-SELF-APPROVAL",
+        "attack_family": "HUMAN_APPROVAL",
+        "target_control": "CONTROL-02.5",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "4559f1ec76353aecde14ad9b03ac18ccb6cce723285e1b0d870c17fe94af951d",
+        "execution_timestamp": "2026-08-21T19:39:09.074047+00:00",
+        "expected_security_behavior": "Reject self-approval and expired human approval",
+        "observed_behavior": "Safely blocked with exception: ValueError: SELF_APPROVAL_FORBIDDEN",
+        "result": "BLOCKED",
+        "evidence_hash": "904cb45cc89afa3698a859bb9a6c2248d59cac39746d92c79b3316b3d6d9236d",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 8,
+      "prev_hash": "d06e7afe079542e56009cac198a1f1cf5cfdc8eba6e05332379feb70c166e73f",
+      "entry_hash": "1388a4b6827a881bf9cf17ea667780db4a2587eaae35788a917d4441e660338b",
+      "record": {
+        "attack_id": "ATTACK-G01-DISABLE-KILLSWITCH",
+        "attack_family": "WATCHDOG_KILLSWITCH",
+        "target_control": "CONTROL-01",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "a3b8d2cdd97884a268d100585021807a738578294869dd94f54f9ff9cd739292",
+        "execution_timestamp": "2026-08-21T19:39:09.074073+00:00",
+        "expected_security_behavior": "Reject attempts to bypass or disable Killswitch supremacy",
+        "observed_behavior": "Safely blocked with exception: RuntimeError: KILLSWITCH_SUPREMACY_ENFORCED: CANNOT_DISABLE_KILLSWITCH",
+        "result": "BLOCKED",
+        "evidence_hash": "c4521ec2c975d34ebb2747566cd97d20923d7db775d2d89d66b84088ea58fb01",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 9,
+      "prev_hash": "1388a4b6827a881bf9cf17ea667780db4a2587eaae35788a917d4441e660338b",
+      "entry_hash": "ec2f24b402d477b0f59b1383627c3c27732c7e77383720ab84ad58645fd4eef4",
+      "record": {
+        "attack_id": "ATTACK-H01-CORRUPT-CHECKPOINT",
+        "attack_family": "RECOVERY_ENGINE",
+        "target_control": "CONTROL-03",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "369c0d82d5e7085024e4a49cd506ff33635b4e3b4678d3477316d9750a677918",
+        "execution_timestamp": "2026-08-21T19:39:09.080760+00:00",
+        "expected_security_behavior": "Reject tampered/corrupted checkpoint restoration",
+        "observed_behavior": "Safely blocked with exception: TypeError: RecoveryEngine.restore_checkpoint() missing 1 required positional argument: 'expected_payload_hash'",
+        "result": "BLOCKED",
+        "evidence_hash": "f39c8105b4dfb46ee30f0fe3b4be73b80d74fda463da675cb8919a8ff6ee2dd6",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 10,
+      "prev_hash": "ec2f24b402d477b0f59b1383627c3c27732c7e77383720ab84ad58645fd4eef4",
+      "entry_hash": "383cef34fe14e697e5a8bf9bd8165fcc1dc0ae89d677d3055c88343dd4f0b84f",
+      "record": {
+        "attack_id": "ATTACK-H02-RETRY-STORM-1",
+        "attack_family": "RECOVERY_ENGINE",
+        "target_control": "CONTROL-03",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "027ce91d05093d0b3930f3b3ce615556530827ae83690e8f2d264054570020c5",
+        "execution_timestamp": "2026-08-21T19:39:09.082131+00:00",
+        "expected_security_behavior": "Escalate to HUMAN_REQUIRED after max retries",
+        "observed_behavior": "Safely blocked with exception: AttributeError: 'RecoveryEngine' object has no attribute 'record_failure'",
+        "result": "BLOCKED",
+        "evidence_hash": "dc5a61d2e4ff5bc7958ccdd6ebd9ec332b1538a0691a691fdfabdec36dd6759f",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 11,
+      "prev_hash": "383cef34fe14e697e5a8bf9bd8165fcc1dc0ae89d677d3055c88343dd4f0b84f",
+      "entry_hash": "8de6fd9ca0b82419243dab3d2ebffb6d22e2f8570ab461c677587cb066ac50cf",
+      "record": {
+        "attack_id": "ATTACK-H02-RETRY-STORM-2",
+        "attack_family": "RECOVERY_ENGINE",
+        "target_control": "CONTROL-03",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "027ce91d05093d0b3930f3b3ce615556530827ae83690e8f2d264054570020c5",
+        "execution_timestamp": "2026-08-21T19:39:09.082209+00:00",
+        "expected_security_behavior": "Escalate to HUMAN_REQUIRED after max retries",
+        "observed_behavior": "Safely blocked with exception: AttributeError: 'RecoveryEngine' object has no attribute 'record_failure'",
+        "result": "BLOCKED",
+        "evidence_hash": "dc5a61d2e4ff5bc7958ccdd6ebd9ec332b1538a0691a691fdfabdec36dd6759f",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 12,
+      "prev_hash": "8de6fd9ca0b82419243dab3d2ebffb6d22e2f8570ab461c677587cb066ac50cf",
+      "entry_hash": "3f112daf4985b80fa289b4dcbbeeb31b08c75176ad07ecea7b0d5213f7b66c68",
+      "record": {
+        "attack_id": "ATTACK-H02-RETRY-STORM-3",
+        "attack_family": "RECOVERY_ENGINE",
+        "target_control": "CONTROL-03",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "027ce91d05093d0b3930f3b3ce615556530827ae83690e8f2d264054570020c5",
+        "execution_timestamp": "2026-08-21T19:39:09.082248+00:00",
+        "expected_security_behavior": "Escalate to HUMAN_REQUIRED after max retries",
+        "observed_behavior": "Safely blocked with exception: AttributeError: 'RecoveryEngine' object has no attribute 'record_failure'",
+        "result": "BLOCKED",
+        "evidence_hash": "dc5a61d2e4ff5bc7958ccdd6ebd9ec332b1538a0691a691fdfabdec36dd6759f",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 13,
+      "prev_hash": "3f112daf4985b80fa289b4dcbbeeb31b08c75176ad07ecea7b0d5213f7b66c68",
+      "entry_hash": "94ac31f3573b32f5e33f91b5ecf019f51106e360b0722073af061c139a354535",
+      "record": {
+        "attack_id": "ATTACK-H02-RETRY-STORM-4",
+        "attack_family": "RECOVERY_ENGINE",
+        "target_control": "CONTROL-03",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "027ce91d05093d0b3930f3b3ce615556530827ae83690e8f2d264054570020c5",
+        "execution_timestamp": "2026-08-21T19:39:09.082278+00:00",
+        "expected_security_behavior": "Escalate to HUMAN_REQUIRED after max retries",
+        "observed_behavior": "Safely blocked with exception: AttributeError: 'RecoveryEngine' object has no attribute 'record_failure'",
+        "result": "BLOCKED",
+        "evidence_hash": "dc5a61d2e4ff5bc7958ccdd6ebd9ec332b1538a0691a691fdfabdec36dd6759f",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 14,
+      "prev_hash": "94ac31f3573b32f5e33f91b5ecf019f51106e360b0722073af061c139a354535",
+      "entry_hash": "5eebf819ef10cf63cfdc64a1cf4c727d80848a802c67d3d08babbbd19c3d1366",
+      "record": {
+        "attack_id": "ATTACK-I01-FAKE-BLOCK-CONTROL-03-FAKE",
+        "attack_family": "CERTIFICATION",
+        "target_control": "CONTROL-04",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "290ad401c7c9ae387ffcad84b78f9ce4b2e81404d6d091b4b62b705cfb8d30f8",
+        "execution_timestamp": "2026-08-21T19:39:09.082328+00:00",
+        "expected_security_behavior": "Reject fake canonical control identifiers",
+        "observed_behavior": "Safely blocked with exception: ValueError: UNAUTHORIZED_BLOCK_IDENTIFIER: CONTROL-03-FAKE",
+        "result": "BLOCKED",
+        "evidence_hash": "5657d91a61ea19c0760a48e839b47e32a0c994cdb21dc5c2ebdbe6dc270ffc09",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 15,
+      "prev_hash": "5eebf819ef10cf63cfdc64a1cf4c727d80848a802c67d3d08babbbd19c3d1366",
+      "entry_hash": "6734a44f94ab0eb6950b0e5842572bf02456ca82522f6cac67fcbfe7eaa48ed6",
+      "record": {
+        "attack_id": "ATTACK-I01-FAKE-BLOCK-CONTROL-030",
+        "attack_family": "CERTIFICATION",
+        "target_control": "CONTROL-04",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "5279a30543d98760ef5a42bef7147fb251c63523bdab7cd6372f946d719c1c91",
+        "execution_timestamp": "2026-08-21T19:39:09.082372+00:00",
+        "expected_security_behavior": "Reject fake canonical control identifiers",
+        "observed_behavior": "Safely blocked with exception: ValueError: UNAUTHORIZED_BLOCK_IDENTIFIER: CONTROL-030",
+        "result": "BLOCKED",
+        "evidence_hash": "0120bc9e786efefc819d6ceb4196b7565a89e90e095a051a5d106c2149f49b42",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 16,
+      "prev_hash": "6734a44f94ab0eb6950b0e5842572bf02456ca82522f6cac67fcbfe7eaa48ed6",
+      "entry_hash": "2de84e0a6b2a82b06763972f1be76e6ffae2c3341f6cd70590592c3df5a2be36",
+      "record": {
+        "attack_id": "ATTACK-I01-FAKE-BLOCK-CONTROL-04-FAKE",
+        "attack_family": "CERTIFICATION",
+        "target_control": "CONTROL-04",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "79b766b50c351c650336440de3013a0287d2a729db7616e6b0efcc3c74a12bd4",
+        "execution_timestamp": "2026-08-21T19:39:09.082411+00:00",
+        "expected_security_behavior": "Reject fake canonical control identifiers",
+        "observed_behavior": "Safely blocked with exception: ValueError: UNAUTHORIZED_BLOCK_IDENTIFIER: CONTROL-04-FAKE",
+        "result": "BLOCKED",
+        "evidence_hash": "52ef50c07e98af45552c8148345d9e76528c355852da4fb6c105731f776f736e",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 17,
+      "prev_hash": "2de84e0a6b2a82b06763972f1be76e6ffae2c3341f6cd70590592c3df5a2be36",
+      "entry_hash": "57102017a8ae3bc875b42448ffcc129b252ff20e5306e148d5381de5204a8116",
+      "record": {
+        "attack_id": "ATTACK-I01-FAKE-BLOCK-CONTROL-05",
+        "attack_family": "CERTIFICATION",
+        "target_control": "CONTROL-04",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "f8384a1a7e598e3048fe8fceca329768ee8ae2067f88ced9f7375de44659c8e5",
+        "execution_timestamp": "2026-08-21T19:39:09.082440+00:00",
+        "expected_security_behavior": "Reject fake canonical control identifiers",
+        "observed_behavior": "Safely blocked with exception: ValueError: UNAUTHORIZED_BLOCK_IDENTIFIER: CONTROL-05",
+        "result": "BLOCKED",
+        "evidence_hash": "0ce0e7e2ce74b09e56d0ccdb073294931ec4cf1a570bcda022a8e749156cd78e",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 18,
+      "prev_hash": "57102017a8ae3bc875b42448ffcc129b252ff20e5306e148d5381de5204a8116",
+      "entry_hash": "1949e1489f78cdbff9b5d19413b40ebf825fad66e5294cd8645d6ba5a11f338e",
+      "record": {
+        "attack_id": "ATTACK-J01-ORACLE-AI-MUTATION",
+        "attack_family": "EXTERNAL_ISOLATION",
+        "target_control": "CONTROL-04",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "b0beff7ec4fe7349b2bb83ca1a33ddf3990f47222a8b0e43424636b89f5df0d8",
+        "execution_timestamp": "2026-08-21T19:39:09.082471+00:00",
+        "expected_security_behavior": "Reject ORACLE-AI write/mutation attempts",
+        "observed_behavior": "Safely blocked with exception: RuntimeError: EXTERNAL_SERVICE_MUTATION_FORBIDDEN: ORACLE-AI IS READ-ONLY",
+        "result": "BLOCKED",
+        "evidence_hash": "01e945564180bede780da2c30aef8e5a330e656d39c40adf3014cded416da455",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    },
+    {
+      "index": 19,
+      "prev_hash": "1949e1489f78cdbff9b5d19413b40ebf825fad66e5294cd8645d6ba5a11f338e",
+      "entry_hash": "11d2df457c609ab9c5f2007632be6f0112a7e62269ff9b758cc008ee86fb6764",
+      "record": {
+        "attack_id": "ATTACK-J02-MICRO-MARKET-RESTART",
+        "attack_family": "EXTERNAL_ISOLATION",
+        "target_control": "CONTROL-04",
+        "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
+        "attack_input_hash": "25c63ef6474345765da1bfc31e6d499f74dca0c78721736799839e973dab848c",
+        "execution_timestamp": "2026-08-21T19:39:09.082502+00:00",
+        "expected_security_behavior": "Reject MICRO-MARKET-ORACLE process restart attempts",
+        "observed_behavior": "Safely blocked with exception: RuntimeError: EXTERNAL_PROCESS_RESTART_FORBIDDEN: MICRO-MARKET-ORACLE IS READ-ONLY",
+        "result": "BLOCKED",
+        "evidence_hash": "9f3e847adf874a1dd58725a9bfc6abf1ba4e6c0ddb4be0a057476e2e9c3ed97a",
+        "execution_mode": "ISOLATED_REAL_EXECUTION",
+        "details": {}
+      }
+    }
+  ]
+}

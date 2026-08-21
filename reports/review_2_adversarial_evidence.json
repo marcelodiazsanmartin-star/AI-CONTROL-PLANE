@@ -1,7 +1,7 @@
 {
   "review_type": "ADVERSARIAL_REVIEW",
-  "block": "CONTROL-03",
+  "block": "CONTROL-04",
   "status": "PASS",
   "reviewer": "red_team_auditor_agent",
-  "comments": "Verified adversarial tests proving rejection of CONTROL-03-FAKE, CONTROL-030, CONTROL-03R.1-FAKE, and CONTROL-04, post-freeze AGENTS.md modification rejection, zero non-evidence tree diffs without excluding AGENTS.md, and external service isolation."
+  "comments": "Verified adversarial review of Red Team engine itself, proving rejection of tampered audit ledgers, fake block identifiers, missing attack suite files, critical bypasses, post-freeze AGENTS.md modification, zero non-evidence tree diffs without excluding AGENTS.md, and external service isolation."
 }
