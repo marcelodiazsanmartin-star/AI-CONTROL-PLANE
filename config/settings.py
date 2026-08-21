@@ -41,8 +41,8 @@ GIT_TIMEOUT_SECONDS: float = 10.0
 MAX_CLOCK_SKEW_SECONDS: float = 300.0
 
 # Base Workspace Paths
-WORKSPACE_ROOT = Path("c:/Users/VD/Desktop/Antigravity")
-CONTROL_PLANE_ROOT = WORKSPACE_ROOT / "AI-CONTROL-PLANE"
+CONTROL_PLANE_ROOT = Path(__file__).resolve().parent.parent
+WORKSPACE_ROOT = CONTROL_PLANE_ROOT.parent
 
 # Directive Channel Source & Action Rules
 APPROVED_SOURCE_REPOSITORY: str = "AI-CONTROL-PLANE"
