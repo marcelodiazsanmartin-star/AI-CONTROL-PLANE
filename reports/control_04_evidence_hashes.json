@@ -1,0 +1,14 @@
+{
+  "manifest": "CONTROL-04_EVIDENCE_HASHES",
+  "generated_at": "2026-08-23T15:35:17.5702451Z",
+  "algorithm": "SHA-256",
+  "code_under_test_sha": "e810dd7ef58e39718f1539d88af4cb7c4bed93ab",
+  "files": {
+    "reports/junit.xml": "417e3dcb37beb4fc42e209cb81d8c0b8b3f0bdef0cf2f49d2ddf1a9b33c97200",
+    "reports/red_team_attack_ledger.json": "8a0cfd781efdda490aa7933836f4bd9b2412c60a3cdc22527c364a5c876fa6c9",
+    "reports/crypto_test_evidence.json": "873ef0f018cb925e904413521307a579d076754cafde60a271a8afa6a29c8cd7",
+    "reports/review_1_functional_evidence.json": "5db724df9669733520ddee064c26ff5bd5687ed65308087bd46595577d705696",
+    "reports/review_2_adversarial_evidence.json": "2c670ad0b2ff46ef879e1916b0832187f44b9d26e7263b80bf166d0aa3d7dbb2",
+    "reports/provenance_manifest.json": "c5bba60ea7aad4648ae56f393c8a462c3c99ecda2a0ca402854b764cdd9e831b"
+  }
+}

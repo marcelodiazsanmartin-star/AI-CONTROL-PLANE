@@ -2,6 +2,11 @@
   "review_type": "FUNCTIONAL_REVIEW",
   "block": "CONTROL-04",
   "status": "PASS",
-  "reviewer": "security_architect_agent",
-  "comments": "Verified Independent Red Team engine implementation, attack surfaces A through J (20 attacks executed, 20 blocked, 0 bypasses), tamper-evident audit ledger, strict allowed_roots (reports/ and state/ only), AGENTS.md participation in tree equivalence from base SHA 04101f1, and 483/483 tests PASS."
+  "reviewer": "codex_engineering_validation",
+  "generated_at": "2026-08-23T15:35:17.5702451Z",
+  "code_under_test_sha": "e810dd7ef58e39718f1539d88af4cb7c4bed93ab",
+  "tests_passed": 490,
+  "tests_failed": 0,
+  "tests_errors": 0,
+  "comments": "Full deterministic regression executed against the exact CODE_UNDER_TEST_SHA. Red Team result semantics distinguish explicit security rejection, bypass, and harness failure."
 }

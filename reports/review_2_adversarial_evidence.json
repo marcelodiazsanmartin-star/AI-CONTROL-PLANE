@@ -2,6 +2,15 @@
   "review_type": "ADVERSARIAL_REVIEW",
   "block": "CONTROL-04",
   "status": "PASS",
-  "reviewer": "red_team_auditor_agent",
-  "comments": "Verified adversarial review of Red Team engine itself, proving rejection of tampered audit ledgers, fake block identifiers, missing attack suite files, critical bypasses, post-freeze AGENTS.md modification, zero non-evidence tree diffs without excluding AGENTS.md, and external service isolation."
+  "reviewer": "codex_red_team_validation",
+  "generated_at": "2026-08-23T15:35:17.5702451Z",
+  "code_under_test_sha": "e810dd7ef58e39718f1539d88af4cb7c4bed93ab",
+  "attacks_executed": 20,
+  "attacks_blocked": 20,
+  "bypasses": 0,
+  "harness_errors": 0,
+  "attack_h01_result": "BLOCKED",
+  "attack_h01_security_reason": "CHECKPOINT_SIGNATURE_INVALID",
+  "ledger_integrity_verified": true,
+  "comments": "All 20 CONTROL-04 attacks exercised explicit security mechanisms. Historical H01 TypeError and H02 AttributeError false positives were eliminated."
 }

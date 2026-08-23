@@ -1,5 +1,17 @@
 {
-  "manifest": "CONTROL-04 Independent Red Team Provenance Manifest",
-  "code_under_test_sha": "4b95691fdc57f6a9434025653ce821b3ec3948f0",
-  "base_sha": "04101f155d7c9916969b182afd6092e0ae3e2262"
+  "manifest": "CONTROL-04 Baseline Closure Remediation Provenance Manifest",
+  "generated_at": "2026-08-23T15:35:17.5702451Z",
+  "base_sha": "d721dc310ed6907dffaed1556c595ed6452389a5",
+  "code_under_test_sha": "e810dd7ef58e39718f1539d88af4cb7c4bed93ab",
+  "test_evidence_parent_sha": "e810dd7ef58e39718f1539d88af4cb7c4bed93ab",
+  "test_command": "python -m pytest tests/ -q --junitxml=reports/junit.xml",
+  "tests_passed": 490,
+  "tests_failed": 0,
+  "tests_errors": 0,
+  "red_team_attacks_executed": 20,
+  "red_team_attacks_blocked": 20,
+  "red_team_bypasses": 0,
+  "red_team_harness_errors": 0,
+  "attack_h01_security_reason": "CHECKPOINT_SIGNATURE_INVALID",
+  "test_evidence_sha_note": "The containing evidence commit SHA is recorded and verified externally after commit creation to avoid self-reference."
 }
