@@ -231,9 +231,17 @@ def test_attack_family_h_recovery_engine_corrupt_checkpoint(red_team, tmp_path):
     )
 
     def target_fn(payload):
-        restored = rec_engine.restore_checkpoint(tampered_chk, payload["expected_payload"])
+        # Compute expected payload hash from the expected payload dict
+        import json, hashlib
+        expected_payload = payload["expected_payload"]
+        expected_payload_hash = hashlib.sha256(json.dumps(expected_payload, sort_keys=True).encode()).hexdigest()
+        restored, status = rec_engine.restore_checkpoint(
+            tampered_chk.directive_id,
+            tampered_chk.attempt_count,
+            expected_payload_hash,
+        )
         if restored is None:
-            return {"status": "BLOCKED", "error": "CORRUPT_CHECKPOINT_REJECTED"}
+            return {"status": "BLOCKED", "error": status}
 
     res = red_team.execute_attack(
         attack_id="ATTACK-H01-CORRUPT-CHECKPOINT",
@@ -258,8 +266,8 @@ def test_attack_family_h_recovery_loop_and_retry_storm(red_team, tmp_path):
         if res_state.recovery_state == RecoveryState.HUMAN_REQUIRED:
             raise RuntimeError("RETRY_STORM_ESCALATED_TO_HUMAN_REQUIRED")
 
-    # Simulate 4 consecutive failures
-    for i in range(4):
+    # Simulate 5 consecutive failures to trigger escalation
+    for i in range(5):
         res = red_team.execute_attack(
             attack_id=f"ATTACK-H02-RETRY-STORM-{i+1}",
             attack_family=AttackFamily.RECOVERY_ENGINE,

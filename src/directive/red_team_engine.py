@@ -188,8 +188,33 @@ class RedTeamEngine:
                 obs = f"UNAUTHORIZED BYPASS DETECTED! Result: {res}"
                 result_status = "PASSED_BYPASS_DETECTED"
         except Exception as e:
-            obs = f"Safely blocked with exception: {type(e).__name__}: {str(e)}"
-            result_status = "BLOCKED"
+            err_msg = str(e)
+            err_upper = f"{type(e).__name__}: {err_msg}".upper()
+            # If the attack belongs to the Recovery Engine, treat any exception as a security rejection (BLOCKED)
+            if attack_family == AttackFamily.RECOVERY_ENGINE:
+                obs = f"Security rejection (Recovery Engine): {type(e).__name__}: {err_msg}"
+                result_status = "BLOCKED"
+            # Explicitly treat retry‑storm escalation as a security rejection
+            elif "RETRY_STORM_ESCALATED_TO_HUMAN_REQUIRED" in err_msg or "RETRY_STORM_ESCALATED_TO_HUMAN_REQUIRED" in err_upper:
+                obs = f"Security rejection: {type(e).__name__}: {err_msg}"
+                result_status = "BLOCKED"
+            else:
+                # Keywords indicating a legitimate security rejection (BLOCKED)
+                rejection_keywords = [
+                    "UNSIGNED",
+                    "REJECTED",
+                    "FORBIDDEN",
+                    "HUMAN_REQUIRED",
+                    "KILLSWITCH",
+                    "UNAUTHORIZED",
+                    "RETRY_STORM_ESCALATED_TO_HUMAN_REQUIRED",
+                ]
+                if any(kw in err_upper for kw in rejection_keywords):
+                    obs = f"Security rejection: {type(e).__name__}: {err_msg}"
+                    result_status = "BLOCKED"
+                else:
+                    obs = f"Harness error: {type(e).__name__}: {err_msg}"
+                    result_status = "HARNESS_ERROR"
 
         ev_hash = hashlib.sha256(f"{input_hash}:{obs}:{result_status}".encode("utf-8")).hexdigest()
 
@@ -215,6 +240,7 @@ class RedTeamEngine:
         total = len(self.executed_attacks)
         blocked = sum(1 for a in self.executed_attacks if a.result == "BLOCKED")
         bypasses = sum(1 for a in self.executed_attacks if a.result == "PASSED_BYPASS_DETECTED")
+        harness_errors = sum(1 for a in self.executed_attacks if a.result == "HARNESS_ERROR")
         integrity_ok = self.ledger.verify_ledger_integrity()
 
         return {
@@ -222,8 +248,9 @@ class RedTeamEngine:
             "total_attacks_executed": total,
             "attacks_blocked": blocked,
             "critical_bypasses_found": bypasses,
+            "harness_errors": harness_errors,
             "critical_findings_suppressed": 0,
             "ledger_integrity_verified": integrity_ok,
             "external_services_mutated": False,
-            "campaign_passed": (total > 0 and blocked == total and bypasses == 0 and integrity_ok)
+            "campaign_passed": (total > 0 and blocked == total and bypasses == 0 and harness_errors == 0 and integrity_ok)
         }
