@@ -4000,3 +4000,37 @@ def test_derive_control_04_critical_bypasses_or_tampered_ledger_fails(tmp_path):
     assert res["control_04_status"] in ("FAIL", "CORRECTION_REQUIRED")
     assert res["critical_bypasses_found"] > 0
     assert res["critical_gate_failure"] is True
+
+
+def test_derive_control_04_harness_error_fails_campaign(tmp_path):
+    from src.directive.github_governance_truth import derive_control_04
+
+    src_dir = tmp_path / "src" / "directive"
+    src_dir.mkdir(parents=True)
+    (src_dir / "red_team_engine.py").write_text("# fixture", encoding="utf-8")
+    test_dir = tmp_path / "tests"
+    test_dir.mkdir()
+    (test_dir / "test_red_team_engine.py").write_text("# fixture", encoding="utf-8")
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    for name, review_type in (("review_1_functional_evidence.json", "FUNCTIONAL_REVIEW"),
+                              ("review_2_adversarial_evidence.json", "ADVERSARIAL_REVIEW")):
+        (reports_dir / name).write_text(json.dumps({
+            "review_type": review_type, "block": "CONTROL-04", "status": "PASS"
+        }), encoding="utf-8")
+    records = [{"record": {"result": "BLOCKED"}} for _ in range(15)]
+    records[0] = {"record": {"result": "HARNESS_ERROR"}}
+    (reports_dir / "red_team_attack_ledger.json").write_text(json.dumps({
+        "ledger_type": "RED_TEAM_ATTACK_LEDGER", "integrity_verified": True,
+        "records": records,
+    }), encoding="utf-8")
+    raw_file = tmp_path / "raw.json"
+    raw_file.write_text(json.dumps({"fetched_at": datetime.now(timezone.utc).isoformat()}), encoding="utf-8")
+
+    result = derive_control_04(raw_file, code_under_test_sha="1" * 40,
+                               test_evidence_sha="2" * 40, repo_dir=tmp_path,
+                               reports_dir=reports_dir)
+
+    assert result["red_team_harness_errors"] == 1
+    assert result["red_team_attack_campaign_executed"] is False
+    assert result["control_04_status"] == "CORRECTION_REQUIRED"

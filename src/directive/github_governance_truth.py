@@ -975,6 +975,7 @@ def derive_control_04(
     total_attacks = 0
     attacks_blocked = 0
     bypasses_found = 999
+    harness_errors = 999
     ledger_verified = False
 
     if ledger_file.exists() and ledger_file.stat().st_size > 0:
@@ -984,8 +985,10 @@ def derive_control_04(
             total_attacks = len(records)
             attacks_blocked = sum(1 for r in records if r.get("record", {}).get("result") == "BLOCKED")
             bypasses_found = sum(1 for r in records if r.get("record", {}).get("result") == "PASSED_BYPASS_DETECTED")
+            harness_errors = sum(1 for r in records if r.get("record", {}).get("result") == "HARNESS_ERROR")
             ledger_verified = l_data.get("integrity_verified", False)
-            if total_attacks >= 15 and attacks_blocked == total_attacks and bypasses_found == 0 and ledger_verified:
+            if (total_attacks >= 15 and attacks_blocked == total_attacks
+                    and bypasses_found == 0 and harness_errors == 0 and ledger_verified):
                 campaign_executed = True
         except Exception:
             pass
@@ -1032,6 +1035,7 @@ def derive_control_04(
         red_team_implemented and
         campaign_executed and
         (bypasses_found == 0) and
+        (harness_errors == 0) and
         r1_pass and
         r2_pass and
         worktree_clean and
@@ -1055,6 +1059,7 @@ def derive_control_04(
         "total_attacks_executed": total_attacks,
         "attacks_blocked": attacks_blocked,
         "critical_bypasses_found": bypasses_found,
+        "red_team_harness_errors": harness_errors,
         "critical_findings_suppressed": 0,
         "external_services_mutated": False,
         "control_05_started": False,
