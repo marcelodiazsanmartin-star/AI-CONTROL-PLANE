@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src http://127.0.0.1:8000; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>AI Control Tower</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">PRIVATE OPERATIONS CONSOLE · PHASE 0</p>
+      <h1>AI CONTROL TOWER</h1>
+    </div>
+    <div class="header-meta">
+      <span class="badge safe">READ ONLY</span>
+      <button id="theme" type="button" aria-label="Toggle color theme">◐</button>
+      <span id="clock">—</span>
+    </div>
+  </header>
+  <main>
+    <section id="mode" class="mode">DATA MODE: LOADING</section>
+    <section id="connection" class="connection">Connecting to dashboard API…</section>
+    <section id="summary" class="summary" aria-label="Global summary"></section>
+
+    <div class="section-title"><h2>PROJECTS</h2><span>Weighted truth · no AI estimates</span></div>
+    <section id="projects" class="projects"></section>
+
+    <div class="lower">
+      <section><div class="section-title"><h2>AGENTS</h2></div><div id="agents" class="panel"></div></section>
+      <section><div class="section-title"><h2>TASKS & BLOCKERS</h2></div><div id="tasks" class="panel"></div></section>
+    </div>
+    <div class="lower">
+      <section><div class="section-title"><h2>ALERTS</h2></div><div id="alerts" class="panel"></div></section>
+      <section><div class="section-title"><h2>APPROVALS</h2></div><div id="approvals" class="panel"></div></section>
+    </div>
+
+    <section>
+      <div class="section-title"><h2>EVIDENCE TIMELINE</h2><span>Source-labelled evidence</span></div>
+      <div id="timeline" class="timeline"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
