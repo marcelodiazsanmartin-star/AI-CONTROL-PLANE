@@ -1368,7 +1368,7 @@ def test_ct04_r2_product_path_timeout_isolation_and_liveness() -> None:
 
 
 def test_ct04_r2_synthetic_pass_evidence_fails_closed() -> None:
-    """Verify that placeholder or unverified evidence provenance cannot produce effective PASS."""
+    """Verify that placeholder or provenance-only evidence without semantic verification fails closed."""
     gate = Gate(
         id="test-gate",
         label="Test Gate",
@@ -1377,7 +1377,9 @@ def test_ct04_r2_synthetic_pass_evidence_fails_closed() -> None:
         evidence_ids=("ev-fake",),
         evidence_complete=True,
     )
-    # Placeholder provenance
+    valid_sha = "c" * 64
+
+    # Placeholder provenance -> UNKNOWN
     ev_placeholder = Evidence(
         id="ev-fake",
         label="Fake Evidence",
@@ -1388,27 +1390,120 @@ def test_ct04_r2_synthetic_pass_evidence_fails_closed() -> None:
     )
     assert effective_gate_status(gate, {"ev-fake": ev_placeholder}, now=NOW) is TruthStatus.UNKNOWN
 
-    # Missing verified_at
+    # Missing verified_at -> UNKNOWN
     ev_no_time = Evidence(
         id="ev-fake",
         label="Fake Evidence",
         status=TruthStatus.PASS,
         source="none",
         verified_at=None,
-        provenance="sha256:abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+        provenance=f"sha256:{valid_sha}",
+        verifier_id="verifier:loopback_check",
+        code_identity=valid_sha,
+        verification_result="PASS",
     )
     assert effective_gate_status(gate, {"ev-fake": ev_no_time}, now=NOW) is TruthStatus.UNKNOWN
 
-    # Valid cryptographic provenance + verified_at
-    ev_valid = Evidence(
+    # Provenance-only without verifier_id / verification_result / code_identity -> UNKNOWN (CT04-R4)
+    ev_provenance_only = Evidence(
         id="ev-fake",
-        label="Valid Evidence",
+        label="Provenance Only Evidence",
         status=TruthStatus.PASS,
         source="none",
         verified_at=NOW,
-        provenance="sha256:abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+        provenance=f"sha256:{valid_sha}",
     )
-    assert effective_gate_status(gate, {"ev-fake": ev_valid}, now=NOW) is TruthStatus.PASS
+    assert effective_gate_status(gate, {"ev-fake": ev_provenance_only}, now=NOW) is TruthStatus.UNKNOWN
+
+    # Full semantic evidence -> PASS
+    ev_full_valid = Evidence(
+        id="ev-fake",
+        label="Full Valid Evidence",
+        status=TruthStatus.PASS,
+        source="none",
+        verified_at=NOW,
+        provenance=f"sha256:{valid_sha}",
+        verifier_id="verifier:loopback_check",
+        code_identity=valid_sha,
+        verification_result="PASS",
+    )
+    assert effective_gate_status(gate, {"ev-fake": ev_full_valid}, now=NOW) is TruthStatus.PASS
+
+
+def test_ct04_r4_mandatory_semantic_fields_fail_closed() -> None:
+    """Verify that every mandatory semantic evidence field fails closed if absent or invalid."""
+    valid_sha = "d" * 64
+    gate = Gate("test-gate", "Test Gate", 50.0, TruthStatus.PASS, ("ev-1",), True)
+
+    # Missing verification_result -> UNKNOWN
+    ev1 = Evidence(
+        id="ev-1",
+        label="Missing result",
+        status=TruthStatus.PASS,
+        source="none",
+        verified_at=NOW,
+        provenance=f"sha256:{valid_sha}",
+        verifier_id="verifier:loopback_check",
+        code_identity=valid_sha,
+        verification_result=None,
+    )
+    assert effective_gate_status(gate, {"ev-1": ev1}, now=NOW) is TruthStatus.UNKNOWN
+
+    # Missing verifier_id -> UNKNOWN
+    ev2 = Evidence(
+        id="ev-1",
+        label="Missing verifier",
+        status=TruthStatus.PASS,
+        source="none",
+        verified_at=NOW,
+        provenance=f"sha256:{valid_sha}",
+        verifier_id=None,
+        code_identity=valid_sha,
+        verification_result="PASS",
+    )
+    assert effective_gate_status(gate, {"ev-1": ev2}, now=NOW) is TruthStatus.UNKNOWN
+
+    # Untrusted verifier_id -> UNKNOWN
+    ev3 = Evidence(
+        id="ev-1",
+        label="Untrusted verifier",
+        status=TruthStatus.PASS,
+        source="none",
+        verified_at=NOW,
+        provenance=f"sha256:{valid_sha}",
+        verifier_id="untrusted_random_verifier",
+        code_identity=valid_sha,
+        verification_result="PASS",
+    )
+    assert effective_gate_status(gate, {"ev-1": ev3}, now=NOW) is TruthStatus.UNKNOWN
+
+    # Missing code_identity -> UNKNOWN
+    ev4 = Evidence(
+        id="ev-1",
+        label="Missing code identity",
+        status=TruthStatus.PASS,
+        source="none",
+        verified_at=NOW,
+        provenance=f"sha256:{valid_sha}",
+        verifier_id="verifier:loopback_check",
+        code_identity=None,
+        verification_result="PASS",
+    )
+    assert effective_gate_status(gate, {"ev-1": ev4}, now=NOW) is TruthStatus.UNKNOWN
+
+    # Mismatched code_identity vs provenance -> UNKNOWN
+    ev5 = Evidence(
+        id="ev-1",
+        label="Mismatched code identity vs provenance",
+        status=TruthStatus.PASS,
+        source="none",
+        verified_at=NOW,
+        provenance=f"sha256:{valid_sha}",
+        verifier_id="verifier:loopback_check",
+        code_identity="e" * 64,
+        verification_result="PASS",
+    )
+    assert effective_gate_status(gate, {"ev-1": ev5}, now=NOW) is TruthStatus.UNKNOWN
 
 
 def test_ct04_r3_semantic_provenance_and_code_identity_binding() -> None:

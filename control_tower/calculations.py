@@ -30,6 +30,22 @@ PLACEHOLDER_PROVENANCE_TOKENS = frozenset({
     "test_evidence_sha:verified",
 })
 
+TRUSTED_VERIFIER_PREFIXES = (
+    "verifier:invariant:",
+    "verifier:test:",
+    "verifier:artifact:",
+    "verifier:report:",
+    "verifier:loopback_check",
+    "verifier:gov_baseline_rules",
+    "verifier:crypto_test_report_check",
+    "verifier:multi_priority_auth_check",
+    "verifier:read_only_loopback_policy",
+    "verifier:adapter_failure_isolation",
+    "verifier:strict_host_header_validation",
+    "verifier:safe_dom_no_innerhtml",
+    "verifier:queue_read_only_projection",
+)
+
 STATUS_NORMALIZATION_MAP: dict[str, RuntimeStatus] = {
     "RUNNING": RuntimeStatus.WORKING,
     "WORKING": RuntimeStatus.WORKING,
@@ -108,38 +124,73 @@ def is_valid_cryptographic_provenance(prov: str | None) -> bool:
     return False
 
 
+def is_trusted_verifier(verifier_id: str | None) -> bool:
+    """Check if verifier_id is non-empty and belongs to trusted verifier registry/pattern."""
+    if not verifier_id or not isinstance(verifier_id, str):
+        return False
+    v = verifier_id.strip()
+    if not v:
+        return False
+    if "fail" in v.lower():
+        return False
+    return any(v.startswith(prefix) for prefix in TRUSTED_VERIFIER_PREFIXES)
+
+
 def validate_evidence_semantics(
     ev: Evidence,
     now: datetime | None = None,
     expected_code_identity: str | None = None,
     max_evidence_age: timedelta = MAX_EVIDENCE_AGE,
 ) -> bool:
-    """Validate that evidence proves an executed verification result, not just source code presence."""
+    """Validate that evidence proves an executed verification result with mandatory verifier, result, and code identity."""
+    # 1. Gate/Evidence claimed status must be PASS
     if ev.status is not TruthStatus.PASS:
         return False
-    # Verification result must be PASS if explicitly specified
-    if ev.verification_result is not None and ev.verification_result.strip().upper() != "PASS":
+
+    # 2. verification_result is MANDATORY and must be exactly 'PASS'
+    if not ev.verification_result or ev.verification_result.strip().upper() != "PASS":
         return False
-    # Verifier ID or valid invariant check required
-    if ev.verifier_id and "fail" in ev.verifier_id.lower():
+
+    # 3. verifier_id is MANDATORY, non-empty, and from trusted verifiers
+    if not is_trusted_verifier(ev.verifier_id):
         return False
-    # Cryptographic provenance format must be valid
+
+    # 4. code_identity is MANDATORY, non-empty, and valid hex digest
+    if not ev.code_identity or not isinstance(ev.code_identity, str):
+        return False
+    code_id = ev.code_identity.strip().lower()
+    if not (SHA256_HEX_REGEX.match(code_id) or GIT_HEX_REGEX.match(code_id)):
+        return False
+
+    # 5. Cryptographic provenance format must be valid and consistent with code_identity
     if not is_valid_cryptographic_provenance(ev.provenance):
         return False
-    # Code identity check if expected_code_identity is specified
-    if expected_code_identity is not None and ev.code_identity is not None:
-        if ev.code_identity.strip().lower() != expected_code_identity.strip().lower():
+    prov = ev.provenance.strip().lower()
+    if prov.startswith("sha256:") and prov[7:] != code_id:
+        return False
+    if prov.startswith("hash:") and prov[5:] != code_id:
+        return False
+    if prov.startswith("git:") and prov[4:] != code_id:
+        return False
+
+    # 6. If expected_code_identity is specified, code_identity must match it
+    if expected_code_identity is not None:
+        if code_id != expected_code_identity.strip().lower():
             return False
-    # Freshness & timestamp requirements
+
+    # 7. verified_at is MANDATORY, timezone-aware, not in future, not stale
     if ev.verified_at is None:
         return False
+    if ev.verified_at.tzinfo is None:
+        return False
     if now is not None:
-        if ev.verified_at.tzinfo is None or now.tzinfo is None:
+        if now.tzinfo is None:
             return False
         if ev.verified_at > now + MAX_CLOCK_SKEW:
             return False
         if now - ev.verified_at > max_evidence_age:
             return False
+
     return True
 
 
@@ -155,11 +206,11 @@ def effective_gate_status(
     CT-01R1 / CT-04 Truth Semantics:
     - Evidence ID must resolve
     - Evidence status must be PASS
+    - Verification result is mandatory and must be PASS
+    - Verifier identity is mandatory and trusted
+    - Code identity is mandatory and matches cryptographic provenance
     - Evidence provenance must be immutable/cryptographic (sha256:, hash:, git:, canonical:)
-    - Placeholder tokens are strictly rejected
     - Evidence verified_at must be present, non-future, and within SLA
-    - Code identity must match expected code-under-test identity if specified
-    - Semantic verification must prove invariant execution
     """
     if gate.blocker:
         return TruthStatus.BLOCKED

@@ -133,13 +133,57 @@ def build_dashboard(
                 verification_result="FAIL",
             )
 
+    def _verify_gov_baseline(p: Path) -> bool:
+        text = p.read_text(encoding="utf-8")
+        return "AI-CONTROL-PLANE — CODEX GOVERNANCE RULES" in text and "Authority Hierarchy" in text and "Fail-Closed Rule" in text
+
+    def _verify_crypto_report(p: Path) -> bool:
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+            return isinstance(d, dict) and (d.get("status") in ("PASS", "HEALTHY", "VALID") or d.get("tests_passed", 0) > 0)
+        except Exception:
+            return False
+
+    def _verify_auth_syntax(p: Path) -> bool:
+        text = p.read_text(encoding="utf-8")
+        return "validate_directive_syntax" in text and "DirectiveSyntaxError" in text
+
+    def _verify_read_only_sec(p: Path) -> bool:
+        from control_tower.security import validate_host_header
+        return not validate_host_header("external-evil.com") and validate_host_header("127.0.0.1:8000")
+
+    def _verify_adapter_isolation(p: Path) -> bool:
+        from control_tower.resilience import resilient_executor
+        dummy_res = resilient_executor.execute_adapter(
+            lambda t: 1 / 0,
+            "test-iso",
+            "TEST",
+            "none",
+            300.0,
+            now,
+        )
+        return dummy_res.truth_status is SourceStatus.UNKNOWN
+
+    def _verify_host_header_sec(p: Path) -> bool:
+        from control_tower.security import validate_host_header
+        return validate_host_header("127.0.0.1") and not validate_host_header("attacker.com")
+
+    def _verify_safe_dom(p: Path) -> bool:
+        text = p.read_text(encoding="utf-8")
+        return ".innerHTML" not in text and "textContent" in text
+
+    def _verify_queue_projection(p: Path) -> bool:
+        from control_tower.adapters.directive_channel import DirectiveChannelAdapter
+        adapter = DirectiveChannelAdapter(root_dir=resolved_root)
+        return adapter.source_id == "directive-channel"
+
     evidence_list = [
         _resolve_evidence(
             "ev-gov-01",
             "AGENTS.md and governance rule baseline active",
             "AGENTS.md",
             "verifier:gov_baseline_rules",
-            lambda p: "AI-CONTROL-PLANE — CODEX GOVERNANCE RULES" in p.read_text(encoding="utf-8"),
+            _verify_gov_baseline,
             now - timedelta(hours=2),
         ),
         _resolve_evidence(
@@ -147,7 +191,7 @@ def build_dashboard(
             "Red Team Engine certification evidence verified",
             "reports/crypto_test_evidence.json",
             "verifier:crypto_test_report_check",
-            lambda p: len(p.read_text(encoding="utf-8").strip()) > 0,
+            _verify_crypto_report,
             now - timedelta(hours=1),
         ),
         _resolve_evidence(
@@ -155,7 +199,7 @@ def build_dashboard(
             "Multi-priority authentication verified",
             "src/directive/validator.py",
             "verifier:multi_priority_auth_check",
-            lambda p: "validate_directive_syntax" in p.read_text(encoding="utf-8"),
+            _verify_auth_syntax,
             now - timedelta(hours=1),
         ),
         _resolve_evidence(
@@ -163,7 +207,7 @@ def build_dashboard(
             "CONTROL TOWER loopback & read-only policy verified",
             "control_tower/api.py",
             "verifier:read_only_loopback_policy",
-            lambda p: "READ_ONLY_METHOD_NOT_ALLOWED" in p.read_text(encoding="utf-8") and "LOOPBACK_HOST" in p.read_text(encoding="utf-8"),
+            _verify_read_only_sec,
             now,
         ),
         _resolve_evidence(
@@ -171,7 +215,7 @@ def build_dashboard(
             "Adapter failure isolation verified",
             "control_tower/adapters/base.py",
             "verifier:adapter_failure_isolation",
-            lambda p: "class BaseAdapter" in p.read_text(encoding="utf-8"),
+            _verify_adapter_isolation,
             now,
         ),
         _resolve_evidence(
@@ -179,7 +223,7 @@ def build_dashboard(
             "Strict Host header validation active",
             "control_tower/security.py",
             "verifier:strict_host_header_validation",
-            lambda p: "validate_host_header" in p.read_text(encoding="utf-8"),
+            _verify_host_header_sec,
             now,
         ),
         _resolve_evidence(
@@ -187,7 +231,7 @@ def build_dashboard(
             "Safe DOM rendering without innerHTML verified",
             "control_tower/frontend/app.js",
             "verifier:safe_dom_no_innerhtml",
-            lambda p: "innerHTML" not in p.read_text(encoding="utf-8") and "textContent" in p.read_text(encoding="utf-8"),
+            _verify_safe_dom,
             now,
         ),
         _resolve_evidence(
@@ -195,7 +239,7 @@ def build_dashboard(
             "Canonical execution queue read-only projection verified",
             "control_tower/adapters/directive_channel.py",
             "verifier:queue_read_only_projection",
-            lambda p: "DirectiveChannelAdapter" in p.read_text(encoding="utf-8"),
+            _verify_queue_projection,
             now,
         ),
     ]
