@@ -8,7 +8,7 @@ from typing import Any
 
 from control_tower.adapters.base import BaseAdapter
 from control_tower.models import AdapterResult, SourceStatus
-from control_tower.security import safe_read_json
+from control_tower.security import safe_read_json, sanitize_error
 
 CONTROL_PLANE_ALLOWLIST = frozenset(
     {"state/global_status.json", "state/control_plane_status.json"}
@@ -58,11 +58,29 @@ class ControlPlaneAdapter(BaseAdapter):
                 error_code="FILE_NOT_FOUND",
                 error_detail="Canonical state/global_status.json is not present",
             )
+        except Exception as e:
+            return AdapterResult(
+                source_id=self.source_id,
+                source_kind=self.source_kind,
+                source_ref=self.source_ref,
+                fetched_at=now.isoformat(),
+                observed_at=None,
+                freshness_sla_seconds=self.freshness_sla_seconds,
+                status=SourceStatus.UNKNOWN,
+                adapter_health=SourceStatus.DEGRADED,
+                truth_status=SourceStatus.UNKNOWN,
+                last_known_status=None,
+                last_known_conflict=None,
+                last_known_observed_at=None,
+                payload={},
+                error_code=type(e).__name__,
+                error_detail=sanitize_error(e),
+            )
 
         adapter_health = SourceStatus.HEALTHY
 
         cp_section = data.get("control_plane", {})
-        observed_at_str = cp_section.get("observed_at")
+        observed_at_str = cp_section.get("observed_at") or data.get("last_heartbeat") or data.get("observed_at")
         observed_at = None
         if observed_at_str:
             try:
@@ -90,7 +108,7 @@ class ControlPlaneAdapter(BaseAdapter):
             isinstance(p, dict) and p.get("state_conflict") is True
             for p in projects_section.values()
         )
-        overall_health = cp_section.get("overall_health", "UNKNOWN")
+        overall_health = cp_section.get("overall_health") or data.get("overall_health", "UNKNOWN")
         last_known_status = "BLOCKED" if has_conflict else str(overall_health)
 
         # STALE SOURCE PRECEDENCE (Issue #27):

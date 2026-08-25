@@ -1,4 +1,4 @@
-"""Deterministic fixtures and live adapter dashboard builders for CONTROL TOWER CT-01R1."""
+"""Deterministic fixtures and live adapter dashboard builders for CONTROL TOWER CT-02A."""
 
 from __future__ import annotations
 
@@ -133,12 +133,21 @@ def build_dashboard(
             now,
             "dom:verified",
         ),
+        Evidence(
+            "ev-ct-queue-01",
+            "Canonical execution queue read-only projection verified",
+            TruthStatus.PASS,
+            "control_tower/adapters/directive_channel.py",
+            now,
+            "queue:projection:verified",
+        ),
     ]
 
     evidence_map = {ev.id: ev for ev in evidence_list}
 
     # Extract adapter state if available
     cp_res = adapter_results.get("control-plane-state")
+    dc_res = adapter_results.get("directive-channel")
     oracle_res = adapter_results.get("oracle-ai-state")
     micro_res = adapter_results.get("micro-market-oracle-state")
     github_res = adapter_results.get("github-ci-governance")
@@ -219,19 +228,20 @@ def build_dashboard(
             "CONTROL TOWER",
             "Operational Observability & Control Tower",
             (
-                Milestone("ct-foundation", "Phase 0 Foundation & Read-Only API", 40, 100, TruthStatus.PASS),
-                Milestone("ct-adapters", "Phase 1 Verified Adapters & Isolation", 40, 100, TruthStatus.PASS),
-                Milestone("ct-multi-source", "Phase 2 Multi-Source Synchronization", 20, 0, TruthStatus.PENDING),
+                Milestone("ct-foundation", "Phase 0 Foundation & Read-Only API", 30, 100, TruthStatus.PASS),
+                Milestone("ct-adapters", "Phase 1 Verified Adapters & Isolation", 35, 100, TruthStatus.PASS),
+                Milestone("ct-directive-obs", "Phase 2A Directive & Task Observability", 35, 100, TruthStatus.PASS),
             ),
             (
-                Gate("ct-sec-gate", "Read-Only Security Verification", 50, TruthStatus.PASS, ("ev-ct-sec-01",), True),
-                Gate("ct-iso-gate", "Adapter Failure Isolation Gate", 50, TruthStatus.PASS, ("ev-ct-iso-01",), True),
+                Gate("ct-sec-gate", "Read-Only Security Verification", 34, TruthStatus.PASS, ("ev-ct-sec-01",), True),
+                Gate("ct-iso-gate", "Adapter Failure Isolation Gate", 33, TruthStatus.PASS, ("ev-ct-iso-01",), True),
+                Gate("ct-queue-gate", "Queue Projection Verification", 33, TruthStatus.PASS, ("ev-ct-queue-01",), True),
             ),
             (
                 Gate("ct-host-gate", "Host & CORS Validation", 50, TruthStatus.PASS, ("ev-ct-host-01",), True),
                 Gate("ct-dom-gate", "Safe DOM Rendering Verification", 50, TruthStatus.PASS, ("ev-ct-dom-01",), True),
             ),
-            "Complete CT-01R1 review and request ChatGPT audit",
+            "Complete CT-02A review and request ChatGPT audit",
             source_id="control-tower-self",
         ),
         Project(
@@ -259,12 +269,12 @@ def build_dashboard(
     )
 
     tasks = (
-        Task("task-ct-01r1", "control-tower", "CONTROL TOWER 01R1 truth semantics correction", "REVIEW", 100, True),
+        Task("task-ct-02a", "control-tower", "CONTROL TOWER 02A directive & task observability", "REVIEW", 100, True),
         Task("task-oracle-connect", "oracle-ai", "Verified adapter", "NOT_CONNECTED", None, False, "No verified source"),
         Task("task-micro-connect", "micro-market-oracle", "Verified discovery adapter", "NOT_CONNECTED", None, False, "No verified source"),
     )
 
-    # MANDATORY CORRECTION 3: Agents without fresh canonical source MUST NOT be WORKING
+    # Agents without fresh canonical source MUST NOT be WORKING
     agents = (
         Agent("chatgpt", "ChatGPT", RuntimeStatus.UNKNOWN, None, None, None, None, "UNKNOWN"),
         Agent("codex", "Codex", RuntimeStatus.UNKNOWN, None, None, None, None, "UNKNOWN"),
@@ -372,8 +382,47 @@ def build_dashboard(
         "DEGRADED" if resolved_data_mode == DATA_MODE_DEGRADED else "UNKNOWN"
     )
 
+    # Directive channel section projection
+    directive_channel_payload: dict[str, Any] = {
+        "channel_status": "NOT_CONNECTED",
+        "accepted_count": 0,
+        "rejected_count": 0,
+        "waiting_human_count": 0,
+        "queued_count": 0,
+        "replay_rejections": 0,
+        "auth_rejections": 0,
+        "schema_rejections": 0,
+        "state_conflicts": 0,
+        "last_directive_id": None,
+        "last_poll": None,
+        "last_error": None,
+        "queue_items": [],
+        "waiting_human_items": [],
+    }
+    if dc_res and dc_res.payload:
+        p = dc_res.payload
+        directive_channel_payload = {
+            "channel_status": dc_res.truth_status.value,
+            "adapter_health": dc_res.adapter_health.value,
+            "truth_status": dc_res.truth_status.value,
+            "last_known_status": dc_res.last_known_status or "UNKNOWN",
+            "accepted_count": p.get("accepted_count", 0),
+            "rejected_count": p.get("rejected_count", 0),
+            "waiting_human_count": p.get("waiting_human_count", 0),
+            "queued_count": p.get("queued_count", 0),
+            "replay_rejections": p.get("replay_rejections", 0),
+            "auth_rejections": p.get("auth_rejections", 0),
+            "schema_rejections": p.get("schema_rejections", 0),
+            "state_conflicts": p.get("state_conflicts", 0),
+            "last_directive_id": p.get("last_directive_id"),
+            "last_poll": p.get("last_poll"),
+            "last_error": p.get("last_error"),
+            "queue_items": p.get("queue_items", []),
+            "waiting_human_items": p.get("waiting_human_items", []),
+        }
+
     return {
-        "schema_version": "control-tower.phase1.r1",
+        "schema_version": "control-tower.phase2a.v1",
         "generated_at": now.isoformat(),
         "data_mode": resolved_data_mode,
         "dashboard_is_source_of_truth": False,
@@ -399,6 +448,7 @@ def build_dashboard(
             "planned": "NOT_CONNECTED",
             "budget": "NOT_CONNECTED",
         },
+        "directive_channel": directive_channel_payload,
         "sources": {k: serialize(v) for k, v in adapter_results.items()},
         "projects": project_payload,
         "tasks": serialize(tasks),

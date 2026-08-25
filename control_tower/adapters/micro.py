@@ -8,7 +8,7 @@ from typing import Any
 
 from control_tower.adapters.base import BaseAdapter
 from control_tower.models import AdapterResult, SourceStatus
-from control_tower.security import safe_read_json
+from control_tower.security import safe_read_json, sanitize_error
 
 MICRO_ALLOWLIST = frozenset({"state/micro.json", "state/global_status.json"})
 
@@ -34,20 +34,42 @@ class MicroAdapter(BaseAdapter):
         data: dict[str, Any] = {}
 
         if micro_file.exists():
-            data = safe_read_json(
-                file_path=micro_file,
-                base_dir=self.root_dir,
-                allowlist=MICRO_ALLOWLIST,
-            )
-        else:
-            global_file = self.root_dir / "state" / "global_status.json"
-            if global_file.exists():
-                g_data = safe_read_json(
-                    file_path=global_file,
+            try:
+                data = safe_read_json(
+                    file_path=micro_file,
                     base_dir=self.root_dir,
                     allowlist=MICRO_ALLOWLIST,
                 )
-                data = g_data.get("projects", {}).get("MICRO-MARKET-ORACLE", {})
+            except Exception as e:
+                return AdapterResult(
+                    source_id=self.source_id,
+                    source_kind=self.source_kind,
+                    source_ref=self.source_ref,
+                    fetched_at=now.isoformat(),
+                    observed_at=None,
+                    freshness_sla_seconds=self.freshness_sla_seconds,
+                    status=SourceStatus.UNKNOWN,
+                    adapter_health=SourceStatus.DEGRADED,
+                    truth_status=SourceStatus.UNKNOWN,
+                    last_known_status=None,
+                    last_known_conflict=None,
+                    last_known_observed_at=None,
+                    payload={},
+                    error_code=type(e).__name__,
+                    error_detail=sanitize_error(e),
+                )
+        else:
+            global_file = self.root_dir / "state" / "global_status.json"
+            if global_file.exists():
+                try:
+                    g_data = safe_read_json(
+                        file_path=global_file,
+                        base_dir=self.root_dir,
+                        allowlist=MICRO_ALLOWLIST,
+                    )
+                    data = g_data.get("projects", {}).get("MICRO-MARKET-ORACLE", {})
+                except Exception:
+                    data = {}
 
         if not data or not isinstance(data, dict):
             return AdapterResult(
@@ -70,7 +92,7 @@ class MicroAdapter(BaseAdapter):
 
         adapter_health = SourceStatus.HEALTHY
 
-        observed_at_str = data.get("observed_at")
+        observed_at_str = data.get("observed_at") or data.get("last_heartbeat")
         observed_at = None
         if observed_at_str:
             try:

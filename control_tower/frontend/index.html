@@ -9,14 +9,25 @@
 <body>
   <aside class="sidebar" aria-label="Primary navigation">
     <div class="brand"><span class="brand-mark">CT</span><div><strong>CONTROL TOWER</strong><small>READ-ONLY CONSOLE</small></div></div>
-    <nav><a class="active" href="#overview"><span>◎</span>Overview</a><a href="#alerts"><span>△</span>Alerts <b id="nav-alerts">0</b></a><a href="#activity"><span>↗</span>Activity</a><a href="#agents"><span>◇</span>Agents</a><a href="#projects"><span>▦</span>Projects</a><a href="#sources"><span>⎇</span>Sources</a><a href="#approvals"><span>✓</span>Approvals</a></nav>
+    <nav><a class="active" href="#overview"><span>◎</span>Overview</a><a href="#directives"><span>⎈</span>Directives</a><a href="#alerts"><span>△</span>Alerts <b id="nav-alerts">0</b></a><a href="#activity"><span>↗</span>Activity</a><a href="#agents"><span>◇</span>Agents</a><a href="#projects"><span>▦</span>Projects</a><a href="#sources"><span>⎇</span>Sources</a><a href="#approvals"><span>✓</span>Approvals</a></nav>
     <div class="sidebar-bottom"><a href="#help"><span>?</span>Help</a><div class="policy"><i></i><div><strong>READ_ONLY = TRUE</strong><small>Mutations disabled</small></div></div></div>
   </aside>
   <div class="shell">
-    <header class="topbar"><div><p class="eyebrow">AI CONTROL TOWER</p><h1>Executive Overview</h1></div><div class="workspace"><small>WORKSPACE / PROJECT</small><strong>AI-CONTROL-PLANE / CONTROL TOWER 01</strong></div><div class="top-stats"><div><small>GLOBAL STATE</small><span id="global-state" class="status status-UNKNOWN">UNKNOWN</span></div><div><small>ACTIVE AGENTS</small><strong id="active-agents">0</strong></div><div><small>ALERTS</small><strong id="top-alerts">0</strong></div><button id="theme" type="button" aria-label="Toggle color theme">◐</button><time id="clock">--:--:--</time></div></header>
+    <header class="topbar"><div><p class="eyebrow">AI CONTROL TOWER</p><h1>Executive Overview</h1></div><div class="workspace"><small>WORKSPACE / PROJECT</small><strong>AI-CONTROL-PLANE / CONTROL TOWER 02A</strong></div><div class="top-stats"><div><small>GLOBAL STATE</small><span id="global-state" class="status status-UNKNOWN">UNKNOWN</span></div><div><small>ACTIVE AGENTS</small><strong id="active-agents">0</strong></div><div><small>ALERTS</small><strong id="top-alerts">0</strong></div><button id="theme" type="button" aria-label="Toggle color theme">◐</button><time id="clock">--:--:--</time></div></header>
     <main id="overview">
       <div class="truth-strip"><span id="mode" class="mode">DATA MODE: LOADING</span><span id="connection">CONNECTING TO LOOPBACK API</span><span>LOCAL · READ ONLY · NO LIVE MONEY</span></div>
       <section><div class="section-heading"><div><p class="eyebrow">SYSTEM PULSE</p><h2>Executive summary</h2></div><span>Verified sources only</span></div><div id="summary" class="summary"></div></section>
+
+      <!-- Dedicated Directive / Task Operations Section (CT-02A) -->
+      <section id="directives" class="project-section">
+        <div class="section-heading"><div><p class="eyebrow">CANONICAL RUNTIME</p><h2>Directive Channel & Execution Queue</h2></div><span>Truthful runtime state · No simulated router stages</span></div>
+        <div class="dashboard-grid">
+          <article class="card"><div class="card-title"><div><p class="eyebrow">CHANNEL STATUS</p><h2>Telemetry</h2></div><span id="directive-channel-badge" class="status status-UNKNOWN">UNKNOWN</span></div><div id="directive-channel-metrics" class="metric-table"></div></article>
+          <article class="card"><div class="card-title"><div><p class="eyebrow">EXECUTION QUEUE</p><h2>Queued Items</h2></div><span id="queue-count-badge" class="status status-UNKNOWN">0 items</span></div><div id="queue-items-list" class="rows"></div></article>
+          <article class="card"><div class="card-title"><div><p class="eyebrow">WAITING HUMAN</p><h2>Observation Only</h2></div><span id="waiting-human-badge" class="status status-UNKNOWN">0 items</span></div><div id="waiting-human-list" class="rows"></div></article>
+        </div>
+      </section>
+
       <section class="dashboard-grid" aria-label="Dashboard metrics">
         <article class="card health-card"><div class="card-title"><div><p class="eyebrow">HEALTH</p><h2>System health</h2></div><span id="health-badge" class="status status-UNKNOWN">UNKNOWN</span></div><div id="health" class="health-list"></div></article>
         <article class="card tasks-card"><div class="card-title"><div><p class="eyebrow">TASKS</p><h2>Task distribution</h2></div><span>All projects</span></div><div class="donut-layout"><div id="task-donut" class="donut" role="img" aria-label="Task distribution"><div><strong id="task-total">0</strong><small>TOTAL</small></div></div><div id="task-legend" class="legend"></div></div></article>

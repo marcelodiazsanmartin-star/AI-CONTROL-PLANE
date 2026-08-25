@@ -1,14 +1,18 @@
-"""Security utilities for CONTROL TOWER: fail-closed validation and isolation."""
+"""Security utilities for CONTROL TOWER: fail-closed validation and bounded read isolation."""
 
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 MAX_FILE_SIZE_BYTES = 1_000_000  # 1 MB bounded file read
+MAX_JSONL_LINE_BYTES = 65_536  # 64 KB per JSONL line
+MAX_JSONL_LINES = 500  # 500 lines max in jsonl
 MAX_JSON_DEPTH = 30
+
 SECRET_PATTERNS = [
     re.compile(r"ghp_[a-zA-Z0-9]{20,}", re.IGNORECASE),
     re.compile(r"github_pat_[a-zA-Z0-9_]{20,}", re.IGNORECASE),
@@ -71,12 +75,12 @@ def check_json_depth(obj: Any, current_depth: int = 0) -> None:
             check_json_depth(item, current_depth + 1)
 
 
-def safe_read_json(
+def safe_resolve_path(
     file_path: Path,
     base_dir: Path | None = None,
     allowlist: set[str] | frozenset[str] | None = None,
-) -> dict[str, Any]:
-    """Defensively read and parse JSON file within allowlisted base directory."""
+) -> Path:
+    """Validate that path does not escape base_dir and matches allowlist."""
     if base_dir is not None:
         resolved_base = base_dir.resolve()
         try:
@@ -91,10 +95,25 @@ def safe_read_json(
 
         if allowlist is not None:
             rel_str = str(resolved_target.relative_to(resolved_base)).replace("\\", "/")
-            if rel_str not in allowlist:
+            # Check direct match or directory prefix match
+            matched = rel_str in allowlist or any(
+                allowed.endswith("/*") and rel_str.startswith(allowed[:-2] + "/")
+                or allowed.endswith("/*.json") and rel_str.startswith(allowed[:-7] + "/") and rel_str.endswith(".json")
+                for allowed in allowlist
+            )
+            if not matched:
                 raise SecurityError(f"File not in allowlist: {rel_str}")
-    else:
-        resolved_target = file_path.resolve()
+        return resolved_target
+    return file_path.resolve()
+
+
+def safe_read_json(
+    file_path: Path,
+    base_dir: Path | None = None,
+    allowlist: set[str] | frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """Defensively read and parse JSON file within allowlisted base directory."""
+    resolved_target = safe_resolve_path(file_path, base_dir, allowlist)
 
     if not resolved_target.exists():
         raise FileNotFoundError(f"File does not exist: {file_path.name}")
@@ -122,3 +141,66 @@ def safe_read_json(
 
     check_json_depth(data)
     return data
+
+
+def safe_read_jsonl(
+    file_path: Path,
+    base_dir: Path | None = None,
+    allowlist: set[str] | frozenset[str] | None = None,
+    max_lines: int = MAX_JSONL_LINES,
+    max_line_bytes: int = MAX_JSONL_LINE_BYTES,
+) -> list[dict[str, Any]]:
+    """Defensively read and parse bounded JSONL file."""
+    resolved_target = safe_resolve_path(file_path, base_dir, allowlist)
+
+    if not resolved_target.exists():
+        return []
+    if not resolved_target.is_file():
+        raise SecurityError(f"Target is not a regular file: {file_path.name}")
+
+    stat_result = resolved_target.stat()
+    if stat_result.st_size > MAX_FILE_SIZE_BYTES:
+        raise SecurityError(
+            f"File size {stat_result.st_size} exceeds maximum {MAX_FILE_SIZE_BYTES} bytes"
+        )
+
+    records: list[dict[str, Any]] = []
+    with open(resolved_target, "r", encoding="utf-8") as f:
+        for line_no, raw_line in enumerate(f, start=1):
+            if line_no > max_lines:
+                break
+            if len(raw_line.encode("utf-8")) > max_line_bytes:
+                raise SecurityError(f"JSONL line {line_no} exceeded max line length {max_line_bytes}")
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            try:
+                data = json.loads(stripped)
+            except Exception as e:
+                raise SecurityError(f"Malformed JSONL at line {line_no}: {sanitize_error(e)}") from e
+            if not isinstance(data, dict):
+                raise SecurityError(f"JSONL line {line_no} root must be an object")
+            check_json_depth(data)
+            records.append(data)
+    return records
+
+
+def safe_list_dir_files(
+    dir_path: Path,
+    base_dir: Path,
+    allowlist: set[str] | frozenset[str] | None = None,
+    max_files: int = 20,
+    extension: str = ".json",
+) -> list[Path]:
+    """Safely list bounded number of files in a directory within base_dir."""
+    resolved_dir = safe_resolve_path(dir_path, base_dir, allowlist)
+    if not resolved_dir.exists() or not resolved_dir.is_dir():
+        return []
+
+    files = [
+        p for p in resolved_dir.iterdir()
+        if p.is_file() and p.name.endswith(extension)
+    ]
+    # Sort by modification time descending
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return files[:max_files]
