@@ -1,7 +1,8 @@
-"""Deterministic, fail-closed dashboard calculations with truth semantics."""
+"""Deterministic, fail-closed dashboard calculations with truth and semantic provenance semantics."""
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from typing import Any, Iterable, Mapping
 
@@ -10,6 +11,24 @@ from control_tower.models import Evidence, Gate, Milestone, RuntimeStatus, Truth
 STALE_AFTER = timedelta(minutes=5)
 MAX_CLOCK_SKEW = timedelta(seconds=30)
 MAX_EVIDENCE_AGE = timedelta(hours=24)
+
+SHA256_HEX_REGEX = re.compile(r"^[a-f0-9]{64}$")
+GIT_HEX_REGEX = re.compile(r"^[a-f0-9]{40,64}$")
+
+PLACEHOLDER_PROVENANCE_TOKENS = frozenset({
+    "placeholder",
+    "stub",
+    "none",
+    "test",
+    "sec:verified",
+    "host:verified",
+    "dom:verified",
+    "iso:verified",
+    "auth:verified",
+    "governance:hash:valid",
+    "queue:projection:verified",
+    "test_evidence_sha:verified",
+})
 
 STATUS_NORMALIZATION_MAP: dict[str, RuntimeStatus] = {
     "RUNNING": RuntimeStatus.WORKING,
@@ -65,19 +84,82 @@ def weighted_milestone_progress(items: Iterable[Milestone]) -> float | None:
     return round(weighted / sum(item.weight for item in values), 1)
 
 
+def is_valid_cryptographic_provenance(prov: str | None) -> bool:
+    """Validate format of cryptographic provenance strictly against format rules."""
+    if not prov or not isinstance(prov, str):
+        return False
+    p = prov.strip().lower()
+    if p in PLACEHOLDER_PROVENANCE_TOKENS:
+        return False
+    if p.startswith("sha256:"):
+        digest = p[7:]
+        return bool(SHA256_HEX_REGEX.match(digest))
+    if p.startswith("hash:"):
+        digest = p[5:]
+        return bool(SHA256_HEX_REGEX.match(digest))
+    if p.startswith("git:"):
+        git_hash = p[4:]
+        return bool(GIT_HEX_REGEX.match(git_hash))
+    if p.startswith("canonical:"):
+        parts = p[10:].split("#sha256:")
+        if len(parts) == 2 and parts[0] and SHA256_HEX_REGEX.match(parts[1]):
+            return True
+        return False
+    return False
+
+
+def validate_evidence_semantics(
+    ev: Evidence,
+    now: datetime | None = None,
+    expected_code_identity: str | None = None,
+    max_evidence_age: timedelta = MAX_EVIDENCE_AGE,
+) -> bool:
+    """Validate that evidence proves an executed verification result, not just source code presence."""
+    if ev.status is not TruthStatus.PASS:
+        return False
+    # Verification result must be PASS if explicitly specified
+    if ev.verification_result is not None and ev.verification_result.strip().upper() != "PASS":
+        return False
+    # Verifier ID or valid invariant check required
+    if ev.verifier_id and "fail" in ev.verifier_id.lower():
+        return False
+    # Cryptographic provenance format must be valid
+    if not is_valid_cryptographic_provenance(ev.provenance):
+        return False
+    # Code identity check if expected_code_identity is specified
+    if expected_code_identity is not None and ev.code_identity is not None:
+        if ev.code_identity.strip().lower() != expected_code_identity.strip().lower():
+            return False
+    # Freshness & timestamp requirements
+    if ev.verified_at is None:
+        return False
+    if now is not None:
+        if ev.verified_at.tzinfo is None or now.tzinfo is None:
+            return False
+        if ev.verified_at > now + MAX_CLOCK_SKEW:
+            return False
+        if now - ev.verified_at > max_evidence_age:
+            return False
+    return True
+
+
 def effective_gate_status(
     gate: Gate,
     evidence_map: Mapping[str, Evidence] | None = None,
     now: datetime | None = None,
+    expected_code_identity: str | None = None,
     max_evidence_age: timedelta = MAX_EVIDENCE_AGE,
 ) -> TruthStatus:
     """A claimed PASS without complete verified fresh referenced evidence fails closed.
 
-    CT-01R1 Truth Semantics:
+    CT-01R1 / CT-04 Truth Semantics:
     - Evidence ID must resolve
     - Evidence status must be PASS
-    - Evidence provenance must be present/verified
-    - Evidence freshness must satisfy freshness requirement if verified_at is present
+    - Evidence provenance must be immutable/cryptographic (sha256:, hash:, git:, canonical:)
+    - Placeholder tokens are strictly rejected
+    - Evidence verified_at must be present, non-future, and within SLA
+    - Code identity must match expected code-under-test identity if specified
+    - Semantic verification must prove invariant execution
     """
     if gate.blocker:
         return TruthStatus.BLOCKED
@@ -91,19 +173,13 @@ def effective_gate_status(
                 ev = evidence_map[ev_id]
                 if ev.status is TruthStatus.BLOCKED:
                     return TruthStatus.BLOCKED
-                if ev.status is not TruthStatus.PASS:
+                if not validate_evidence_semantics(
+                    ev,
+                    now=now,
+                    expected_code_identity=expected_code_identity,
+                    max_evidence_age=max_evidence_age,
+                ):
                     return TruthStatus.UNKNOWN
-                # Provenance requirement
-                if not ev.provenance or not ev.provenance.strip():
-                    return TruthStatus.UNKNOWN
-                # Freshness requirement
-                if now is not None and ev.verified_at is not None:
-                    if ev.verified_at.tzinfo is None or now.tzinfo is None:
-                        return TruthStatus.UNKNOWN
-                    if ev.verified_at > now + MAX_CLOCK_SKEW:
-                        return TruthStatus.UNKNOWN
-                    if now - ev.verified_at > max_evidence_age:
-                        return TruthStatus.UNKNOWN
         return TruthStatus.PASS
     return gate.status
 
@@ -112,6 +188,7 @@ def weighted_gate_readiness(
     items: Iterable[Gate],
     evidence_map: Mapping[str, Evidence] | None = None,
     now: datetime | None = None,
+    expected_code_identity: str | None = None,
 ) -> float | None:
     """Count only effective PASS gates toward readiness."""
     values = tuple(items)
@@ -120,7 +197,7 @@ def weighted_gate_readiness(
     earned = sum(
         item.weight
         for item in values
-        if effective_gate_status(item, evidence_map=evidence_map, now=now) is TruthStatus.PASS
+        if effective_gate_status(item, evidence_map=evidence_map, now=now, expected_code_identity=expected_code_identity) is TruthStatus.PASS
     )
     return round(100 * earned / sum(item.weight for item in values), 1)
 

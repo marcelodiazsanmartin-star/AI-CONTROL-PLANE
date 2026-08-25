@@ -78,6 +78,31 @@ class GitHubCIAdapter(BaseAdapter):
 
         adapter_health = SourceStatus.HEALTHY
 
+        from control_tower.schema import validate_payload_schema_version
+        from control_tower.security import SecurityError
+
+        try:
+            validate_payload_schema_version(self.source_id, data)
+        except SecurityError as se:
+            return AdapterResult(
+                source_id=self.source_id,
+                source_kind=self.source_kind,
+                source_ref=self.source_ref,
+                fetched_at=now.isoformat(),
+                observed_at=None,
+                freshness_sla_seconds=self.freshness_sla_seconds,
+                status=SourceStatus.BLOCKED,
+                adapter_health=SourceStatus.DEGRADED,
+                truth_status=SourceStatus.BLOCKED,
+                last_known_status="BLOCKED",
+                last_known_conflict=True,
+                last_known_observed_at=None,
+                payload={},
+                provenance=None,
+                error_code="UNSUPPORTED_SCHEMA_VERSION",
+                error_detail=str(se),
+            )
+
         api_data = data.get("api_data", {})
         repo = api_data.get("repo", {})
         branch = api_data.get("branch", {})

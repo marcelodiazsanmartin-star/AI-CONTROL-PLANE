@@ -1,4 +1,4 @@
-"""Resilience, bounded timeouts, circuit breakers, and backoff with jitter for CONTROL TOWER CT-03."""
+"""Resilience, bounded timeouts, circuit breakers, and backoff with jitter for CONTROL TOWER CT-04."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ DEFAULT_RECOVERY_TIMEOUT_SECONDS = 10.0
 MAX_WORKER_THREADS = 4
 MAX_BACKOFF_DELAY_SECONDS = 2.0
 BASE_BACKOFF_DELAY_SECONDS = 0.1
+DEFAULT_MAX_RETRIES = 1  # 1 retry on recoverable timeout/exception
 
 
 class CircuitState(str, Enum):
@@ -40,7 +41,7 @@ def calculate_backoff_delay(
 
     Guaranteed properties:
     1. Result is >= 0.0 (non-negative).
-    2. Result is <= max_delay + jitter_bound (strictly upper-bounded).
+    2. Result is <= max_delay * 1.5 (strictly upper-bounded).
     3. Monotonically scales with attempt up to cap.
     """
     if attempt < 0:
@@ -104,18 +105,32 @@ class CircuitBreaker:
 
 
 class ResilientAdapterExecutor:
-    """Bounded executor that runs adapters with timeouts, circuit breakers, and logging."""
+    """Bounded executor that runs adapters with timeouts, circuit breakers, backoff, and logging."""
 
     def __init__(
         self,
         timeout_seconds: float = DEFAULT_ADAPTER_TIMEOUT_SECONDS,
         max_workers: int = MAX_WORKER_THREADS,
+        max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> None:
         self.timeout_seconds = timeout_seconds
-        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="TowerAdapter")
+        self.max_workers = max_workers
+        self.max_retries = max_retries
+        self._executor: ThreadPoolExecutor | None = None
+        self._is_shutdown = False
         self._breakers: dict[str, CircuitBreaker] = {}
         self._last_known_results: dict[str, AdapterResult] = {}
         self._lock = threading.Lock()
+
+    def _get_executor(self) -> ThreadPoolExecutor:
+        with self._lock:
+            if self._executor is None or self._is_shutdown:
+                self._executor = ThreadPoolExecutor(
+                    max_workers=self.max_workers,
+                    thread_name_prefix="TowerAdapter",
+                )
+                self._is_shutdown = False
+            return self._executor
 
     def get_breaker(self, source_id: str) -> CircuitBreaker:
         """Get or create circuit breaker for source_id."""
@@ -123,6 +138,23 @@ class ResilientAdapterExecutor:
             if source_id not in self._breakers:
                 self._breakers[source_id] = CircuitBreaker(source_id)
             return self._breakers[source_id]
+
+    def _execute_single_attempt(
+        self,
+        adapter_func: Callable[[datetime], AdapterResult],
+        source_id: str,
+        now: datetime,
+    ) -> tuple[AdapterResult | None, str | None, Exception | None]:
+        """Submit and wait for adapter execution bounded by timeout."""
+        executor = self._get_executor()
+        future = executor.submit(adapter_func, now)
+        try:
+            res = future.result(timeout=self.timeout_seconds)
+            return res, None, None
+        except FutureTimeoutError:
+            return None, "TIMEOUT", None
+        except Exception as e:
+            return None, "EXCEPTION", e
 
     def execute_adapter(
         self,
@@ -133,7 +165,7 @@ class ResilientAdapterExecutor:
         freshness_sla_seconds: float,
         now: datetime,
     ) -> AdapterResult:
-        """Execute adapter safely within bounded timeout and circuit breaker."""
+        """Execute adapter safely within bounded timeout, circuit breaker, and retry."""
         breaker = self.get_breaker(source_id)
         start_time = time.monotonic()
 
@@ -166,33 +198,42 @@ class ResilientAdapterExecutor:
                 error_detail=f"Circuit breaker OPEN for {source_id}",
             )
 
-        future = self._executor.submit(adapter_func, now)
-        try:
-            result = future.result(timeout=self.timeout_seconds)
-            latency = (time.monotonic() - start_time) * 1000
+        attempts_allowed = 1 + self.max_retries
+        for attempt in range(attempts_allowed):
+            res, failure_type, exc = self._execute_single_attempt(adapter_func, source_id, now)
 
-            if result.truth_status in (SourceStatus.HEALTHY, SourceStatus.STALE):
-                breaker.record_success()
-                with self._lock:
-                    self._last_known_results[source_id] = result
-                tower_logger.log(
-                    component=source_id,
-                    result_class=result.truth_status.value,
-                    latency_ms=latency,
-                )
-            else:
-                breaker.record_failure()
-                tower_logger.log(
-                    component=source_id,
-                    result_class=result.truth_status.value,
-                    latency_ms=latency,
-                    error_code=result.error_code,
-                    error_detail=result.error_detail,
-                )
-            return result
-        except FutureTimeoutError:
-            latency = (time.monotonic() - start_time) * 1000
-            breaker.record_failure()
+            if res is not None:
+                latency = (time.monotonic() - start_time) * 1000
+                if res.truth_status in (SourceStatus.HEALTHY, SourceStatus.STALE):
+                    breaker.record_success()
+                    with self._lock:
+                        self._last_known_results[source_id] = res
+                    tower_logger.log(
+                        component=source_id,
+                        result_class=res.truth_status.value,
+                        latency_ms=latency,
+                    )
+                else:
+                    breaker.record_failure()
+                    tower_logger.log(
+                        component=source_id,
+                        result_class=res.truth_status.value,
+                        latency_ms=latency,
+                        error_code=res.error_code,
+                        error_detail=res.error_detail,
+                    )
+                return res
+
+            if attempt < attempts_allowed - 1:
+                # Apply exponential backoff delay with bounded jitter before retry
+                backoff_s = calculate_backoff_delay(attempt=attempt)
+                time.sleep(min(backoff_s, 0.1))  # Keep in-process sleep small
+
+        # If loop exhausts without success
+        latency = (time.monotonic() - start_time) * 1000
+        breaker.record_failure()
+
+        if failure_type == "TIMEOUT":
             tower_logger.log(
                 component=source_id,
                 result_class="TIMEOUT",
@@ -219,15 +260,13 @@ class ResilientAdapterExecutor:
                 error_code="ADAPTER_TIMEOUT",
                 error_detail=f"Adapter timed out after {self.timeout_seconds}s",
             )
-        except Exception as e:
-            latency = (time.monotonic() - start_time) * 1000
-            breaker.record_failure()
+        else:
             tower_logger.log(
                 component=source_id,
                 result_class="EXCEPTION",
                 latency_ms=latency,
-                error_code=type(e).__name__,
-                error_detail=sanitize_error(e),
+                error_code=type(exc).__name__ if exc else "EXECUTION_ERROR",
+                error_detail=sanitize_error(exc) if exc else "Unknown error",
             )
             return AdapterResult(
                 source_id=source_id,
@@ -244,13 +283,17 @@ class ResilientAdapterExecutor:
                 last_known_observed_at=None,
                 payload={},
                 provenance=None,
-                error_code=type(e).__name__,
-                error_detail=sanitize_error(e),
+                error_code=type(exc).__name__ if exc else "EXECUTION_ERROR",
+                error_detail=sanitize_error(exc) if exc else "Unknown error",
             )
 
     def shutdown(self, wait: bool = True) -> None:
         """Gracefully shutdown worker threads."""
-        self._executor.shutdown(wait=wait, cancel_futures=True)
+        with self._lock:
+            if self._executor is not None:
+                self._executor.shutdown(wait=wait, cancel_futures=True)
+                self._executor = None
+            self._is_shutdown = True
 
 
 # Global resilient executor instance

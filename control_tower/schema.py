@@ -1,4 +1,4 @@
-"""Schema versioning and validation for CONTROL TOWER CT-03."""
+"""Schema versioning and validation for CONTROL TOWER CT-04."""
 
 from __future__ import annotations
 
@@ -18,9 +18,13 @@ SUPPORTED_SCHEMA_VERSIONS = frozenset({
     "1.0.0",
     "2.0",
     "2.0.0",
+    "v1",
+    "v1.0",
+    "v2",
 })
 
 VERSION_REGEX = re.compile(r"^[a-zA-Z0-9.\-_]{1,64}$")
+VERSION_FIELD_NAMES = ("schema_version", "version", "channel_version", "directive_schema_version", "report_version")
 
 
 def validate_schema_version(version_str: str | None) -> bool:
@@ -40,3 +44,12 @@ def assert_supported_schema(version_str: str | None, context_label: str = "upstr
         raise SecurityError(f"Malformed schema version in {context_label}: {sanitize_error(version_str)}")
     if version_str.strip() not in SUPPORTED_SCHEMA_VERSIONS:
         raise SecurityError(f"Unsupported future schema version in {context_label}: {sanitize_error(version_str)}")
+
+
+def validate_payload_schema_version(source_id: str, payload: dict[str, Any]) -> None:
+    """Inspect and validate all version declarations in source payload, failing closed on unsupported versions."""
+    for field_name in VERSION_FIELD_NAMES:
+        if field_name in payload:
+            val = payload[field_name]
+            if val is not None:
+                assert_supported_schema(str(val), context_label=f"{source_id}:{field_name}")

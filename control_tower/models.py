@@ -74,6 +74,9 @@ class Evidence:
     source: str | None = None
     verified_at: datetime | None = None
     provenance: str | None = None
+    verifier_id: str | None = None
+    code_identity: str | None = None
+    verification_result: str | None = None
 
 
 @dataclass(frozen=True)
