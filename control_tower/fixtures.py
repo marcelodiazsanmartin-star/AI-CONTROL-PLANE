@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 from typing import Any
 
@@ -151,13 +152,12 @@ def build_dashboard(
 
     def _verify_auth_syntax(p: Path) -> bool:
         try:
-            from src.directive.validator import validate_directive_syntax
-            from src.contracts import DirectiveSyntaxError
-            try:
-                validate_directive_syntax({})
-                return False
-            except DirectiveSyntaxError:
-                return True
+            from src.directive.schema_validator import DirectiveSchemaValidator
+            schema_val = DirectiveSchemaValidator()
+            valid_empty, _ = schema_val.validate({})
+            valid_none, _ = schema_val.validate(None)
+            valid_bad, _ = schema_val.validate("bad")
+            return (not valid_empty) and (not valid_none) and (not valid_bad)
         except Exception:
             return False
 
@@ -238,7 +238,11 @@ def build_dashboard(
         from control_tower.adapters.directive_channel import DirectiveChannelAdapter
         adapter = DirectiveChannelAdapter(root_dir=resolved_root)
         res = adapter.fetch(now=now)
-        return res.source_id == "directive-channel" and isinstance(res.payload, dict)
+        if res.truth_status is not SourceStatus.HEALTHY or not isinstance(res.payload, dict):
+            return False
+        payload = res.payload
+        required_fields = ("accepted_count", "rejected_count", "queued_count", "queue_items")
+        return all(k in payload for k in required_fields) and isinstance(payload.get("queue_items"), list)
 
     evidence_list = [
         _resolve_evidence(
@@ -259,8 +263,8 @@ def build_dashboard(
         ),
         _resolve_evidence(
             "ev-auth-01",
-            "Multi-priority authentication verified",
-            "src/directive/validator.py",
+            "Directive schema and syntax validation verified",
+            "src/directive/schema_validator.py",
             "verifier:multi_priority_auth_check",
             _verify_auth_syntax,
             now - timedelta(hours=1),
@@ -381,7 +385,7 @@ def build_dashboard(
                 Gate("cp-cert-gate", "Red Team Certification Gate", 50, TruthStatus.PASS, ("ev-cert-01",), True),
             ),
             (
-                Gate("cp-auth-gate", "Multi-Priority Authentication", 60, TruthStatus.PASS, ("ev-auth-01",), True),
+                Gate("cp-auth-gate", "Directive Schema and Syntax Validation", 60, TruthStatus.PASS, ("ev-auth-01",), True),
                 Gate("cp-runtime-gate", "Runtime Process Freshness", 40, TruthStatus.UNKNOWN, ("ev-runtime-01",), False),
             ),
             "Evaluate runtime truth and maintain fail-closed observer sweep",

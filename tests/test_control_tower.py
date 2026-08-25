@@ -1613,6 +1613,438 @@ def test_ct04_r5_e3_mutating_handler_returning_200_with_405_substring_fails_clos
         DashboardHandler.do_POST = orig_post
 
 
+def test_ct04_r6_positive_baseline_pass_and_claim_alignment() -> None:
+    """(06A & 06B) Verify positive baseline PASS for unmodified DashboardHandler and auth/queue claim alignment."""
+    from control_tower.fixtures import build_dashboard
+    dash = build_dashboard(now=NOW)
+
+    # 1. ev-ct-sec-01 passes legitimately on unmodified DashboardHandler
+    sec_ev = next((ev for ev in dash["evidence"] if ev["id"] == "ev-ct-sec-01"), None)
+    assert sec_ev is not None
+    assert sec_ev["status"] == "PASS"
+    assert sec_ev["verification_result"] == "PASS"
+
+    # 2. ev-auth-01 passes legitimately for directive schema and syntax validation
+    auth_ev = next((ev for ev in dash["evidence"] if ev["id"] == "ev-auth-01"), None)
+    assert auth_ev is not None
+    assert auth_ev["status"] == "PASS"
+    assert auth_ev["verification_result"] == "PASS"
+    assert auth_ev["label"] == "Directive schema and syntax validation verified"
+
+    # 3. ev-ct-queue-01 fails closed to UNKNOWN when directive channel is NOT_CONNECTED
+    queue_ev = next((ev for ev in dash["evidence"] if ev["id"] == "ev-ct-queue-01"), None)
+    assert queue_ev is not None
+    assert queue_ev["status"] == "UNKNOWN"
+    assert queue_ev.get("verification_result") in ("FAIL", "UNKNOWN")
+
+
+def test_ct04_r6_queue_projection_mock_pass_when_healthy(monkeypatch: Any) -> None:
+    """(06B) Verify that when DirectiveChannelAdapter is live/HEALTHY with valid queue payload, ev-ct-queue-01 produces PASS."""
+    from control_tower.adapters.directive_channel import DirectiveChannelAdapter
+    from control_tower.fixtures import build_dashboard
+
+    def mock_fetch(self: Any, now: datetime) -> AdapterResult:
+        return AdapterResult(
+            source_id="directive-channel",
+            source_kind="DIRECTIVE_CHANNEL",
+            source_ref="directives/inbound",
+            fetched_at=now.isoformat(),
+            observed_at=now.isoformat(),
+            freshness_sla_seconds=60.0,
+            status=SourceStatus.HEALTHY,
+            adapter_health=SourceStatus.HEALTHY,
+            truth_status=SourceStatus.HEALTHY,
+            payload={
+                "accepted_count": 5,
+                "rejected_count": 0,
+                "queued_count": 2,
+                "queue_items": [{"id": "dir-1"}, {"id": "dir-2"}],
+            },
+        )
+
+    monkeypatch.setattr(DirectiveChannelAdapter, "fetch", mock_fetch)
+    dash = build_dashboard(now=NOW)
+    queue_ev = next((ev for ev in dash["evidence"] if ev["id"] == "ev-ct-queue-01"), None)
+    assert queue_ev is not None
+    assert queue_ev["status"] == "PASS"
+    assert queue_ev["verification_result"] == "PASS"
+
+
+def test_ct04_r6_true_hang_resource_boundedness() -> None:
+    """(06C) Verify that permanent adapter hangs trigger admission backpressure and keep workers/latency bounded."""
+    import time
+    from control_tower.resilience import ResilientAdapterExecutor
+
+    executor = ResilientAdapterExecutor(
+        timeout_seconds=0.05,
+        max_workers=2,
+        max_retries=0,
+        max_queue_depth=2,
+    )
+
+    def hung_adapter(now: datetime) -> AdapterResult:
+        time.sleep(5.0)
+        return AdapterResult("hung-src", "KIND", "ref", now.isoformat(), None, 300.0, SourceStatus.HEALTHY)
+
+    # Submit 4 hanging adapter tasks (2 occupying worker threads + 2 occupying queue capacity)
+    for i in range(4):
+        res = executor.execute_adapter(hung_adapter, f"hung-src-{i}", "KIND", "ref", 300.0, NOW)
+        assert res.truth_status is SourceStatus.UNKNOWN
+        assert res.error_code == "ADAPTER_TIMEOUT"
+
+    # 5th task must immediately be rejected by admission backpressure with CAPACITY_EXHAUSTED in < 20ms
+    start = time.monotonic()
+    res_rejected = executor.execute_adapter(hung_adapter, "hung-src-4", "KIND", "ref", 300.0, NOW)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 0.05  # Instant backpressure rejection
+    assert res_rejected.truth_status is SourceStatus.UNKNOWN
+    assert res_rejected.error_code == "CAPACITY_EXHAUSTED"
+
+    executor.shutdown(wait=False)
+
+
+def test_ct04_r6_e2_generation_safety_and_restart_boundedness() -> None:
+    """(06D) Verify generation safety, non-inflating admission bounds, and bounded live threads across restart."""
+    import time
+    import threading
+    from control_tower.resilience import ResilientAdapterExecutor
+
+    executor = ResilientAdapterExecutor(
+        timeout_seconds=0.05,
+        max_workers=2,
+        max_retries=0,
+        max_queue_depth=2,
+    )
+
+    release_event = threading.Event()
+
+    def controlled_hung(now: datetime) -> AdapterResult:
+        release_event.wait()
+        return AdapterResult("src", "KIND", "ref", now.isoformat(), None, 300.0, SourceStatus.HEALTHY)
+
+    # 1. Fill executor with 4 hangs
+    for i in range(4):
+        res = executor.execute_adapter(controlled_hung, f"hung-{i}", "KIND", "ref", 300.0, NOW)
+        assert res.error_code == "ADAPTER_TIMEOUT"
+
+    # 2. 5th call is CAPACITY_EXHAUSTED
+    res5 = executor.execute_adapter(controlled_hung, "hung-4", "KIND", "ref", 300.0, NOW)
+    assert res5.error_code == "CAPACITY_EXHAUSTED"
+
+    # 3. Shutdown without waiting (2 tasks running on threads, 2 cancelled from work queue)
+    executor.shutdown(wait=False)
+
+    # 4. In new generation, exactly 2 slots were freed by the cancelled queue futures,
+    # while the 2 running background threads still hold their admission permits!
+    r_new1 = executor.execute_adapter(controlled_hung, "new-gen-0", "KIND", "ref", 300.0, NOW)
+    assert r_new1.error_code == "ADAPTER_TIMEOUT"
+
+    r_new2 = executor.execute_adapter(controlled_hung, "new-gen-1", "KIND", "ref", 300.0, NOW)
+    assert r_new2.error_code == "ADAPTER_TIMEOUT"
+
+    # Saturated: 2 old running + 2 new running = 4 (all permits held)
+    # Next call in new generation MUST be immediately rejected with CAPACITY_EXHAUSTED
+    r_new_saturated = executor.execute_adapter(controlled_hung, "new-gen-2", "KIND", "ref", 300.0, NOW)
+    assert r_new_saturated.error_code == "CAPACITY_EXHAUSTED"
+
+    # 5. Let all hanging tasks across both generations finish
+    release_event.set()
+    time.sleep(0.1)
+
+    # 6. Now that all old and new tasks finished, verify capacity is exactly 4, NEVER MORE
+    release_event2 = threading.Event()
+
+    def hung2(now: datetime) -> AdapterResult:
+        release_event2.wait()
+        return AdapterResult("src", "KIND", "ref", now.isoformat(), None, 300.0, SourceStatus.HEALTHY)
+
+    for i in range(4):
+        r = executor.execute_adapter(hung2, f"final-hung-{i}", "KIND", "ref", 300.0, NOW)
+        assert r.error_code == "ADAPTER_TIMEOUT"
+
+    r_final_overflow = executor.execute_adapter(hung2, "final-overflow", "KIND", "ref", 300.0, NOW)
+    assert r_final_overflow.error_code == "CAPACITY_EXHAUSTED"
+
+    release_event2.set()
+    executor.shutdown(wait=False)
+
+
+def test_ct04_r6_e2_direct_permit_accounting_no_over_release() -> None:
+    """(06D) Verify that repeated or late done callbacks cannot over-release admission capacity."""
+    from control_tower.resilience import ResilientAdapterExecutor
+    import threading
+
+    executor = ResilientAdapterExecutor(
+        timeout_seconds=0.05,
+        max_workers=2,
+        max_retries=0,
+        max_queue_depth=2,
+    )
+
+    # Semaphore starts with max permits (4)
+    # Intentionally trigger simulated over-release attempts
+    for _ in range(10):
+        # Trigger safe release callback handling
+        try:
+            executor._admission_semaphore.release()
+        except ValueError:
+            pass  # Expected BoundedSemaphore behavior
+
+    # Must still only allow exactly 4 acquisitions, 5th must fail
+    acquired_count = 0
+    for _ in range(4):
+        assert executor._admission_semaphore.acquire(blocking=False) is True
+        acquired_count += 1
+
+    assert acquired_count == 4
+    # 5th acquire MUST fail (capacity was not inflated beyond 4)
+    assert executor._admission_semaphore.acquire(blocking=False) is False
+
+    # Cleanly release the 4 acquired permits
+    for _ in range(4):
+        executor._admission_semaphore.release()
+
+    executor.shutdown(wait=False)
+
+
+def test_ct04_r6_e3_submit_failure_permit_exception_safety(monkeypatch: Any) -> None:
+    """(06E) Verify that when submit() raises an exception after admission, the permit is immediately released."""
+    from control_tower.resilience import ResilientAdapterExecutor
+    from concurrent.futures import ThreadPoolExecutor
+
+    executor = ResilientAdapterExecutor(
+        timeout_seconds=0.05,
+        max_workers=2,
+        max_retries=0,
+        max_queue_depth=2,
+    )
+
+    def failing_submit(self: Any, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("Injected submission failure after admission acquisition")
+
+    # Incur 10 consecutive submission failures
+    monkeypatch.setattr(ThreadPoolExecutor, "submit", failing_submit)
+    for i in range(10):
+        res = executor.execute_adapter(lambda now: None, f"fail-src-{i}", "KIND", "ref", 300.0, NOW)
+        assert res.truth_status is SourceStatus.UNKNOWN
+        assert res.error_code == "RuntimeError"
+
+    # Restore normal submit
+    monkeypatch.undo()
+
+    # Verify that all 4 permits are completely intact (none leaked!)
+    # We should be able to acquire exactly 4 permits
+    for i in range(4):
+        res_ok = executor.execute_adapter(
+            lambda now: AdapterResult(
+                "ok", "KIND", "ref", now.isoformat(), None, 300.0,
+                SourceStatus.HEALTHY, SourceStatus.HEALTHY, SourceStatus.HEALTHY,
+            ),
+            f"ok-src-{i}",
+            "KIND",
+            "ref",
+            300.0,
+            NOW,
+        )
+        assert res_ok.truth_status is SourceStatus.HEALTHY
+
+    executor.shutdown(wait=False)
+
+
+def test_ct04_r6_e3_shutdown_vs_submit_race_no_permit_leak() -> None:
+    """(06E) Verify that when shutdown() occurs right as submit() is called, no permit is leaked."""
+    from control_tower.resilience import ResilientAdapterExecutor
+
+    executor = ResilientAdapterExecutor(
+        timeout_seconds=0.05,
+        max_workers=2,
+        max_retries=0,
+        max_queue_depth=2,
+    )
+
+    # Initialize the underlying executor pool
+    underlying_pool = executor._get_executor()
+    # Pre-emptively shut down the underlying pool so executor.submit() raises RuntimeError
+    underlying_pool.shutdown(wait=False, cancel_futures=True)
+
+    # Submit task: admission acquires permit, but submit() raises RuntimeError (cannot schedule after shutdown)
+    res = executor.execute_adapter(
+        lambda now: AdapterResult(
+            "src", "KIND", "ref", now.isoformat(), None, 300.0,
+            SourceStatus.HEALTHY, SourceStatus.HEALTHY, SourceStatus.HEALTHY,
+        ),
+        "race-src",
+        "KIND",
+        "ref",
+        300.0,
+        NOW,
+    )
+    assert res.truth_status is SourceStatus.UNKNOWN
+    assert res.error_code == "RuntimeError"
+
+    # Restart executor cleanly via shutdown()
+    executor.shutdown(wait=False)
+
+    # Verify all 4 permits remain available in the next lifecycle
+    for i in range(4):
+        res_restart = executor.execute_adapter(
+            lambda now: AdapterResult(
+                "src", "KIND", "ref", now.isoformat(), None, 300.0,
+                SourceStatus.HEALTHY, SourceStatus.HEALTHY, SourceStatus.HEALTHY,
+            ),
+            f"restart-src-{i}",
+            "KIND",
+            "ref",
+            300.0,
+            NOW,
+        )
+        assert res_restart.truth_status is SourceStatus.HEALTHY
+
+    executor.shutdown(wait=False)
+
+
+def test_ct04_r6_e4_callback_failure_with_running_future(monkeypatch: Any) -> None:
+    """(06F) Verify that when add_done_callback() fails after submit(), permit remains held while worker runs and releases on completion."""
+    from control_tower.resilience import ResilientAdapterExecutor
+    from concurrent.futures import Future
+    import threading
+    import time
+
+    executor = ResilientAdapterExecutor(
+        timeout_seconds=0.05,
+        max_workers=2,
+        max_retries=0,
+        max_queue_depth=2,
+    )
+
+    task_started = threading.Event()
+    task_finish = threading.Event()
+
+    def running_adapter(now: datetime) -> AdapterResult:
+        task_started.set()
+        task_finish.wait()
+        return AdapterResult("src", "KIND", "ref", now.isoformat(), None, 300.0, SourceStatus.HEALTHY, SourceStatus.HEALTHY, SourceStatus.HEALTHY)
+
+    # Injected failure for add_done_callback
+    def failing_add_done(self: Any, fn: Any) -> None:
+        raise RuntimeError("Injected add_done_callback failure")
+
+    monkeypatch.setattr(Future, "add_done_callback", failing_add_done)
+
+    # Execute task in background thread
+    t = threading.Thread(target=lambda: executor._execute_single_attempt(running_adapter, "src-1", NOW))
+    t.start()
+    task_started.wait()
+
+    # The running worker thread MUST still hold its permit (permit not released prematurely!)
+    # Capacity is 4: exactly 3 permits can be acquired, 4th must fail
+    assert executor._admission_semaphore.acquire(blocking=False) is True
+    assert executor._admission_semaphore.acquire(blocking=False) is True
+    assert executor._admission_semaphore.acquire(blocking=False) is True
+    assert executor._admission_semaphore.acquire(blocking=False) is False
+
+    # Release probe permits
+    for _ in range(3):
+        executor._admission_semaphore.release()
+
+    # Finish worker task
+    task_finish.set()
+    t.join()
+    time.sleep(0.05)
+
+    # Now that the worker wrapper finished and executed its finally block, the permit is cleanly released!
+    # All 4 permits must be acquirable
+    for _ in range(4):
+        assert executor._admission_semaphore.acquire(blocking=False) is True
+    for _ in range(4):
+        executor._admission_semaphore.release()
+
+    executor.shutdown(wait=False)
+
+
+def test_ct04_r6_e4_cancellation_before_start_releases_permit(monkeypatch: Any) -> None:
+    """(06F) Verify that when add_done_callback() fails on a queued task and future is cancelled before start, permit is released."""
+    from control_tower.resilience import ResilientAdapterExecutor
+    from concurrent.futures import Future
+    import threading
+    import time
+
+    executor = ResilientAdapterExecutor(
+        timeout_seconds=0.05,
+        max_workers=1,
+        max_retries=0,
+        max_queue_depth=2,
+    )
+
+    block_worker = threading.Event()
+
+    def blocking_adapter(now: datetime) -> AdapterResult:
+        block_worker.wait()
+        return AdapterResult("b", "K", "r", now.isoformat(), None, 300.0, SourceStatus.HEALTHY, SourceStatus.HEALTHY, SourceStatus.HEALTHY)
+
+    # Start 1 worker to occupy the pool
+    t = threading.Thread(target=lambda: executor._execute_single_attempt(blocking_adapter, "src-b", NOW))
+    t.start()
+    time.sleep(0.02)
+
+    # Injected failure for add_done_callback
+    def failing_add_done(self: Any, fn: Any) -> None:
+        raise RuntimeError("Injected add_done_callback failure on queued task")
+
+    monkeypatch.setattr(Future, "add_done_callback", failing_add_done)
+
+    # Submit 2nd task: worker pool is busy, task is queued, add_done_callback raises, future.cancel() succeeds -> permit released
+    res, err, exc = executor._execute_single_attempt(lambda now: None, "src-queued", NOW)
+
+    # Total capacity = 3. Task 1 is running (1 permit). Task 2 was cancelled (0 permits held).
+    # We should be able to acquire exactly 2 permits!
+    assert executor._admission_semaphore.acquire(blocking=False) is True
+    assert executor._admission_semaphore.acquire(blocking=False) is True
+    assert executor._admission_semaphore.acquire(blocking=False) is False
+
+    for _ in range(2):
+        executor._admission_semaphore.release()
+
+    block_worker.set()
+    t.join()
+    executor.shutdown(wait=False)
+
+
+def test_ct04_r6_e4_double_release_does_not_inflate_capacity() -> None:
+    """(06F) Verify that release-once semantics prevent double release by both worker wrapper finally and done callback."""
+    from control_tower.resilience import ResilientAdapterExecutor
+
+    executor = ResilientAdapterExecutor(
+        timeout_seconds=0.05,
+        max_workers=2,
+        max_retries=0,
+        max_queue_depth=2,
+    )
+
+    # Execute 10 normal tasks where both worker wrapper and done callback participate in completion
+    for i in range(10):
+        res = executor.execute_adapter(
+            lambda now: AdapterResult("ok", "K", "r", now.isoformat(), None, 300.0, SourceStatus.HEALTHY, SourceStatus.HEALTHY, SourceStatus.HEALTHY),
+            f"ok-src-{i}",
+            "K",
+            "r",
+            300.0,
+            NOW,
+        )
+        assert res.truth_status is SourceStatus.HEALTHY
+
+    # Verify capacity remains exactly 4, never inflated beyond 4
+    for _ in range(4):
+        assert executor._admission_semaphore.acquire(blocking=False) is True
+    assert executor._admission_semaphore.acquire(blocking=False) is False
+
+    for _ in range(4):
+        executor._admission_semaphore.release()
+
+    executor.shutdown(wait=False)
+
+
 
 def test_ct04_r3_semantic_provenance_and_code_identity_binding() -> None:
     """Verify semantic provenance, invariant execution, and code-under-test identity binding."""

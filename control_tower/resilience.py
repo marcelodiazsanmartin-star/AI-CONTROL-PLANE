@@ -24,6 +24,9 @@ BASE_BACKOFF_DELAY_SECONDS = 0.1
 DEFAULT_MAX_RETRIES = 1  # 1 retry on recoverable timeout/exception
 
 
+MAX_PENDING_QUEUE_DEPTH = 4
+
+
 class CircuitState(str, Enum):
     CLOSED = "CLOSED"
     OPEN = "OPEN"
@@ -105,22 +108,25 @@ class CircuitBreaker:
 
 
 class ResilientAdapterExecutor:
-    """Bounded executor that runs adapters with timeouts, circuit breakers, backoff, and logging."""
+    """Bounded executor that runs adapters with timeouts, circuit breakers, backoff, admission control, and logging."""
 
     def __init__(
         self,
         timeout_seconds: float = DEFAULT_ADAPTER_TIMEOUT_SECONDS,
         max_workers: int = MAX_WORKER_THREADS,
         max_retries: int = DEFAULT_MAX_RETRIES,
+        max_queue_depth: int = MAX_PENDING_QUEUE_DEPTH,
     ) -> None:
         self.timeout_seconds = timeout_seconds
         self.max_workers = max_workers
         self.max_retries = max_retries
+        self.max_queue_depth = max_queue_depth
         self._executor: ThreadPoolExecutor | None = None
         self._is_shutdown = False
         self._breakers: dict[str, CircuitBreaker] = {}
         self._last_known_results: dict[str, AdapterResult] = {}
         self._lock = threading.Lock()
+        self._admission_semaphore = threading.BoundedSemaphore(self.max_workers + self.max_queue_depth)
 
     def _get_executor(self) -> ThreadPoolExecutor:
         with self._lock:
@@ -145,13 +151,51 @@ class ResilientAdapterExecutor:
         source_id: str,
         now: datetime,
     ) -> tuple[AdapterResult | None, str | None, Exception | None]:
-        """Submit and wait for adapter execution bounded by timeout."""
-        executor = self._get_executor()
-        future = executor.submit(adapter_func, now)
+        """Submit and wait for adapter execution bounded by timeout, admission capacity, and release-once ownership."""
+        admitted = self._admission_semaphore.acquire(blocking=False)
+        if not admitted:
+            return None, "CAPACITY_EXHAUSTED", None
+
+        lease_lock = threading.Lock()
+        lease_released = False
+
+        def release_once() -> None:
+            nonlocal lease_released
+            with lease_lock:
+                if not lease_released:
+                    lease_released = True
+                    try:
+                        self._admission_semaphore.release()
+                    except ValueError:
+                        pass
+
+        def adapter_worker_wrapper() -> AdapterResult:
+            try:
+                return adapter_func(now)
+            finally:
+                release_once()
+
+        try:
+            executor = self._get_executor()
+            future = executor.submit(adapter_worker_wrapper)
+        except Exception as e:
+            # Submission failed before Future creation; release permit immediately
+            release_once()
+            return None, "EXCEPTION", e
+
+        try:
+            future.add_done_callback(lambda fut: release_once())
+        except Exception:
+            # If callback registration fails, attempt cancellation. If cancelled before start,
+            # release permit; if already running on worker thread, wrapper finally will release.
+            if future.cancel():
+                release_once()
+
         try:
             res = future.result(timeout=self.timeout_seconds)
             return res, None, None
         except FutureTimeoutError:
+            # Slot remains held by running background worker until completion, providing true backpressure
             return None, "TIMEOUT", None
         except Exception as e:
             return None, "EXCEPTION", e
@@ -233,7 +277,34 @@ class ResilientAdapterExecutor:
         latency = (time.monotonic() - start_time) * 1000
         breaker.record_failure()
 
-        if failure_type == "TIMEOUT":
+        if failure_type == "CAPACITY_EXHAUSTED":
+            tower_logger.log(
+                component=source_id,
+                result_class="CAPACITY_EXHAUSTED",
+                latency_ms=latency,
+                error_code="CAPACITY_EXHAUSTED",
+                error_detail="Executor admission queue exhausted due to hung workers",
+            )
+            last_known = self._last_known_results.get(source_id)
+            return AdapterResult(
+                source_id=source_id,
+                source_kind=source_kind,
+                source_ref=source_ref,
+                fetched_at=now.isoformat(),
+                observed_at=last_known.observed_at if last_known else None,
+                freshness_sla_seconds=freshness_sla_seconds,
+                status=SourceStatus.UNKNOWN,
+                adapter_health=SourceStatus.DEGRADED,
+                truth_status=SourceStatus.UNKNOWN,
+                last_known_status=last_known.last_known_status if last_known else None,
+                last_known_conflict=last_known.last_known_conflict if last_known else None,
+                last_known_observed_at=last_known.last_known_observed_at if last_known else None,
+                payload=last_known.payload if last_known else {},
+                provenance=last_known.provenance if last_known else None,
+                error_code="CAPACITY_EXHAUSTED",
+                error_detail="Executor admission capacity exhausted",
+            )
+        elif failure_type == "TIMEOUT":
             tower_logger.log(
                 component=source_id,
                 result_class="TIMEOUT",
@@ -287,8 +358,8 @@ class ResilientAdapterExecutor:
                 error_detail=sanitize_error(exc) if exc else "Unknown error",
             )
 
-    def shutdown(self, wait: bool = True) -> None:
-        """Gracefully shutdown worker threads."""
+    def shutdown(self, wait: bool = False) -> None:
+        """Gracefully shutdown worker threads without resetting persistent admission bounds."""
         with self._lock:
             if self._executor is not None:
                 self._executor.shutdown(wait=wait, cancel_futures=True)
