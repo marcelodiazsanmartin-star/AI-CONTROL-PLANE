@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from control_tower.schema import CURRENT_SCHEMA_VERSION
 from control_tower.adapters import fetch_all_adapters, get_default_adapters
 from control_tower.calculations import (
     effective_gate_status,
@@ -422,7 +423,7 @@ def build_dashboard(
         }
 
     return {
-        "schema_version": "control-tower.phase2a.v1",
+        "schema_version": CURRENT_SCHEMA_VERSION,
         "generated_at": now.isoformat(),
         "data_mode": resolved_data_mode,
         "dashboard_is_source_of_truth": False,

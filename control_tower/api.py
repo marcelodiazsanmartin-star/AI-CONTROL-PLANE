@@ -1,100 +1,170 @@
-"""Dependency-free, loopback-only, read-only CONTROL TOWER HTTP API."""
+"""Read-only HTTP API server for CONTROL TOWER CT-03."""
 
 from __future__ import annotations
 
-import argparse
 import json
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from pathlib import Path
+from typing import Any
 
 from control_tower.fixtures import build_dashboard
-from control_tower.security import validate_host_header
-
-LOOPBACK_HOST = "127.0.0.1"
-DEFAULT_PORT = 8000
-ALLOWED_ORIGINS = frozenset(
-    {"http://localhost:3000", "http://127.0.0.1:3000"}
+from control_tower.logging import tower_logger
+from control_tower.schema import CURRENT_SCHEMA_VERSION
+from control_tower.security import (
+    ALLOWED_LOOPBACK_HOSTS,
+    sanitize_error,
+    validate_host_header,
 )
+
+ALLOWED_ORIGINS = frozenset({"http://localhost:3000", "http://127.0.0.1:3000"})
+LOOPBACK_HOST = "127.0.0.1"
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
-    """Serve two GET endpoints and reject every mutation and unauthorized host header."""
+    """Secure, loopback-only, read-only HTTP handler."""
 
-    server_version = "ControlTower/0.2"
+    server_version = "ControlTowerBackend/3.0"
 
-    def _write_json(self, status: int, payload: dict[str, object]) -> None:
-        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        self.send_response(status)
+    def _write_json(
+        self,
+        status_code: int,
+        payload: dict[str, Any],
+        request_id: str | None = None,
+    ) -> None:
+        origin = self.headers.get("Origin")
+        body = json.dumps(payload).encode("utf-8")
+
+        self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Vary", "Origin")
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "no-store, max-age=0")
+        self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Content-Security-Policy", "default-src 'none'")
+
+        if origin and origin in ALLOWED_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
         self.end_headers()
         self.wfile.write(body)
 
-    def _check_host(self) -> bool:
-        """Strict Host header validation (F-CT00-02)."""
-        host_header = self.headers.get("Host")
-        server_port = getattr(self.server, "server_port", None)
-        if not validate_host_header(host_header, server_port=server_port):
-            self._write_json(400, {"error": "INVALID_HOST_HEADER"})
-            return False
-        return True
+    def do_OPTIONS(self) -> None:
+        origin = self.headers.get("Origin")
+        if origin and origin in ALLOWED_ORIGINS:
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Max-Age", "600")
+            self.end_headers()
+        else:
+            self.send_response(403)
+            self.end_headers()
 
     def do_GET(self) -> None:
-        if not self._check_host():
+        host = self.headers.get("Host")
+        server_port = self.server.server_port if hasattr(self.server, "server_port") else None
+
+        if not validate_host_header(host, server_port):
+            tower_logger.log(
+                component="HTTP",
+                result_class="INVALID_HOST_HEADER",
+                error_code="INVALID_HOST_HEADER",
+                error_detail=f"Host header rejected: {sanitize_error(host)}",
+            )
+            self._write_json(400, {"error": "INVALID_HOST_HEADER"})
             return
-        path = urlsplit(self.path).path
-        if path == "/api/v1/dashboard":
-            self._write_json(200, build_dashboard(now=datetime.now(timezone.utc)))
-            return
-        if path == "/health":
+
+        if self.path in ("/health", "/api/v1/health", "/api/v1/liveness"):
             self._write_json(
                 200,
                 {
                     "status": "HEALTHY",
-                    "scope": "CONTROL_TOWER_APPLICATION",
-                    "stage": "CT-01",
-                    "read_only": True,
-                    "upstream_systems_included": False,
+                    "liveness": "PASS",
+                    "service": "CONTROL_TOWER",
+                    "schema_version": CURRENT_SCHEMA_VERSION,
                 },
             )
             return
+
+        if self.path in ("/ready", "/api/v1/ready", "/api/v1/readiness"):
+            try:
+                now = datetime.now(timezone.utc)
+                root_dir = getattr(self.server, "root_dir", None)
+                build_dashboard(now, root_dir=root_dir)
+                self._write_json(
+                    200,
+                    {
+                        "status": "READY",
+                        "readiness": "PASS",
+                        "service": "CONTROL_TOWER",
+                        "schema_version": CURRENT_SCHEMA_VERSION,
+                    },
+                )
+            except Exception as e:
+                tower_logger.log(
+                    component="READINESS",
+                    result_class="NOT_READY",
+                    error_code=type(e).__name__,
+                    error_detail=sanitize_error(e),
+                )
+                self._write_json(
+                    503,
+                    {
+                        "status": "NOT_READY",
+                        "readiness": "FAIL",
+                        "service": "CONTROL_TOWER",
+                        "error": type(e).__name__,
+                        "detail": sanitize_error(e),
+                    },
+                )
+            return
+
+        if self.path == "/api/v1/dashboard":
+            try:
+                now = datetime.now(timezone.utc)
+                root_dir = getattr(self.server, "root_dir", None)
+                data = build_dashboard(now, root_dir=root_dir)
+                self._write_json(200, data)
+            except Exception as e:
+                tower_logger.log(
+                    component="API",
+                    result_class="SERVER_ERROR",
+                    error_code=type(e).__name__,
+                    error_detail=sanitize_error(e),
+                )
+                self._write_json(500, {"error": "INTERNAL_SERVER_ERROR", "detail": sanitize_error(e)})
+            return
+
         self._write_json(404, {"error": "NOT_FOUND"})
 
-    def _read_only(self) -> None:
-        if not self._check_host():
-            return
-        self._write_json(405, {"error": "READ_ONLY_PHASE_0"})
+    def do_HEAD(self) -> None:
+        self.do_GET()
 
-    do_POST = _read_only
-    do_PUT = _read_only
-    do_PATCH = _read_only
-    do_DELETE = _read_only
+    def do_POST(self) -> None:
+        self._write_json(405, {"error": "READ_ONLY: Mutations not permitted"})
 
-    def log_message(self, message: str, *args: object) -> None:
-        print(f"CONTROL_TOWER_API {self.address_string()} {message % args}")
+    def do_PUT(self) -> None:
+        self.do_POST()
 
+    def do_PATCH(self) -> None:
+        self.do_POST()
 
-def create_server(port: int = DEFAULT_PORT) -> ThreadingHTTPServer:
-    """Create a server that cannot be configured to listen beyond loopback."""
-    return ThreadingHTTPServer((LOOPBACK_HOST, port), DashboardHandler)
+    def do_DELETE(self) -> None:
+        self.do_POST()
 
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    args = parser.parse_args()
-    server = create_server(args.port)
-    print(f"CONTROL TOWER API: http://{LOOPBACK_HOST}:{args.port}")
-    server.serve_forever()
+    def log_message(self, format: str, *args: Any) -> None:
+        pass
 
 
-if __name__ == "__main__":
-    main()
+def create_server(
+    port: int = 8000,
+    host: str = LOOPBACK_HOST,
+    root_dir: Path | None = None,
+) -> ThreadingHTTPServer:
+    """Create loopback backend HTTP server."""
+    server = ThreadingHTTPServer((host, port), DashboardHandler)
+    server.root_dir = root_dir
+    return server
