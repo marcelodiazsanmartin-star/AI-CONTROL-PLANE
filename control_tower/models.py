@@ -1,4 +1,4 @@
-"""Canonical, read-only Phase 0 dashboard data contract."""
+"""Canonical, read-only Phase 0/1 dashboard data contract."""
 
 from __future__ import annotations
 
@@ -27,6 +27,16 @@ class TruthStatus(str, Enum):
     BLOCKED = "BLOCKED"
 
 
+class SourceStatus(str, Enum):
+    HEALTHY = "HEALTHY"
+    DEGRADED = "DEGRADED"
+    STALE = "STALE"
+    OFFLINE = "OFFLINE"
+    UNKNOWN = "UNKNOWN"
+    BLOCKED = "BLOCKED"
+    NOT_CONNECTED = "NOT_CONNECTED"
+
+
 class AlertLevel(str, Enum):
     INFO = "INFO"
     WARNING = "WARNING"
@@ -37,12 +47,33 @@ class AlertLevel(str, Enum):
 
 
 @dataclass(frozen=True)
+class AdapterResult:
+    source_id: str
+    source_kind: str
+    source_ref: str
+    fetched_at: str
+    observed_at: str | None
+    freshness_sla_seconds: float
+    status: SourceStatus  # Canonical truth_status
+    adapter_health: SourceStatus = SourceStatus.HEALTHY
+    truth_status: SourceStatus = SourceStatus.UNKNOWN
+    last_known_status: str | None = None
+    last_known_conflict: bool | None = None
+    last_known_observed_at: str | None = None
+    payload: dict[str, Any] = field(default_factory=dict)
+    provenance: str | None = None
+    error_code: str | None = None
+    error_detail: str | None = None
+
+
+@dataclass(frozen=True)
 class Evidence:
     id: str
     label: str
     status: TruthStatus
     source: str | None = None
     verified_at: datetime | None = None
+    provenance: str | None = None
 
 
 @dataclass(frozen=True)
@@ -118,6 +149,8 @@ class Runtime:
     heartbeat: datetime | None
     source: str
     conflict: bool = False
+    truth_status: RuntimeStatus = RuntimeStatus.UNKNOWN
+    last_known_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -139,6 +172,7 @@ class Project:
     operational_gates: tuple[Gate, ...] = ()
     next_action: str = "UNKNOWN"
     domain: dict[str, Any] = field(default_factory=dict)
+    source_id: str | None = None
 
 
 @dataclass(frozen=True)

@@ -1,160 +1,25 @@
 "use strict";
-
-const API = "http://127.0.0.1:8000/api/v1/dashboard";
-
-function element(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = String(text ?? "UNKNOWN");
-  return node;
-}
-
-function replaceChildren(selector, children) {
-  document.querySelector(selector).replaceChildren(...children);
-}
-
-function statusBadge(value) {
-  const safeValue = String(value ?? "UNKNOWN");
-  return element("span", `status status-${safeValue}`, safeValue);
-}
-
-function formatPercent(value) {
-  return typeof value === "number" ? `${value}%` : "UNKNOWN";
-}
-
-function progressRow(label, value) {
-  const row = element("div", "progress-row");
-  row.append(element("label", "", label), element("b", "", formatPercent(value)));
-  const bar = element("div", "bar");
-  const fill = element("i");
-  const bounded = typeof value === "number" ? Math.min(100, Math.max(0, value)) : 0;
-  fill.style.width = `${bounded}%`;
-  bar.append(fill);
-  row.append(bar);
-  return row;
-}
-
-function detailLine(label, value) {
-  const line = element("div", "detail-line");
-  line.append(element("small", "", label), element("b", "", value));
-  return line;
-}
-
-function projectCard(project, runtimes) {
-  const card = element("article", "project");
-  const header = element("div", "project-header");
-  const identity = element("div");
-  identity.append(element("h3", "", project.name), element("small", "", project.id));
-  const runtime = runtimes.find((item) => item.project_id === project.id);
-  header.append(identity, statusBadge(runtime?.observed_status));
-  card.append(header, element("p", "description", project.description));
-  card.append(
-    progressRow("PLAN PROGRESS", project.plan_progress),
-    progressRow("CERTIFICATION READINESS", project.certification_readiness),
-    progressRow("OPERATIONAL READINESS", project.operational_readiness),
-  );
-
-  const gates = element("div", "gates");
-  gates.append(element("h4", "", "GATES"));
-  for (const gate of [...project.certification_gates, ...project.operational_gates]) {
-    const row = element("div", "gate-row");
-    row.append(element("span", "", `${gate.label} · weight ${gate.weight}`));
-    row.append(statusBadge(gate.effective_status));
-    gates.append(row);
-  }
-  card.append(gates);
-
-  if (Object.keys(project.domain).length) {
-    const domain = element("div", "domain");
-    for (const [key, value] of Object.entries(project.domain)) {
-      domain.append(detailLine(key.replaceAll("_", " ").toUpperCase(), value));
-    }
-    card.append(domain);
-  }
-
-  const next = element("div", "next");
-  next.append(element("b", "", "NEXT ACTION"), element("span", "", project.next_action));
-  card.append(next);
-  return card;
-}
-
-function render(data) {
-  const mode = document.querySelector("#mode");
-  mode.textContent = `DATA MODE: ${data.data_mode}`;
-  mode.className = "mode fixture";
-
-  const connection = document.querySelector("#connection");
-  connection.className = "connection online";
-  connection.textContent = `API ONLINE · ${data.schema_version} · GENERATED ${data.generated_at}`;
-
-  const summaryItems = [
-    ["GLOBAL HEALTH", data.summary.global_health],
-    ["AUTONOMY READINESS", data.summary.autonomy_readiness],
-    ["CRITICAL ALERTS", data.summary.critical_alerts],
-    ["HUMAN APPROVAL REQUIRED", data.summary.human_approval_required ? "REQUIRED" : "NONE"],
-    ["ACTIVE AGENTS", data.summary.active_agents],
-    ["ACTIVE TASKS", data.summary.active_tasks],
-    ["BLOCKERS", data.summary.blockers],
-  ].map(([label, value]) => {
-    const metric = element("article", "metric");
-    metric.append(element("label", "", label), element("strong", "", value));
-    return metric;
-  });
-  replaceChildren("#summary", summaryItems);
-  replaceChildren("#projects", data.projects.map((project) => projectCard(project, data.runtimes)));
-
-  replaceChildren("#agents", data.agents.map((agent) => {
-    const row = element("div", "agent");
-    row.append(element("b", "", agent.name), statusBadge(agent.availability));
-    row.append(element("small", "", `Task ${agent.current_task ?? "UNKNOWN"} · Stage ${agent.task_stage ?? "UNKNOWN"} · Progress ${formatPercent(agent.progress)} · Heartbeat ${agent.heartbeat ?? "UNKNOWN"} · Provider ${agent.provider_status ?? "UNKNOWN"} · Quota ${agent.quota_status ?? "UNKNOWN"} · Blocker ${agent.blocker ?? "NONE"}`));
-    return row;
-  }));
-
-  replaceChildren("#tasks", data.tasks.map((task) => {
-    const row = element("div", "task");
-    row.append(element("b", "", task.label), statusBadge(task.stage));
-    row.append(element("small", "", `Project ${task.project_id} · Progress ${formatPercent(task.progress)} · Blocker ${task.blocker ?? "NONE"}`));
-    return row;
-  }));
-
-  replaceChildren("#alerts", data.alerts.map((alert) => {
-    const row = element("div", "alert");
-    row.append(element("b", "", alert.title), statusBadge(alert.level));
-    row.append(element("small", "", alert.detail));
-    return row;
-  }));
-
-  replaceChildren("#approvals", data.approvals.map((approval) => {
-    const row = element("div", "approval");
-    row.append(element("b", "", approval.label), statusBadge(approval.status));
-    row.append(element("small", "", `Reason ${approval.reason} · Requested ${approval.requested_at ?? "UNKNOWN"} · Required ${approval.required} · Execution enabled ${approval.execution_enabled}`));
-    return row;
-  }));
-
-  replaceChildren("#timeline", data.evidence.map((evidence) => {
-    const event = element("div", "event");
-    event.append(element("b", "", evidence.label), statusBadge(evidence.status));
-    event.append(element("small", "", `${evidence.source ?? "UNKNOWN"} · ${evidence.verified_at ?? "UNKNOWN"}`));
-    return event;
-  }));
-}
-
-fetch(API, {method: "GET", credentials: "omit"})
-  .then((response) => {
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.json();
-  })
-  .then(render)
-  .catch((error) => {
-    const connection = document.querySelector("#connection");
-    connection.className = "connection error";
-    connection.textContent = `API OFFLINE · Start backend on 127.0.0.1:8000 · ${error.message}`;
-  });
-
-document.querySelector("#theme").addEventListener("click", () => {
-  const root = document.documentElement;
-  root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light";
-});
-setInterval(() => {
-  document.querySelector("#clock").textContent = new Date().toLocaleTimeString();
-}, 1000);
+const API="http://127.0.0.1:8000/api/v1/dashboard",UNKNOWN="UNKNOWN";
+const NAMES=["AI-CONTROL-PLANE","CONTROL TOWER","ORACLE-AI","MICRO-MARKET-ORACLE"];
+function el(tag,cls,value){const node=document.createElement(tag);if(cls)node.className=cls;if(value!==undefined)node.textContent=String(value??UNKNOWN);return node}
+function put(selector,nodes){const target=document.querySelector(selector);if(target)target.replaceChildren(...nodes)}
+function truth(value){return value===null||value===undefined||value===""?UNKNOWN:String(value)}
+function badge(value){const safe=truth(value);return el("span",`status status-${safe}`,safe)}
+function pct(value){return typeof value==="number"&&Number.isFinite(value)?`${value}%`:UNKNOWN}
+function bar(label,value,cls="progress-item"){const row=el("div",cls),head=el("div","progress-head"),track=el("div","bar"),fill=el("i");head.append(el("span","",label),el("small","",pct(value)));fill.style.width=`${typeof value==="number"?Math.min(100,Math.max(0,value)):0}%`;track.append(fill);row.append(head,track);return row}
+function metric(label,value){const row=el("div","metric-row");row.append(el("span","",label),el("b","",truth(value)));return row}
+function renderSummary(data){const values=[["TIME",data.time?.actual,"Schedule source"],["TASKS",data.tasks.length,`${data.summary.blockers} blocked`],["WORKLOAD",data.summary.active_agents,"active agents"],["PROGRESS",UNKNOWN,"Per-project weighted"],["COST",data.cost_summary?.actual,"NOT_CONNECTED"]];put("#summary",values.map(([label,value,note])=>{const card=el("article","metric");card.append(el("label","",label),el("strong","",truth(value)),el("small","",note));return card}))}
+function renderHealth(data){const value=truth(data.summary.global_health);for(const selector of ["#global-state","#health-badge"]){const node=document.querySelector(selector);if(node){node.className=`status status-${value}`;node.textContent=value}}const values=[["Global health",value],["Dashboard API","HEALTHY"],["Upstream systems",data.data_mode==="LIVE_READONLY"?"HEALTHY":"PARTIAL_LIVE"],["Critical alerts",data.summary.critical_alerts],["Blockers",data.summary.blockers]];put("#health",values.map(([label,status])=>{const row=el("div","health-item");row.append(el("span","",label),typeof status==="string"?badge(status):el("b","",status));return row}))}
+function taskState(task){if(task.blocker)return"BLOCKED";const stage=truth(task.stage).toUpperCase();if(["COMPLETE","COMPLETED","DONE"].includes(stage))return"COMPLETE";if(["IN_PROGRESS","WORKING","REVIEW"].includes(stage))return"IN_PROGRESS";if(["NOT_STARTED","PENDING","BACKLOG"].includes(stage))return"NOT_STARTED";return UNKNOWN}
+function renderTasks(tasks){const keys=["NOT_STARTED","IN_PROGRESS","COMPLETE","BLOCKED"],colors={NOT_STARTED:"#aab3bf",IN_PROGRESS:"#5276e6",COMPLETE:"#21a477",BLOCKED:"#d25764"},counts=Object.fromEntries(keys.map(k=>[k,0]));let unknown=0;tasks.forEach(task=>{const state=taskState(task);state===UNKNOWN?unknown++:counts[state]++});const totalEl=document.querySelector("#task-total");if(totalEl)totalEl.textContent=String(tasks.length);let cursor=0;const stops=[];keys.forEach(key=>{const next=tasks.length?cursor+counts[key]/tasks.length*100:cursor;stops.push(`${colors[key]} ${cursor}% ${next}%`);cursor=next});if(unknown)stops.push(`#e1e6eb ${cursor}% 100%`);const donutEl=document.querySelector("#task-donut");if(donutEl)donutEl.style.background=tasks.length?`conic-gradient(${stops.join(",")})`:"var(--line)";put("#task-legend",keys.map(key=>{const row=el("div","legend-row"),dot=el("i");dot.style.backgroundColor=colors[key];row.append(dot,el("span","",key),el("b","",counts[key]));return row}))}
+function missing(name){return{id:"not-connected",name,description:"No verified project source connected",plan_progress:null,certification_readiness:null,operational_readiness:null,certification_gates:[],operational_gates:[],next_action:UNKNOWN}}
+function projectsInOrder(projects){return NAMES.map(name=>projects.find(project=>project.name===name)??missing(name))}
+function projectCard(project,runtimes){const card=el("article","project-card"),head=el("div","project-head"),title=el("div");title.append(el("h3","",project.name),el("small","",project.description));head.append(title,badge(runtimes.find(item=>item.project_id===project.id)?.observed_status));card.append(head,bar("PLAN_PROGRESS",project.plan_progress,"project-progress"),bar("CERTIFICATION_READINESS",project.certification_readiness,"project-progress"),bar("OPERATIONAL_READINESS",project.operational_readiness,"project-progress"));const gates=el("div","gate-list");[...project.certification_gates,...project.operational_gates].forEach(gate=>{const row=el("div","gate");row.append(el("span","",`${gate.label} · weight ${gate.weight}`),badge(gate.effective_status));gates.append(row)});const next=el("div","next-action");next.append(el("b","","NEXT · "),document.createTextNode(truth(project.next_action)));card.append(gates,next);return card}
+function renderProgress(projects){put("#progress-overview",projects.map(project=>{const block=bar(project.name,project.plan_progress),trio=el("div","readiness-trio");[["PLAN",project.plan_progress],["CERT",project.certification_readiness],["OPS",project.operational_readiness]].forEach(([label,value])=>{const item=el("div");item.append(el("small","",label),el("b","",pct(value)));trio.append(item)});block.append(trio);return block}))}
+function renderWorkload(agents){const labels=["completed","remaining","blocked","overdue","waiting approval"];put("#workload",agents.map(agent=>{const row=el("div","agent-row");row.append(el("strong","",agent.name),badge(agent.availability),el("small","",`Provider ${truth(agent.provider_status)} · Heartbeat ${truth(agent.heartbeat)}`));const counts=el("div","agent-counts");labels.forEach(label=>{const cell=el("span");cell.append(el("b","",UNKNOWN),document.createTextNode(label));counts.append(cell)});row.append(counts);return row}))}
+function renderDomain(selector,project){put(selector,Object.entries(project?.domain??{}).map(([key,value])=>{const field=el("div","domain-field");field.append(el("small","",key.replaceAll("_"," ")),el("b","",truth(value)));return field}))}
+function renderSources(sources){const entries=Object.entries(sources||{});put("#source-list",entries.map(([id,src])=>{const card=el("article","project-card"),head=el("div","project-head"),title=el("div");title.append(el("h3","",src.source_id),el("small","",`${src.source_kind} (${src.source_ref})`));head.append(title,badge(src.truth_status||src.status));card.append(head);const grid=el("div","domain-panel");const fields=[["Adapter Health",truth(src.adapter_health)],["Truth Status",truth(src.truth_status||src.status)],["Observed",truth(src.observed_at)],["Fetched",truth(src.fetched_at)],["SLA",`${src.freshness_sla_seconds}s`],["Last Known",truth(src.last_known_status)],["Provenance",truth(src.provenance)]];if(src.error_code){fields.push(["Error",`${src.error_code}: ${src.error_detail}`])}fields.forEach(([k,v])=>{const f=el("div","domain-field");f.append(el("small","",k),el("b","",v));grid.append(f)});card.append(grid);return card}))}
+function item(title,status,detail){const row=el("div","row");row.append(el("b","",title),badge(status),el("small","",detail));return row}
+function render(data){document.querySelector("#mode").textContent=`DATA MODE: ${truth(data.data_mode)}`;document.querySelector("#connection").textContent=`API ONLINE · ${truth(data.schema_version)} · ${truth(data.generated_at)}`;for(const [selector,value] of [["#active-agents",data.summary.active_agents],["#top-alerts",data.alerts.length],["#nav-alerts",data.alerts.length]]){const node=document.querySelector(selector);if(node)node.textContent=String(value)}renderSummary(data);renderHealth(data);renderTasks(data.tasks);const projects=projectsInOrder(data.projects);renderProgress(projects);put("#project-list",projects.map(project=>projectCard(project,data.runtimes)));renderSources(data.sources);renderWorkload(data.agents);put("#time-metrics",["PLANNED","ACTUAL","AHEAD","BEHIND","STALE"].map(key=>metric(key,data.time?.[key.toLowerCase()])));put("#cost-metrics",["ACTUAL","PLANNED","BUDGET"].map(key=>metric(key,data.cost_summary?.[key.toLowerCase()]??"NOT_CONNECTED")));renderDomain("#oracle-panel",data.projects.find(p=>p.name==="ORACLE-AI"));renderDomain("#micro-panel",data.projects.find(p=>p.name==="MICRO-MARKET-ORACLE"));put("#alert-list",data.alerts.map(x=>item(x.title,x.level,x.detail)));put("#approval-list",data.approvals.map(x=>item(x.label,x.status,`${x.reason} · execution ${x.execution_enabled}`)));put("#timeline",data.evidence.map(x=>item(x.label,x.status,`${truth(x.source)} · ${truth(x.verified_at)}`)))}
+fetch(API,{method:"GET",credentials:"omit"}).then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json()}).then(render).catch(error=>{const node=document.querySelector("#connection");if(node){node.className="error";node.textContent=`API OFFLINE · ${error.message}`}});
+document.querySelector("#theme")?.addEventListener("click",()=>{const root=document.documentElement;root.dataset.theme=root.dataset.theme==="dark"?"light":"dark"});function clock(){const node=document.querySelector("#clock");if(node)node.textContent=new Date().toLocaleTimeString()}clock();setInterval(clock,1000);

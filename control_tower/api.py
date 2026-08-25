@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 from control_tower.fixtures import build_dashboard
+from control_tower.security import validate_host_header
 
 LOOPBACK_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
@@ -17,7 +19,7 @@ ALLOWED_ORIGINS = frozenset(
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
-    """Serve two GET endpoints and reject every mutation without reading a body."""
+    """Serve two GET endpoints and reject every mutation and unauthorized host header."""
 
     server_version = "ControlTower/0.2"
 
@@ -36,10 +38,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _check_host(self) -> bool:
+        """Strict Host header validation (F-CT00-02)."""
+        host_header = self.headers.get("Host")
+        server_port = getattr(self.server, "server_port", None)
+        if not validate_host_header(host_header, server_port=server_port):
+            self._write_json(400, {"error": "INVALID_HOST_HEADER"})
+            return False
+        return True
+
     def do_GET(self) -> None:
+        if not self._check_host():
+            return
         path = urlsplit(self.path).path
         if path == "/api/v1/dashboard":
-            self._write_json(200, build_dashboard())
+            self._write_json(200, build_dashboard(now=datetime.now(timezone.utc)))
             return
         if path == "/health":
             self._write_json(
@@ -47,6 +60,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 {
                     "status": "HEALTHY",
                     "scope": "CONTROL_TOWER_APPLICATION",
+                    "stage": "CT-01",
                     "read_only": True,
                     "upstream_systems_included": False,
                 },
@@ -55,6 +69,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._write_json(404, {"error": "NOT_FOUND"})
 
     def _read_only(self) -> None:
+        if not self._check_host():
+            return
         self._write_json(405, {"error": "READ_ONLY_PHASE_0"})
 
     do_POST = _read_only

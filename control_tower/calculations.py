@@ -1,14 +1,47 @@
-"""Deterministic, fail-closed dashboard calculations."""
+"""Deterministic, fail-closed dashboard calculations with truth semantics."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Iterable
+from typing import Any, Iterable, Mapping
 
-from control_tower.models import Gate, Milestone, RuntimeStatus, TruthStatus
+from control_tower.models import Evidence, Gate, Milestone, RuntimeStatus, TruthStatus
 
 STALE_AFTER = timedelta(minutes=5)
 MAX_CLOCK_SKEW = timedelta(seconds=30)
+MAX_EVIDENCE_AGE = timedelta(hours=24)
+
+STATUS_NORMALIZATION_MAP: dict[str, RuntimeStatus] = {
+    "RUNNING": RuntimeStatus.WORKING,
+    "WORKING": RuntimeStatus.WORKING,
+    "ONLINE": RuntimeStatus.WORKING,
+    "ACTIVE": RuntimeStatus.WORKING,
+    "UP": RuntimeStatus.WORKING,
+    "HEALTHY": RuntimeStatus.HEALTHY,
+    "OK": RuntimeStatus.HEALTHY,
+    "DEGRADED": RuntimeStatus.DEGRADED,
+    "DEGRADED_STALE": RuntimeStatus.DEGRADED,
+    "STALE": RuntimeStatus.STALE,
+    "OUTDATED": RuntimeStatus.STALE,
+    "OFFLINE": RuntimeStatus.OFFLINE,
+    "STOPPED": RuntimeStatus.OFFLINE,
+    "EXITED": RuntimeStatus.OFFLINE,
+    "DOWN": RuntimeStatus.OFFLINE,
+    "BLOCKED": RuntimeStatus.BLOCKED,
+    "CONFLICT": RuntimeStatus.BLOCKED,
+    "ERROR": RuntimeStatus.BLOCKED,
+    "UNKNOWN": RuntimeStatus.UNKNOWN,
+}
+
+
+def normalize_runtime_status(value: Any) -> RuntimeStatus:
+    """Explicit deterministic normalization for runtime status strings."""
+    if isinstance(value, RuntimeStatus):
+        return value
+    if not isinstance(value, str):
+        return RuntimeStatus.UNKNOWN
+    cleaned = value.strip().upper()
+    return STATUS_NORMALIZATION_MAP.get(cleaned, RuntimeStatus.UNKNOWN)
 
 
 def _valid_weight(weight: float) -> bool:
@@ -32,18 +65,54 @@ def weighted_milestone_progress(items: Iterable[Milestone]) -> float | None:
     return round(weighted / sum(item.weight for item in values), 1)
 
 
-def effective_gate_status(gate: Gate) -> TruthStatus:
-    """A claimed PASS without complete referenced evidence fails closed."""
+def effective_gate_status(
+    gate: Gate,
+    evidence_map: Mapping[str, Evidence] | None = None,
+    now: datetime | None = None,
+    max_evidence_age: timedelta = MAX_EVIDENCE_AGE,
+) -> TruthStatus:
+    """A claimed PASS without complete verified fresh referenced evidence fails closed.
+
+    CT-01R1 Truth Semantics:
+    - Evidence ID must resolve
+    - Evidence status must be PASS
+    - Evidence provenance must be present/verified
+    - Evidence freshness must satisfy freshness requirement if verified_at is present
+    """
     if gate.blocker:
         return TruthStatus.BLOCKED
-    if gate.status is TruthStatus.PASS and (
-        not gate.evidence_complete or not gate.evidence_ids
-    ):
-        return TruthStatus.UNKNOWN
+    if gate.status is TruthStatus.PASS:
+        if not gate.evidence_complete or not gate.evidence_ids:
+            return TruthStatus.UNKNOWN
+        if evidence_map is not None:
+            for ev_id in gate.evidence_ids:
+                if ev_id not in evidence_map:
+                    return TruthStatus.UNKNOWN
+                ev = evidence_map[ev_id]
+                if ev.status is TruthStatus.BLOCKED:
+                    return TruthStatus.BLOCKED
+                if ev.status is not TruthStatus.PASS:
+                    return TruthStatus.UNKNOWN
+                # Provenance requirement
+                if not ev.provenance or not ev.provenance.strip():
+                    return TruthStatus.UNKNOWN
+                # Freshness requirement
+                if now is not None and ev.verified_at is not None:
+                    if ev.verified_at.tzinfo is None or now.tzinfo is None:
+                        return TruthStatus.UNKNOWN
+                    if ev.verified_at > now + MAX_CLOCK_SKEW:
+                        return TruthStatus.UNKNOWN
+                    if now - ev.verified_at > max_evidence_age:
+                        return TruthStatus.UNKNOWN
+        return TruthStatus.PASS
     return gate.status
 
 
-def weighted_gate_readiness(items: Iterable[Gate]) -> float | None:
+def weighted_gate_readiness(
+    items: Iterable[Gate],
+    evidence_map: Mapping[str, Evidence] | None = None,
+    now: datetime | None = None,
+) -> float | None:
     """Count only effective PASS gates toward readiness."""
     values = tuple(items)
     if not values or any(not _valid_weight(item.weight) for item in values):
@@ -51,7 +120,7 @@ def weighted_gate_readiness(items: Iterable[Gate]) -> float | None:
     earned = sum(
         item.weight
         for item in values
-        if effective_gate_status(item) is TruthStatus.PASS
+        if effective_gate_status(item, evidence_map=evidence_map, now=now) is TruthStatus.PASS
     )
     return round(100 * earned / sum(item.weight for item in values), 1)
 
@@ -61,10 +130,10 @@ def runtime_truth(
     heartbeat: datetime | None,
     now: datetime,
     *,
-    observed_status: RuntimeStatus | None = None,
+    observed_status: RuntimeStatus | str | None = None,
     blocker: str | None = None,
 ) -> RuntimeStatus:
-    """Resolve runtime truth without treating persisted state as live evidence."""
+    """Resolve runtime truth with strict stale-precedence."""
     if blocker:
         return RuntimeStatus.BLOCKED
     if not isinstance(heartbeat, datetime) or not isinstance(now, datetime):
@@ -77,6 +146,16 @@ def runtime_truth(
         return RuntimeStatus.STALE
     if observed_status is None:
         return RuntimeStatus.UNKNOWN
-    if persisted_status and persisted_status.upper() != observed_status.value:
-        return RuntimeStatus.BLOCKED
-    return observed_status
+
+    norm_obs = normalize_runtime_status(observed_status)
+    if norm_obs is RuntimeStatus.UNKNOWN:
+        return RuntimeStatus.UNKNOWN
+
+    if persisted_status:
+        norm_per = normalize_runtime_status(persisted_status)
+        if norm_per is RuntimeStatus.UNKNOWN:
+            return RuntimeStatus.BLOCKED
+        if norm_per != norm_obs:
+            return RuntimeStatus.BLOCKED
+
+    return norm_obs
