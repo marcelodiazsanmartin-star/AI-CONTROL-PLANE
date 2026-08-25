@@ -30,12 +30,7 @@ PLACEHOLDER_PROVENANCE_TOKENS = frozenset({
     "test_evidence_sha:verified",
 })
 
-TRUSTED_VERIFIER_PREFIXES = (
-    "verifier:invariant:",
-    "verifier:test:",
-    "verifier:artifact:",
-    "verifier:report:",
-    "verifier:loopback_check",
+TRUSTED_VERIFIER_IDS: frozenset[str] = frozenset({
     "verifier:gov_baseline_rules",
     "verifier:crypto_test_report_check",
     "verifier:multi_priority_auth_check",
@@ -44,7 +39,9 @@ TRUSTED_VERIFIER_PREFIXES = (
     "verifier:strict_host_header_validation",
     "verifier:safe_dom_no_innerhtml",
     "verifier:queue_read_only_projection",
-)
+    "verifier:unit_test_certified",
+    "verifier:loopback_check",
+})
 
 STATUS_NORMALIZATION_MAP: dict[str, RuntimeStatus] = {
     "RUNNING": RuntimeStatus.WORKING,
@@ -125,15 +122,13 @@ def is_valid_cryptographic_provenance(prov: str | None) -> bool:
 
 
 def is_trusted_verifier(verifier_id: str | None) -> bool:
-    """Check if verifier_id is non-empty and belongs to trusted verifier registry/pattern."""
+    """Check if verifier_id is non-empty and belongs to the exact trusted verifier allowlist."""
     if not verifier_id or not isinstance(verifier_id, str):
         return False
     v = verifier_id.strip()
-    if not v:
+    if not v or "fail" in v.lower():
         return False
-    if "fail" in v.lower():
-        return False
-    return any(v.startswith(prefix) for prefix in TRUSTED_VERIFIER_PREFIXES)
+    return v in TRUSTED_VERIFIER_IDS
 
 
 def validate_evidence_semantics(
@@ -151,7 +146,7 @@ def validate_evidence_semantics(
     if not ev.verification_result or ev.verification_result.strip().upper() != "PASS":
         return False
 
-    # 3. verifier_id is MANDATORY, non-empty, and from trusted verifiers
+    # 3. verifier_id is MANDATORY, non-empty, and from exact trusted verifier registry (R-CT04-05A)
     if not is_trusted_verifier(ev.verifier_id):
         return False
 
@@ -162,7 +157,7 @@ def validate_evidence_semantics(
     if not (SHA256_HEX_REGEX.match(code_id) or GIT_HEX_REGEX.match(code_id)):
         return False
 
-    # 5. Cryptographic provenance format must be valid and consistent with code_identity
+    # 5. Cryptographic provenance format must be valid and strictly consistent with code_identity (R-CT04-05B)
     if not is_valid_cryptographic_provenance(ev.provenance):
         return False
     prov = ev.provenance.strip().lower()
@@ -172,6 +167,10 @@ def validate_evidence_semantics(
         return False
     if prov.startswith("git:") and prov[4:] != code_id:
         return False
+    if prov.startswith("canonical:"):
+        parts = prov[10:].split("#sha256:")
+        if len(parts) != 2 or parts[1].lower() != code_id:
+            return False
 
     # 6. If expected_code_identity is specified, code_identity must match it
     if expected_code_identity is not None:

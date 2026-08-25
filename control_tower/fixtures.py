@@ -135,22 +135,78 @@ def build_dashboard(
 
     def _verify_gov_baseline(p: Path) -> bool:
         text = p.read_text(encoding="utf-8")
-        return "AI-CONTROL-PLANE — CODEX GOVERNANCE RULES" in text and "Authority Hierarchy" in text and "Fail-Closed Rule" in text
+        return (
+            "AI-CONTROL-PLANE — CODEX GOVERNANCE RULES" in text
+            and "Authority Hierarchy" in text
+            and "Separation of Duties" in text
+            and "Fail-Closed Rule" in text
+        )
 
     def _verify_crypto_report(p: Path) -> bool:
         try:
             d = json.loads(p.read_text(encoding="utf-8"))
-            return isinstance(d, dict) and (d.get("status") in ("PASS", "HEALTHY", "VALID") or d.get("tests_passed", 0) > 0)
+            return isinstance(d, dict) and d.get("status") == "PASS"
         except Exception:
             return False
 
     def _verify_auth_syntax(p: Path) -> bool:
-        text = p.read_text(encoding="utf-8")
-        return "validate_directive_syntax" in text and "DirectiveSyntaxError" in text
+        try:
+            from src.directive.validator import validate_directive_syntax
+            from src.contracts import DirectiveSyntaxError
+            try:
+                validate_directive_syntax({})
+                return False
+            except DirectiveSyntaxError:
+                return True
+        except Exception:
+            return False
 
     def _verify_read_only_sec(p: Path) -> bool:
         from control_tower.security import validate_host_header
-        return not validate_host_header("external-evil.com") and validate_host_header("127.0.0.1:8000")
+        from control_tower.api import DashboardHandler
+        host_ok = not validate_host_header("external-evil.com") and validate_host_header("127.0.0.1:8000")
+        if not host_ok:
+            return False
+
+        import io
+        mutating_methods = ("do_POST", "do_PUT", "do_PATCH", "do_DELETE")
+        for m in mutating_methods:
+            handler_fn = getattr(DashboardHandler, m, None)
+            if not callable(handler_fn):
+                return False
+            wfile = io.BytesIO()
+            handler = DashboardHandler.__new__(DashboardHandler)
+            handler.rfile = io.BytesIO()
+            handler.wfile = wfile
+            handler.headers = {}
+            handler.close_connection = True
+            handler.requestline = f"{m[3:]} /api/v1/dashboard HTTP/1.1"
+            handler.request_version = "HTTP/1.1"
+            try:
+                handler_fn(handler)
+                raw_bytes = wfile.getvalue()
+                if b"\r\n\r\n" in raw_bytes:
+                    header_bytes, body_bytes = raw_bytes.split(b"\r\n\r\n", 1)
+                elif b"\n\n" in raw_bytes:
+                    header_bytes, body_bytes = raw_bytes.split(b"\n\n", 1)
+                else:
+                    return False
+
+                status_line = header_bytes.decode("utf-8", errors="replace").splitlines()[0]
+                status_parts = status_line.strip().split()
+                if len(status_parts) < 2 or status_parts[1] != "405":
+                    return False
+
+                body_json = json.loads(body_bytes.decode("utf-8"))
+                if not isinstance(body_json, dict):
+                    return False
+                err_val = str(body_json.get("error", ""))
+                if not err_val.startswith("READ_ONLY"):
+                    return False
+            except Exception:
+                return False
+
+        return True
 
     def _verify_adapter_isolation(p: Path) -> bool:
         from control_tower.resilience import resilient_executor
@@ -166,16 +222,23 @@ def build_dashboard(
 
     def _verify_host_header_sec(p: Path) -> bool:
         from control_tower.security import validate_host_header
-        return validate_host_header("127.0.0.1") and not validate_host_header("attacker.com")
+        return (
+            validate_host_header("127.0.0.1")
+            and validate_host_header("localhost")
+            and not validate_host_header("attacker.com")
+            and not validate_host_header("192.168.1.50")
+        )
 
     def _verify_safe_dom(p: Path) -> bool:
         text = p.read_text(encoding="utf-8")
-        return ".innerHTML" not in text and "textContent" in text
+        forbidden = (".innerHTML", ".outerHTML", "document.write", "eval(")
+        return not any(f in text for f in forbidden) and "textContent" in text
 
     def _verify_queue_projection(p: Path) -> bool:
         from control_tower.adapters.directive_channel import DirectiveChannelAdapter
         adapter = DirectiveChannelAdapter(root_dir=resolved_root)
-        return adapter.source_id == "directive-channel"
+        res = adapter.fetch(now=now)
+        return res.source_id == "directive-channel" and isinstance(res.payload, dict)
 
     evidence_list = [
         _resolve_evidence(

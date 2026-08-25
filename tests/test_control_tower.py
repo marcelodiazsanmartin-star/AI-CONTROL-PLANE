@@ -1506,6 +1506,114 @@ def test_ct04_r4_mandatory_semantic_fields_fail_closed() -> None:
     assert effective_gate_status(gate, {"ev-1": ev5}, now=NOW) is TruthStatus.UNKNOWN
 
 
+def test_ct04_r5_allowlist_canonical_and_verifier_strength() -> None:
+    """Verify CT04-R5 exact verifier allowlist, canonical digest binding, and verifier strength."""
+    valid_sha = "f" * 64
+    mismatched_sha = "0" * 64
+    gate = Gate("test-gate", "Test Gate", 50.0, TruthStatus.PASS, ("ev-1",), True)
+
+    # 1. (05A) Generic-prefix verifiers not in TRUSTED_VERIFIER_IDS fail closed
+    for unreg_verifier in (
+        "verifier:test:anything",
+        "verifier:report:fake",
+        "verifier:invariant:unregistered_check",
+        "verifier:custom:my_test",
+    ):
+        ev_unreg = Evidence(
+            id="ev-1",
+            label="Unregistered verifier",
+            status=TruthStatus.PASS,
+            source="none",
+            verified_at=NOW,
+            provenance=f"sha256:{valid_sha}",
+            verifier_id=unreg_verifier,
+            code_identity=valid_sha,
+            verification_result="PASS",
+        )
+        assert effective_gate_status(gate, {"ev-1": ev_unreg}, now=NOW) is TruthStatus.UNKNOWN
+
+    # 2. (05B) Canonical provenance with mismatched code_identity vs digest fails closed
+    ev_canon_mismatch = Evidence(
+        id="ev-1",
+        label="Canonical mismatch",
+        status=TruthStatus.PASS,
+        source="reports/crypto_test_evidence.json",
+        verified_at=NOW,
+        provenance=f"canonical:reports/crypto_test_evidence.json#sha256:{valid_sha}",
+        verifier_id="verifier:crypto_test_report_check",
+        code_identity=mismatched_sha,
+        verification_result="PASS",
+    )
+    assert effective_gate_status(gate, {"ev-1": ev_canon_mismatch}, now=NOW) is TruthStatus.UNKNOWN
+
+    # Canonical provenance with matching code_identity passes
+    ev_canon_match = Evidence(
+        id="ev-1",
+        label="Canonical match",
+        status=TruthStatus.PASS,
+        source="reports/crypto_test_evidence.json",
+        verified_at=NOW,
+        provenance=f"canonical:reports/crypto_test_evidence.json#sha256:{valid_sha}",
+        verifier_id="verifier:crypto_test_report_check",
+        code_identity=valid_sha,
+        verification_result="PASS",
+    )
+    assert effective_gate_status(gate, {"ev-1": ev_canon_match}, now=NOW) is TruthStatus.PASS
+
+    # 3. (05C) Product path dashboard evidence resolution fail-closed for uncertified crypto report
+    from control_tower.fixtures import build_dashboard
+    dash = build_dashboard(now=NOW)
+    cert_ev = next((ev for ev in dash["evidence"] if ev["id"] == "ev-cert-01"), None)
+    assert cert_ev is not None
+    # Because reports/crypto_test_evidence.json lacks top-level status == 'PASS', it fails closed to UNKNOWN / FAIL
+    assert cert_ev["status"] == "UNKNOWN"
+    assert cert_ev.get("verification_result") in ("FAIL", "UNKNOWN")
+
+
+def test_ct04_r5_e2_mutating_handlers_returning_200_fails_closed() -> None:
+    """Verify that if mutation handlers return success (200) instead of 405/READ_ONLY, verification fails closed."""
+    from control_tower.api import DashboardHandler
+    from control_tower.fixtures import build_dashboard
+
+    orig_post = DashboardHandler.do_POST
+    try:
+        def fake_do_POST(self: Any) -> None:
+            self._write_json(200, {"status": "SUCCESS: Mutation applied"})
+
+        DashboardHandler.do_POST = fake_do_POST
+
+        dash = build_dashboard(now=NOW)
+        sec_ev = next((ev for ev in dash["evidence"] if ev["id"] == "ev-ct-sec-01"), None)
+        assert sec_ev is not None
+        assert sec_ev["status"] == "UNKNOWN"
+        assert sec_ev.get("verification_result") in ("FAIL", "UNKNOWN")
+    finally:
+        DashboardHandler.do_POST = orig_post
+
+
+def test_ct04_r5_e3_mutating_handler_returning_200_with_405_substring_fails_closed() -> None:
+    """Verify that if a mutation handler returns HTTP 200 with '405' and 'READ_ONLY' in body, verification fails closed."""
+    from control_tower.api import DashboardHandler
+    from control_tower.fixtures import build_dashboard
+
+    orig_post = DashboardHandler.do_POST
+    try:
+        def fake_do_POST(self: Any) -> None:
+            # Returns HTTP 200 with substrings '405' and 'READ_ONLY' in the body
+            self._write_json(200, {"status": "SUCCESS: 405 error bypassed", "note": "READ_ONLY override"})
+
+        DashboardHandler.do_POST = fake_do_POST
+
+        dash = build_dashboard(now=NOW)
+        sec_ev = next((ev for ev in dash["evidence"] if ev["id"] == "ev-ct-sec-01"), None)
+        assert sec_ev is not None
+        assert sec_ev["status"] == "UNKNOWN"
+        assert sec_ev.get("verification_result") in ("FAIL", "UNKNOWN")
+    finally:
+        DashboardHandler.do_POST = orig_post
+
+
+
 def test_ct04_r3_semantic_provenance_and_code_identity_binding() -> None:
     """Verify semantic provenance, invariant execution, and code-under-test identity binding."""
     valid_sha = "a" * 64
