@@ -99,18 +99,38 @@ CREATE TABLE audit(seq INTEGER PRIMARY KEY AUTOINCREMENT,task_id TEXT,event TEXT
    if self.db.in_transaction:self.db.execute("ROLLBACK")
    raise BlockedError("store busy") from e
  def renew(self,task_id,worker_id,lease_id,*,lease_seconds=30,now=None):
-  n=self.now(now); t=self.task(task_id)
-  if t["state"] not in {"LEASED","RUNNING"} or t["assigned_worker_id"]!=worker_id or t["lease_id"]!=lease_id or t["lease_expires_at"]<=n: raise BlockedError("invalid lease owner")
-  exp=n+lease_seconds; self.db.execute("UPDATE tasks SET lease_expires_at=?,updated_at=? WHERE task_id=?",(exp,n,task_id)); self.audit(task_id,"LEASE_RENEWED",n,worker_id); return exp
+  n=self.now(now); exp=n+lease_seconds
+  try:
+   self.db.execute("BEGIN IMMEDIATE")
+   changed=self.db.execute("UPDATE tasks SET lease_expires_at=?,updated_at=? WHERE task_id=? AND assigned_worker_id=? AND lease_id=? AND state IN('LEASED','RUNNING') AND lease_expires_at>?",(exp,n,task_id,worker_id,lease_id,n)).rowcount
+   if changed!=1:raise BlockedError("invalid lease owner")
+   self.audit(task_id,"LEASE_RENEWED",n,worker_id);self.db.execute("COMMIT");return exp
+  except BlockedError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
  def start(self,task_id,worker_id,lease_id,*,now=None):
-  n=self.now(now); t=self.task(task_id)
-  if t["state"]!="LEASED" or t["assigned_worker_id"]!=worker_id or t["lease_id"]!=lease_id or t["lease_expires_at"]<=n or self.worker_status(worker_id,now=n)["status"]!="AVAILABLE": raise BlockedError("cannot run")
-  self.db.execute("UPDATE tasks SET state='RUNNING',updated_at=? WHERE task_id=?",(n,task_id)); self.audit(task_id,"RUNNING",n,worker_id)
+  n=self.now(now)
+  try:
+   self.db.execute("BEGIN IMMEDIATE");w=self.db.execute("SELECT * FROM workers WHERE worker_id=?",(worker_id,)).fetchone()
+   if not w or n-w["last_heartbeat"]>w["heartbeat_sla"] or w["last_heartbeat"]>n+1:raise BlockedError("cannot run")
+   changed=self.db.execute("UPDATE tasks SET state='RUNNING',updated_at=? WHERE task_id=? AND state='LEASED' AND assigned_worker_id=? AND lease_id=? AND lease_expires_at>?",(n,task_id,worker_id,lease_id,n)).rowcount
+   if changed!=1:raise BlockedError("cannot run")
+   self.audit(task_id,"RUNNING",n,worker_id);self.db.execute("COMMIT")
+  except BlockedError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
  def reclaim_expired(self,task_id,*,now=None):
-  n=self.now(now); t=self.task(task_id)
-  if t["state"] in TERMINAL or t["state"] not in {"LEASED","RUNNING"} or t["lease_expires_at"]>n: raise BlockedError("not reclaimable")
-  a=t["attempt_count"]+1; state="DEAD_LETTER" if a>t["retry_budget"] else "RETRYING"
-  self.db.execute("UPDATE tasks SET state=?,attempt_count=?,assigned_worker_id=NULL,lease_id=NULL,lease_expires_at=NULL,updated_at=? WHERE task_id=?",(state,a,n,task_id)); self.audit(task_id,"LEASE_EXPIRED",n,state)
+  n=self.now(now)
+  try:
+   self.db.execute("BEGIN IMMEDIATE");t=self.db.execute("SELECT * FROM tasks WHERE task_id=?",(task_id,)).fetchone()
+   if not t or t["state"] not in {"LEASED","RUNNING"} or t["lease_expires_at"]>n:raise BlockedError("not reclaimable")
+   a=t["attempt_count"]+1;state="DEAD_LETTER" if a>t["retry_budget"] else "RETRYING"
+   changed=self.db.execute("UPDATE tasks SET state=?,attempt_count=?,assigned_worker_id=NULL,lease_id=NULL,lease_expires_at=NULL,updated_at=? WHERE task_id=? AND state IN('LEASED','RUNNING') AND lease_expires_at<=?",(state,a,n,task_id,n)).rowcount
+   if changed!=1:raise BlockedError("reclaim lost")
+   self.audit(task_id,"LEASE_EXPIRED",n,state);self.db.execute("COMMIT")
+  except BlockedError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
  def reconcile_stale_workers(self,*,now=None):
   """Fail running work back to retry/dead-letter when owner truth is stale."""
   n=self.now(now); changed=[]
@@ -126,13 +146,19 @@ WHERE t.state='RUNNING' AND (? - w.last_heartbeat > w.heartbeat_sla OR w.last_he
   a=t["attempt_count"]+1; state="DEAD_LETTER" if a>t["retry_budget"] else "RETRYING"
   self.db.execute("UPDATE tasks SET state=?,attempt_count=?,assigned_worker_id=NULL,lease_id=NULL,lease_expires_at=NULL,terminal_reason=?,error_code=?,updated_at=? WHERE task_id=?",(state,a,clean(reason),clean(error_code),n,task_id)); self.audit(task_id,"ATTEMPT_FAILED",n,state)
  def submit_result(self,task_id,worker_id,lease_id,*,evidence_id,sha256,now=None):
-  n=self.now(now); t=self.task(task_id)
-  if t["state"] not in {"LEASED","RUNNING","EVIDENCE_PENDING"} or t["assigned_worker_id"]!=worker_id or t["lease_id"]!=lease_id: raise BlockedError("invalid result owner")
-  if not evidence_id or not sha256 or not re.fullmatch(r"[0-9a-fA-F]{64}",sha256):
-   self.db.execute("UPDATE tasks SET state='EVIDENCE_PENDING',evidence_status='MISSING_OR_INVALID' WHERE task_id=?",(task_id,)); raise BlockedError("evidence required")
-  try:self.db.execute("INSERT INTO evidence VALUES(?,?,?,?)",(task_id,clean(evidence_id),sha256.lower(),n))
-  except sqlite3.IntegrityError as e: raise BlockedError("duplicate evidence") from e
-  self.db.execute("UPDATE tasks SET state='REVIEW_PENDING',evidence_status='RECEIVED',updated_at=? WHERE task_id=?",(n,task_id)); self.audit(task_id,"RESULT_RECEIVED",n,evidence_id)
+  n=self.now(now)
+  try:
+   self.db.execute("BEGIN IMMEDIATE");t=self.db.execute("SELECT * FROM tasks WHERE task_id=?",(task_id,)).fetchone();w=self.db.execute("SELECT * FROM workers WHERE worker_id=?",(worker_id,)).fetchone()
+   if not t or not w or t["state"] not in {"LEASED","RUNNING","EVIDENCE_PENDING"} or t["assigned_worker_id"]!=worker_id or t["lease_id"]!=lease_id or t["lease_expires_at"]<=n or n-w["last_heartbeat"]>w["heartbeat_sla"] or w["last_heartbeat"]>n+1:raise BlockedError("invalid result owner")
+   if not evidence_id or not sha256 or not re.fullmatch(r"[0-9a-fA-F]{64}",sha256):
+    self.db.execute("UPDATE tasks SET state='EVIDENCE_PENDING',evidence_status='MISSING_OR_INVALID' WHERE task_id=?",(task_id,));self.db.execute("COMMIT");raise BlockedError("evidence required")
+   self.db.execute("INSERT INTO evidence VALUES(?,?,?,?)",(task_id,clean(evidence_id),sha256.lower(),n));self.db.execute("UPDATE tasks SET state='REVIEW_PENDING',evidence_status='RECEIVED',updated_at=? WHERE task_id=?",(n,task_id));self.audit(task_id,"RESULT_RECEIVED",n,evidence_id);self.db.execute("COMMIT")
+  except sqlite3.IntegrityError as e:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise BlockedError("duplicate evidence") from e
+  except BlockedError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
  def complete_after_review(self,task_id,*,evidence_valid,now=None):
   n=self.now(now); t=self.task(task_id)
   if t["state"]!="REVIEW_PENDING" or t["evidence_status"]!="RECEIVED" or not evidence_valid: raise BlockedError("valid review required")
@@ -145,5 +171,23 @@ WHERE t.state='RUNNING' AND (? - w.last_heartbeat > w.heartbeat_sla OR w.last_he
    if s["status"]=="AVAILABLE" and s["active_lease_count"]<s["capacity"] and t["capability"] in json.loads(s["capabilities"]) and t["target_project"] in json.loads(s["targets"]): return r[0]
   self.db.execute("UPDATE tasks SET state='WAITING_CAPACITY',updated_at=? WHERE task_id=?",(n,task_id)); self.audit(task_id,"WAITING_CAPACITY",n); return None
  def audit_events(self,task_id): return [dict(x) for x in self.db.execute("SELECT * FROM audit WHERE task_id=? ORDER BY seq",(task_id,))]
+ def schedulable_tasks(self,*,limit:int):
+  if isinstance(limit,bool) or not isinstance(limit,int) or limit<=0: raise BlockedError("invalid batch size")
+  rows=self.db.execute("SELECT * FROM tasks WHERE state IN('QUEUED','WAITING_CAPACITY','RETRYING') AND requires_human_approval=0 AND governance_allowed=1 ORDER BY priority DESC,created_at ASC,task_id ASC LIMIT ?",(limit,)).fetchall()
+  return [dict(row) for row in rows]
+ def workers(self,*,now=None):
+  n=self.now(now); rows=self.db.execute("SELECT worker_id FROM workers ORDER BY worker_id").fetchall()
+  return [self.worker_status(row[0],now=n) for row in rows]
+ def active_leases(self,*,now=None):
+  n=self.now(now); rows=self.db.execute("SELECT task_id,assigned_worker_id,lease_id,lease_expires_at,last_worker_heartbeat,state FROM tasks WHERE state IN('LEASED','RUNNING') AND lease_id IS NOT NULL ORDER BY task_id").fetchall()
+  return [{**dict(row),"expired":row["lease_expires_at"]<=n} for row in rows]
+ def expired_lease_tasks(self,*,now=None):
+  n=self.now(now); return [row[0] for row in self.db.execute("SELECT task_id FROM tasks WHERE state IN('LEASED','RUNNING') AND lease_expires_at<=? ORDER BY task_id",(n,))]
+ def state_counts(self):
+  counts={state:0 for state in VALID_STATES}
+  for row in self.db.execute("SELECT state,count(*) FROM tasks GROUP BY state"):
+   if row[0] not in VALID_STATES: raise IntegrityBlockedError("unknown task state")
+   counts[row[0]]=row[1]
+  return counts
  @staticmethod
  def evidence_hash(payload:bytes)->str:return hashlib.sha256(payload).hexdigest()
