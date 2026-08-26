@@ -165,6 +165,8 @@ def create_server(
     root_dir: Path | None = None,
 ) -> ThreadingHTTPServer:
     """Create loopback backend HTTP server."""
+    if host != LOOPBACK_HOST:
+        raise ValueError(f"Non-loopback binding forbidden for security: host={host!r}")
     server = ThreadingHTTPServer((host, port), DashboardHandler)
     server.root_dir = root_dir
     return server

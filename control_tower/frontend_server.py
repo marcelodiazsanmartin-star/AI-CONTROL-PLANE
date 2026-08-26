@@ -109,6 +109,8 @@ def create_frontend_server(
     root_dir: Path | None = None,
 ) -> ThreadingHTTPServer:
     """Create loopback frontend HTTP server."""
+    if host != "127.0.0.1":
+        raise ValueError(f"Non-loopback binding forbidden for security: host={host!r}")
     server = ThreadingHTTPServer((host, port), FrontendHandler)
     server.root_dir = root_dir
     return server

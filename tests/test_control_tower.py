@@ -32,6 +32,7 @@ from control_tower.adapters import (
 from control_tower.adapters.base import BaseAdapter
 from control_tower.api import ALLOWED_ORIGINS, LOOPBACK_HOST, create_server
 from control_tower.calculations import (
+    classify_upstream_health,
     effective_gate_status,
     normalize_runtime_status,
     runtime_truth,
@@ -2043,6 +2044,83 @@ def test_ct04_r6_e4_double_release_does_not_inflate_capacity() -> None:
         executor._admission_semaphore.release()
 
     executor.shutdown(wait=False)
+
+
+def test_pr31_01_loopback_bind_enforcement_backend_and_frontend() -> None:
+    """(PR31-01 / PR-R3) Factories accept only the fixed numeric IPv4 loopback bind."""
+    from control_tower.api import create_server
+    from control_tower.frontend_server import create_frontend_server
+
+    invalid_hosts = ["localhost", "::1", "0.0.0.0", "192.168.1.100", "attacker.com", "8.8.8.8"]
+
+    for host in invalid_hosts:
+        with pytest.raises(ValueError, match="Non-loopback binding forbidden"):
+            create_server(port=8000, host=host)
+
+        with pytest.raises(ValueError, match="Non-loopback binding forbidden"):
+            create_frontend_server(port=3000, host=host)
+
+
+def test_pr31_02_oracle_adapter_unsupported_and_malformed_schema_fails_closed_blocked(tmp_path: Path) -> None:
+    """(PR31-02) Verify OracleAdapter properly imports sanitize_error and returns BLOCKED/UNSUPPORTED_SCHEMA_VERSION without NameError."""
+    import json
+    from control_tower.adapters.oracle import OracleAdapter
+
+    state_dir = tmp_path / "state"
+    state_dir.mkdir(parents=True)
+    oracle_file = state_dir / "oracle.json"
+
+    # 1. Unsupported future schema version
+    oracle_file.write_text(json.dumps({
+        "schema_version": "99.0",
+        "observed_at": NOW.isoformat(),
+        "market_conditions": {"regime": "VOLATILE"},
+    }))
+
+    adapter = OracleAdapter(root_dir=tmp_path)
+    res = adapter.fetch(NOW)
+
+    assert res.truth_status is SourceStatus.BLOCKED
+    assert res.error_code == "UNSUPPORTED_SCHEMA_VERSION"
+    assert "Unsupported future schema version" in (res.error_detail or "")
+
+    # 2. Malformed schema (invalid version string format)
+    oracle_file.write_text(json.dumps({
+        "schema_version": "invalid$$$###version",
+        "observed_at": NOW.isoformat(),
+        "market_conditions": {"regime": "VOLATILE"},
+    }))
+
+    res2 = adapter.fetch(NOW)
+    assert res2.truth_status is SourceStatus.BLOCKED
+    assert res2.error_code == "UNSUPPORTED_SCHEMA_VERSION"
+    assert "Malformed schema version" in (res2.error_detail or "")
+
+
+def test_pr31_03_backend_upstream_health_mapping_fail_closed() -> None:
+    """(R-PR31-05 / PR-R3) Exercise the production truth-boundary classifier."""
+    assert classify_upstream_health(DATA_MODE_LIVE) == "HEALTHY"
+    assert classify_upstream_health(DATA_MODE_PARTIAL_LIVE) == "PARTIAL_LIVE"
+    assert classify_upstream_health(DATA_MODE_DEGRADED) == "DEGRADED"
+    assert classify_upstream_health(DATA_MODE_FIXTURE) == "FIXTURE"
+
+    for hostile in ("HEALTHY", "PASS", "LIVE", "FUTURE_MODE", None, "", 123):
+        assert classify_upstream_health(hostile) == "UNKNOWN"
+
+
+def test_pr31_03_dashboard_emits_canonical_upstream_health() -> None:
+    """The dashboard publishes backend-classified truth for frontend rendering."""
+    dashboard = build_dashboard(NOW, data_mode=DATA_MODE_FIXTURE)
+    assert dashboard["summary"]["upstream_health"] == "FIXTURE"
+
+
+def test_pr31_03_frontend_only_renders_backend_upstream_health() -> None:
+    """Frontend must not derive upstream truth from data_mode."""
+    app_js_path = Path("control_tower/frontend/app.js")
+    content = app_js_path.read_text(encoding="utf-8")
+    assert "data.summary?.upstream_health" in content
+    assert "function upstreamHealth" not in content
+    assert "upstreamHealth(data.data_mode)" not in content
 
 
 

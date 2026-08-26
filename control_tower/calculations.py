@@ -65,6 +65,20 @@ STATUS_NORMALIZATION_MAP: dict[str, RuntimeStatus] = {
     "UNKNOWN": RuntimeStatus.UNKNOWN,
 }
 
+UPSTREAM_HEALTH_BY_DATA_MODE: dict[str, str] = {
+    "LIVE_READONLY": "HEALTHY",
+    "PARTIAL_LIVE": "PARTIAL_LIVE",
+    "DEGRADED": "DEGRADED",
+    "DETERMINISTIC_FIXTURE": "FIXTURE",
+}
+
+
+def classify_upstream_health(data_mode: Any) -> str:
+    """Map only canonical data modes to upstream-health display truth."""
+    if not isinstance(data_mode, str):
+        return "UNKNOWN"
+    return UPSTREAM_HEALTH_BY_DATA_MODE.get(data_mode, "UNKNOWN")
+
 
 def normalize_runtime_status(value: Any) -> RuntimeStatus:
     """Explicit deterministic normalization for runtime status strings."""

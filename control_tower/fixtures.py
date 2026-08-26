@@ -10,6 +10,7 @@ from typing import Any
 from control_tower.schema import CURRENT_SCHEMA_VERSION
 from control_tower.adapters import fetch_all_adapters, get_default_adapters
 from control_tower.calculations import (
+    classify_upstream_health,
     effective_gate_status,
     normalize_runtime_status,
     runtime_truth,
@@ -38,7 +39,7 @@ from control_tower.models import (
 
 FIXTURE_NOW = datetime(2026, 8, 23, 15, 0, tzinfo=timezone.utc)
 DATA_MODE_FIXTURE = "DETERMINISTIC_FIXTURE"
-DATA_MODE_PARTIAL_LIVE = "PARTIAL_LIVE_READONLY"
+DATA_MODE_PARTIAL_LIVE = "PARTIAL_LIVE"
 DATA_MODE_LIVE = "LIVE_READONLY"
 DATA_MODE_DEGRADED = "DEGRADED"
 
@@ -597,6 +598,7 @@ def build_dashboard(
         "security": serialize(SecurityPolicy()),
         "summary": {
             "global_health": global_health,
+            "upstream_health": classify_upstream_health(resolved_data_mode),
             "autonomy_readiness": "UNKNOWN",
             "critical_alerts": sum(a.level is AlertLevel.CRITICAL for a in alerts),
             "human_approval_required": any(a.required for a in approvals),

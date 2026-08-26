@@ -1,199 +1,158 @@
-# AI CONTROL TOWER — Phase 0
+# AI CONTROL TOWER — Operational Runbook & System Specification
 
-## Purpose
+## 1. Purpose & Authority Boundaries
 
-AI CONTROL TOWER is a private local operations visualizer for issue #16. It shows
-deterministic project, gate, evidence, agent, task, alert, approval, and runtime
-data without becoming a source of truth. Phase 0 is strictly read-only.
+AI CONTROL TOWER is the local operational visualizer and monitoring plane for the AI-CONTROL-PLANE system (issues #16, #17, #21).
 
-## Architecture
+### Core Invariants & Separation of Duties
+- **Strictly Read-Only**: The control tower has zero authority to mutate state, approve directives, alter risk limits, or execute live transactions.
+- **Disposable Projection**: The dashboard and its servers are ephemeral visualization projections. Persisted repository truth remains independent and immutable.
+- **Fail-Closed Truth Binding**: If an upstream source is missing, stale, conflicting, unauthenticated, or malformed, the visualizer displays `UNKNOWN`, `DEGRADED`, or `BLOCKED`. No plausible-looking data or synthetic green status is ever fabricated.
+
+---
+
+## 2. Architecture & Service Model (CT-03 / CT-04)
 
 ```text
 Browser http://127.0.0.1:3000
-             ↓ GET with restricted CORS
-Static CONTROL TOWER frontend
+             ↓ GET (Restricted CORS: origin http://127.0.0.1:3000 only)
+Static Frontend Server (Port 3000, Loopback Only, Strict CSP)
+             ↓ Fetch /api/v1/dashboard
+Backend Control Tower Server (Port 8000, Loopback Only, Read-Only)
              ↓
-http://127.0.0.1:8000/api/v1/dashboard
+Resilient Adapter Executor (Timeouts, Circuit Breakers, Bounded Admission, Generation Safety)
              ↓
-Loopback-only Python read-only API
-             ↓
-Canonical contract + fail-closed calculations
-             ↓
-Deterministic fixtures (not production telemetry)
+[Control Plane State]  [ORACLE-AI Shadow]  [Micro-Market Shadow]  [Directive Channel]
+      (state/**)             (state/**)             (state/**)        (directives/**)
 ```
 
-The frontend and API are disposable projections. Turning off the local PC removes
-only the dashboard. Future canonical runtime truth must remain cloud-independent
-and outside this viewer.
+Both backend and frontend run under a unified service supervisor managed via `python -m control_tower`.
 
-## Setup
+---
 
-Python 3.12 is required. The application has no third-party runtime dependencies.
-`pytest` is needed only for tests.
+## 3. Quick Start & Operational Commands
 
+### Prerequisites
+- Python 3.12+
+- Local loopback network access (`127.0.0.1`)
+
+### Starting the Service (Unified Dual-Server Supervisor)
+From the repository root:
 ```powershell
-python --version
-python -m pip install pytest
+python -m control_tower
 ```
+This single command:
+1. Validates loopback port availability (ports 8000 and 3000).
+2. Spawns the Backend API Server (`127.0.0.1:8000`).
+3. Spawns the Frontend Asset Server (`127.0.0.1:3000`).
+4. Collects adapters on demand when `/ready` or `/api/v1/dashboard` is requested.
+5. Supervises background server threads in-process.
+6. Handles graceful shutdown on `Ctrl+C` (SIGINT / SIGTERM).
 
-## Start on Windows PowerShell
+---
 
-From the repository root, start the backend in terminal 1:
+## 4. Endpoint Specification
 
-```powershell
-python -m control_tower.api
-```
+| Endpoint | Method | Purpose | Response Format / Contract |
+| :--- | :--- | :--- | :--- |
+| `/health` | `GET` | Application liveness probe | JSON `{"status": "HEALTHY", "service": "CONTROL_TOWER", ...}` |
+| `/ready` | `GET` | Tower projection readiness; confirms a dashboard can be built, not that upstreams are healthy | HTTP 200 `READY/PASS`, or HTTP 503 `NOT_READY/FAIL` when projection building raises an error |
+| `/api/v1/dashboard` | `GET` | Canonical operations projection | JSON compliant with Dashboard Schema v3 |
+| All routes | `POST, PUT, PATCH, DELETE` | Forbidden mutation attempt | HTTP 405 Method Not Allowed with JSON `{"error": "READ_ONLY: ..."}` |
+| Frontend Assets | `GET` | UI HTML, JS, CSS | Served on port 3000 with strict CSP & security headers |
 
-The backend always binds to `127.0.0.1`; there is no host override and it cannot
-be configured to listen on `0.0.0.0`.
+---
 
-Start the frontend in terminal 2 using this exact loopback-only command:
+## 5. Security & Network Model
 
-```powershell
-python -m http.server 3000 --bind 127.0.0.1 --directory control_tower/frontend
-```
+1. **Loopback Binding Enforcement**:
+   - Backend (`create_server`) and frontend (`create_frontend_server`) accept only the numeric bind address `127.0.0.1`.
+   - Hostname aliases, IPv6, `0.0.0.0`, and external addresses fail closed with `ValueError`; the bind boundary does not depend on DNS or hosts-file resolution.
+2. **Restricted CORS**:
+   - `Access-Control-Allow-Origin` is granted exclusively to `http://127.0.0.1:3000` and `http://localhost:3000`.
+   - Wildcard CORS (`*`) and external origins are strictly forbidden.
+3. **Safe DOM Rendering & CSP**:
+   - Frontend renders data strictly through `textContent` and DOM nodes; `innerHTML`, `outerHTML`, `eval()`, and `document.write` are prohibited.
+   - Strict Content Security Policy (`default-src 'self'`, `connect-src http://127.0.0.1:8000`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`).
 
-Open:
+---
 
-- Dashboard: `http://127.0.0.1:3000`
-- Application health: `http://127.0.0.1:8000/health`
-- Canonical dashboard API: `http://127.0.0.1:8000/api/v1/dashboard`
+## 6. Adapters, Freshness SLAs & Resilience Mechanics
 
-`/health` reports only CONTROL TOWER application health. It explicitly does not
-report the health of AI-CONTROL-PLANE, ORACLE-AI, MICRO-MARKET-ORACLE, or an
-autonomous system.
+### Verified Read-Only Adapters
+- `control-plane-state` (`state/control_plane.json` / `global_status.json`, SLA: 3600s)
+- `oracle-ai-state` (`state/oracle.json`, SLA: 3600s)
+- `micro-market-oracle-state` (`state/micro_market_oracle.json`, SLA: 3600s)
+- `directive-channel` (`directives/inbound/`, `state/execution_queue.json`, SLA: 60s)
 
-## Security model and read-only guarantee
+### Resilience Architecture (`ResilientAdapterExecutor`)
+- **Timeout Isolation**: Adapters execute in bounded worker threads with strict per-attempt timeouts.
+- **Circuit Breakers**: Consecutive failures trip the per-adapter circuit to `OPEN`, preventing slow downstreams from starving the system.
+- **Bounded Admission Control**:
+  - Admission capacity is strictly bounded by a persistent `threading.BoundedSemaphore(max_workers + max_queue_depth)`.
+  - When all worker threads and queue slots are saturated (e.g. by permanently hanging adapters), new tasks are rejected immediately (< 1ms) with `CAPACITY_EXHAUSTED` and `truth_status=SourceStatus.UNKNOWN`.
+- **Release-Once Lease Ownership**:
+  - Permits are owned by the executing worker thread and released strictly in a `finally` block upon completion.
+  - Failures during submit release the permit immediately; cancellations of unstarted queued futures release permits via callback. Late callbacks cannot over-release or inflate capacity.
+- **Generation Safety & Clean Restart**:
+  - `shutdown(wait=False)` safely cancels queued futures and preserves persistent capacity bounds without permit leaks across restarts.
 
-Phase 0 fixes the policy to:
+---
 
-```text
-READ_ONLY = TRUE
-LIVE_MONEY_CONTROLS = FALSE
-APPROVAL_EXECUTION = FALSE
-STRATEGY_MUTATION = FALSE
-RISK_MUTATION = FALSE
-CREDENTIAL_MUTATION = FALSE
-```
+## 7. Operational Runbook & Smoke Test Verification
 
-Only these reads are supported:
+### Step-by-Step Smoke Test Procedure
 
-```text
-GET /health
-GET /api/v1/dashboard
-```
+1. **Start the service**:
+   ```powershell
+   python -m control_tower
+   ```
 
-`POST`, `PUT`, `PATCH`, and `DELETE` return HTTP 405 with
-`READ_ONLY_PHASE_0` on valid and invalid routes. Request handlers do not read or
-write repository files. Tests hash `state/**`, `reports/**`, and
-`directives/audit/**` before and after live API traffic.
+2. **Verify application health**:
+   ```powershell
+   curl -i http://127.0.0.1:8000/health
+   ```
+   *Expected Output*: HTTP 200 with `status: "HEALTHY"`.
 
-CORS is limited to `http://localhost:3000` and
-`http://127.0.0.1:3000`. External origins receive no
-`Access-Control-Allow-Origin` header; wildcard CORS is not used. The frontend
-uses CSP and renders API values through `textContent` and DOM element creation.
-It does not use `innerHTML` for API, adapter, alert, agent, task, evidence, or
-future telemetry values.
+3. **Verify readiness**:
+   ```powershell
+   curl -i http://127.0.0.1:8000/ready
+   ```
+   *Expected Output*: HTTP 200 with `status: "READY"` and `readiness: "PASS"`. This does not assert upstream connectivity or autonomous-system readiness; inspect `/api/v1/dashboard` source truth for those conditions.
 
-There are no APPROVE, REJECT, EXECUTE, LIVE, CHANGE RISK, or other mutation
-controls.
+4. **Verify canonical dashboard payload**:
+   ```powershell
+   curl -i http://127.0.0.1:8000/api/v1/dashboard
+   ```
+   *Expected Output*: HTTP 200 with valid schema, project readiness dimensions, and sources.
 
-## Canonical data model
+5. **Verify read-only mutation rejection**:
+   ```powershell
+   curl -i -X POST http://127.0.0.1:8000/api/v1/dashboard
+   ```
+   *Expected Output*: HTTP 405 Method Not Allowed with body containing `READ_ONLY`.
 
-`control_tower/models.py` defines PROJECT, MILESTONE, TASK, AGENT, GATE,
-EVIDENCE, ALERT, APPROVAL, RUNTIME, and COST. Runtime states are `HEALTHY`,
-`WORKING`, `DEGRADED`, `STALE`, `OFFLINE`, `UNKNOWN`, and `BLOCKED`. Alert levels
-are `INFO`, `WARNING`, `ACTION_REQUIRED`, `HUMAN_APPROVAL`, `CRITICAL`, and
-`ORACLE`.
+6. **Verify frontend asset serving**:
+   ```powershell
+   curl -i http://127.0.0.1:3000
+   ```
+   *Expected Output*: HTTP 200 with HTML and security headers.
 
-Agent records expose availability, current task, task stage, progress, heartbeat,
-provider status, quota status, and blocker. Missing quota and provider data remain
-`UNKNOWN`.
+---
 
-## Fixture mode
+## 8. Disaster Recovery & Troubleshooting
 
-The Phase 0 response carries `data_mode: DETERMINISTIC_FIXTURE` and
-`dashboard_is_source_of_truth: false`. The UI displays `DATA MODE:
-DETERMINISTIC_FIXTURE` in a prominent banner. ORACLE and MICRO fields without a
-verified source remain `UNKNOWN` or `NOT_CONNECTED`; they are never replaced by
-plausible-looking telemetry.
+| Symptom | Cause | Remediation |
+| :--- | :--- | :--- |
+| `Port 8000 / 3000 occupied` | Prior instance or conflicting local process running | Identify conflicting process (e.g. `Get-Process` on Windows or `lsof`/`netstat`) and terminate conflicting process. |
+| `API OFFLINE` in UI | Backend server stopped or port blocked | Verify `python -m control_tower` is running and `http://127.0.0.1:8000/health` responds. |
+| `DATA MODE: DEGRADED` | Upstream state file missing or stale | Check adapter health panel in UI or query `/api/v1/dashboard` sources for the specific adapter `error_code`. |
+| `CAPACITY_EXHAUSTED` | Adapter execution hang or severe slowdown | Circuit breaker and backpressure will isolate the failing adapter. Restarting the service via `python -m control_tower` safely resets thread workers. |
 
-## Runtime truth rules
+---
 
-Persisted state is not runtime proof. Resolution is fail-closed:
+## 9. Current Operational Scope & Limitations
 
-- Missing, malformed, or timezone-naive heartbeat → `UNKNOWN`.
-- Future heartbeat beyond tolerated clock skew → `UNKNOWN`.
-- Expired heartbeat → `STALE`, never `WORKING`.
-- Persisted `RUNNING` without a fresh observation → `UNKNOWN`.
-- Conflicting persisted and observed states → `BLOCKED`.
-- Explicit blocker → `BLOCKED`.
-
-## Weighted progress rules
-
-Each project keeps three independent dimensions: plan progress, certification
-readiness, and operational readiness. There is no combined synthetic percentage.
-
-- Plan progress is the weighted average of explicit milestone progress.
-- Certification and operational readiness count only weighted gates whose
-  effective state is `PASS`.
-- `PASS` without complete referenced evidence becomes effective `UNKNOWN`.
-- Missing milestones, zero/negative/malformed weights, and malformed progress
-  fail closed to `UNKNOWN` (`null` in JSON).
-- Unknown or blocked gates earn zero readiness weight.
-- No percentage is estimated by an LLM.
-
-## Tests
-
-Focused CONTROL TOWER suite:
-
-```powershell
-python -m pytest tests/test_control_tower.py -q
-```
-
-Complete repository suite must be run in a disposable copy, never against this
-authorized worktree, because legacy tests may exercise mutable runtime/state paths:
-
-```powershell
-python -m pytest tests/ -q
-```
-
-Current release-candidate verification results are recorded in the implementation
-review report, not injected into the dashboard as live evidence.
-
-## Phase 0 limitations and future integration
-
-- Data is deterministic fixture data, not live telemetry.
-- ORACLE and MICRO adapters are not connected.
-- No cloud runtime, quota, cost, market, signal, position, P&L, drawdown, slippage,
-  discovery, or scheduler source is queried.
-- Approvals are display-only.
-- Phase 1 may add deterministic read-only adapters to canonical sources, but must
-  preserve source labels, freshness checks, fail-closed semantics, loopback
-  defaults, and the separation between dashboard and source of truth.
-
-## Troubleshooting
-
-- If the UI says API offline, verify terminal 1 is running and open
-  `http://127.0.0.1:8000/health`.
-- Serve the frontend from `127.0.0.1:3000`; another origin is intentionally denied
-  CORS access.
-- If port 8000 or 3000 is occupied, stop the conflicting local process. The
-  frontend API URL is intentionally fixed for Phase 0.
-- Do not replace loopback binds with `0.0.0.0`.
-
-## Files delivered
-
-- `CONTROL_TOWER_README.md`
-- `control_tower/__init__.py`
-- `control_tower/api.py`
-- `control_tower/calculations.py`
-- `control_tower/fixtures.py`
-- `control_tower/models.py`
-- `control_tower/frontend/index.html`
-- `control_tower/frontend/app.js`
-- `control_tower/frontend/styles.css`
-- `tests/test_control_tower.py`
-
-No CONTROL-04, CONTROL-05, production, report, audit, directive, or canonical
-state file is part of the CONTROL TOWER implementation.
+- **Observability Only**: Visualizes status; does not execute directives or orchestrate systems.
+- **Independent Verification Required**: Evidence and gate statuses reflect verified verification results (`verification_result == "PASS"`) and code identities; unverified claims fail closed.
+- **Single Host Operation**: Designed strictly for private local loopback operation. The service does not implement client authentication; its boundaries are loopback binding, Host validation, restricted CORS, read-only handlers, and browser CSP.

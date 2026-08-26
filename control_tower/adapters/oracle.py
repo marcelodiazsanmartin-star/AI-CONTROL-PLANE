@@ -8,7 +8,7 @@ from typing import Any
 
 from control_tower.adapters.base import BaseAdapter
 from control_tower.models import AdapterResult, SourceStatus
-from control_tower.security import safe_read_json
+from control_tower.security import safe_read_json, sanitize_error
 
 ORACLE_ALLOWLIST = frozenset({"state/oracle.json", "state/global_status.json"})
 
