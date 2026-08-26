@@ -32,8 +32,12 @@ DISALLOWED_GIT_COMMANDS: List[str] = [
 LOCAL_POLL_SECONDS: float = 5.0
 DIRECTIVE_POLL_SECONDS: float = 5.0
 REMOTE_CHECKPOINT_SECONDS: float = 300.0  # Time-based remote health checkpoint interval (5 mins)
+# Remote publication is a legacy, explicitly opt-in hook. Runtime observation and
+# local state/audit persistence do not require it.
+REMOTE_PUBLICATION_ENABLED: bool = False
 REMOTE_PUBLISH_REPO_URL: str = "https://github.com/marcelodiazsanmartin-star/AI-CONTROL-PLANE.git"
-REMOTE_PUBLISH_BRANCH: str = "main"
+REMOTE_PUBLISH_BRANCH: str = ""
+PROTECTED_REMOTE_PUBLISH_BRANCHES = frozenset({"main", "master"})
 
 # Heartbeat & Freshness Thresholds (in seconds)
 DEFAULT_HEARTBEAT_STALE_THRESHOLD_SECONDS: float = 300.0
