@@ -173,6 +173,7 @@ class ControlPlaneEngine:
         branch = self._validated_remote_publish_branch()
         if branch is None:
             return False
+        push_refspec = f"HEAD:refs/heads/{branch}"
         cp_root = settings.CONTROL_PLANE_ROOT
         if not (cp_root / ".git").exists():
             return False
@@ -212,7 +213,7 @@ class ControlPlaneEngine:
                     return False
 
                 push_res = subprocess.run(
-                    ["git", "push", "origin", branch],
+                    ["git", "push", "origin", push_refspec],
                     cwd=str(cp_root),
                     capture_output=True,
                     text=True,
@@ -234,7 +235,9 @@ class ControlPlaneEngine:
             protected, (set, frozenset, tuple, list)
         ):
             return None
-        branch = raw_branch.strip()
+        if raw_branch != raw_branch.strip():
+            return None
+        branch = raw_branch
         prefix = "refs/heads/"
         if branch.casefold().startswith(prefix):
             branch = branch[len(prefix):]
@@ -246,6 +249,28 @@ class ControlPlaneEngine:
         }
         if not branch or canonical in canonical_protected:
             return None
-        if branch.startswith("-") or any(char.isspace() for char in branch):
+        if (
+            branch == "@"
+            or branch.startswith("-")
+            or branch.startswith("/")
+            or branch.endswith(("/", "."))
+            or "//" in branch
+            or ".." in branch
+            or "@{" in branch
+            or any(
+                ord(char) < 32
+                or ord(char) == 127
+                or char.isspace()
+                or char in "+~^:?*[\\"
+                for char in branch
+            )
+        ):
             return None
+        for component in branch.split("/"):
+            if (
+                not component
+                or component.startswith(".")
+                or component.casefold().endswith(".lock")
+            ):
+                return None
         return branch

@@ -68,6 +68,80 @@ def test_missing_or_invalid_publication_config_fails_closed(tmp_path, monkeypatc
         assert engine.publish_remote_status() is False
 
 
+@pytest.mark.parametrize(
+    "branch",
+    (
+        "HEAD:main",
+        "feature:main",
+        "+HEAD:main",
+        "refs/heads/feature:refs/heads/main",
+        "+feature",
+        "feature*wildcard",
+        "feature^parent",
+        "feature~parent",
+        "feature?query",
+        "feature[range",
+        r"feature\backslash",
+        "feature..main",
+        "feature@{upstream}",
+        "feature\x00control",
+        "feature\x1fcontrol",
+        "feature\x7fcontrol",
+        "/feature",
+        "feature/",
+        "feature//nested",
+        ".feature",
+        "team/.feature",
+        "feature.",
+        "feature.lock",
+        "team/feature.LOCK",
+        " feature",
+        "feature ",
+        "@",
+    ),
+)
+def test_refspec_and_invalid_branch_syntax_fail_before_git(
+    tmp_path, monkeypatch, branch
+):
+    monkeypatch.setattr(settings, "REMOTE_PUBLICATION_ENABLED", True)
+    monkeypatch.setattr(settings, "REMOTE_PUBLISH_BRANCH", branch)
+    monkeypatch.setattr(settings, "CONTROL_PLANE_ROOT", tmp_path)
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(
+        "src.engine.subprocess.run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("git invoked")),
+    )
+    engine = ControlPlaneEngine(
+        output_dir=tmp_path / "local", audit_file=tmp_path / "audit.jsonl"
+    )
+    assert engine.publish_remote_status() is False
+
+
+def test_valid_branch_uses_controlled_push_refspec(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "REMOTE_PUBLICATION_ENABLED", True)
+    monkeypatch.setattr(settings, "REMOTE_PUBLISH_BRANCH", "codex/local-publication")
+    monkeypatch.setattr(settings, "CONTROL_PLANE_ROOT", tmp_path)
+    (tmp_path / ".git").mkdir()
+    calls = []
+
+    def successful_stage(command, **kwargs):
+        calls.append(command)
+        stdout = " M state/example.json\n" if command[1:3] == ["status", "--porcelain"] else ""
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr("src.engine.subprocess.run", successful_stage)
+    engine = ControlPlaneEngine(
+        output_dir=tmp_path / "local", audit_file=tmp_path / "audit.jsonl"
+    )
+    assert engine.publish_remote_status() is True
+    assert calls[-1] == [
+        "git",
+        "push",
+        "origin",
+        "HEAD:refs/heads/codex/local-publication",
+    ]
+
+
 @pytest.mark.parametrize("failure_index", range(4))
 def test_subprocess_failure_never_reports_success(tmp_path, monkeypatch, failure_index):
     monkeypatch.setattr(settings, "REMOTE_PUBLICATION_ENABLED", True)
