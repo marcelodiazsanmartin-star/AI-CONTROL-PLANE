@@ -149,15 +149,17 @@ class ControlPlaneEngine:
         # 7. Update Control Plane Self Health
         self.update_self_health(status_str="RUNNING")
 
-        # 8. Event-driven Remote Publication Debouncing
-        checkpoint_due = (
-            self.last_remote_publish_timestamp is None or
-            (now_dt - self.last_remote_publish_timestamp).total_seconds() >= settings.REMOTE_CHECKPOINT_SECONDS
-        )
-
-        if state_transition_occurred or checkpoint_due:
-            if self.publish_remote_status():
-                self.last_remote_publish_timestamp = now_dt
+        # 8. Legacy remote publication is strictly opt-in. Local state and audit
+        # persistence above remain independent of this compatibility hook.
+        if getattr(settings, "REMOTE_PUBLICATION_ENABLED", None) is True:
+            checkpoint_due = (
+                self.last_remote_publish_timestamp is None or
+                (now_dt - self.last_remote_publish_timestamp).total_seconds()
+                >= settings.REMOTE_CHECKPOINT_SECONDS
+            )
+            if state_transition_occurred or checkpoint_due:
+                if self.publish_remote_status():
+                    self.last_remote_publish_timestamp = now_dt
 
         return states
 
@@ -166,19 +168,26 @@ class ControlPlaneEngine:
         Publishes updated Control Plane state to AI-CONTROL-PLANE repository ONLY.
         Monitored repositories remain strictly untouched.
         """
+        if getattr(settings, "REMOTE_PUBLICATION_ENABLED", None) is not True:
+            return False
+        branch = self._validated_remote_publish_branch()
+        if branch is None:
+            return False
         cp_root = settings.CONTROL_PLANE_ROOT
         if not (cp_root / ".git").exists():
             return False
 
         try:
             # Stage only control plane state, directives, audit, and reports
-            subprocess.run(
+            add_res = subprocess.run(
                 ["git", "add", "state/", "directives/runtime/", "directives/acks/", "directives/inbox/", "audit/", "reports/"],
                 cwd=str(cp_root),
                 capture_output=True,
                 text=True,
                 check=False
             )
+            if add_res.returncode != 0:
+                return False
 
             status_res = subprocess.run(
                 ["git", "status", "--porcelain"],
@@ -187,19 +196,23 @@ class ControlPlaneEngine:
                 text=True,
                 check=False
             )
+            if status_res.returncode != 0:
+                return False
 
             if status_res.stdout.strip():
                 msg = f"chore(control-plane): state publication sweep #{self.sweep_count}"
-                subprocess.run(
+                commit_res = subprocess.run(
                     ["git", "commit", "-m", msg],
                     cwd=str(cp_root),
                     capture_output=True,
                     text=True,
                     check=False
                 )
+                if commit_res.returncode != 0:
+                    return False
 
                 push_res = subprocess.run(
-                    ["git", "push", "origin", settings.REMOTE_PUBLISH_BRANCH],
+                    ["git", "push", "origin", branch],
                     cwd=str(cp_root),
                     capture_output=True,
                     text=True,
@@ -211,3 +224,28 @@ class ControlPlaneEngine:
         except Exception as e:
             self.last_error = f"Remote publication failed: {str(e)}"
             return False
+
+    @staticmethod
+    def _validated_remote_publish_branch() -> Optional[str]:
+        """Return a canonical non-protected branch, otherwise fail closed."""
+        raw_branch = getattr(settings, "REMOTE_PUBLISH_BRANCH", None)
+        protected = getattr(settings, "PROTECTED_REMOTE_PUBLISH_BRANCHES", None)
+        if not isinstance(raw_branch, str) or not isinstance(
+            protected, (set, frozenset, tuple, list)
+        ):
+            return None
+        branch = raw_branch.strip()
+        prefix = "refs/heads/"
+        if branch.casefold().startswith(prefix):
+            branch = branch[len(prefix):]
+        canonical = branch.casefold()
+        canonical_protected = {
+            item.strip().casefold()
+            for item in protected
+            if isinstance(item, str) and item.strip()
+        }
+        if not branch or canonical in canonical_protected:
+            return None
+        if branch.startswith("-") or any(char.isspace() for char in branch):
+            return None
+        return branch
