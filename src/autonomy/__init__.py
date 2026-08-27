@@ -10,4 +10,6 @@ from .protocol import (AckEnvelope, DispatchEnvelope, EvidenceReference,
 from .gateway import (DisposableExternalSession, ImmutableLocalEvidenceResolver,
                       LocalWorkerGateway)
 from .router import AgentRouter
-__all__ = ["AutonomyStore", "BlockedError", "IntegrityBlockedError", "TaskState", "Scheduler", "Supervisor", "ReadOnlyTestWorker", "WorkerAdapter", "WorkerResult", "AckEnvelope", "DispatchEnvelope", "EvidenceReference", "HeartbeatEnvelope", "PROTOCOL_VERSION", "REAL_PROJECT_MUTATION_ENABLED", "ResultEnvelope", "SessionHello", "WorkerProfile", "DisposableExternalSession", "ImmutableLocalEvidenceResolver", "LocalWorkerGateway", "AgentRouter"]
+from .execution import (DisposableWorkspaceRegistry, ExecutionPlan, FileOperation,
+                        GovernedExecutionController, WorkspaceDescriptor)
+__all__ = ["AutonomyStore", "BlockedError", "IntegrityBlockedError", "TaskState", "Scheduler", "Supervisor", "ReadOnlyTestWorker", "WorkerAdapter", "WorkerResult", "AckEnvelope", "DispatchEnvelope", "EvidenceReference", "HeartbeatEnvelope", "PROTOCOL_VERSION", "REAL_PROJECT_MUTATION_ENABLED", "ResultEnvelope", "SessionHello", "WorkerProfile", "DisposableExternalSession", "ImmutableLocalEvidenceResolver", "LocalWorkerGateway", "AgentRouter", "DisposableWorkspaceRegistry", "ExecutionPlan", "FileOperation", "GovernedExecutionController", "WorkspaceDescriptor"]

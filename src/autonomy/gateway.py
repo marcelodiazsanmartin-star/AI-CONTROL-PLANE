@@ -265,6 +265,20 @@ class LocalWorkerGateway:
                         result.append((worker_id, session.session_id))
         return sorted(result)
 
+    def verified_session_binding(self, worker_id: str, session_id: str, *, now: float) -> bool:
+        """Return local-harness authority only; worker envelopes cannot assert it."""
+        n = self.store.now(now)
+        with self._lock:
+            session = self._sessions.get(worker_id)
+            return bool(
+                session is not None
+                and session.session_id == session_id
+                and session.provider_state == "VERIFIED_LOCAL_HARNESS"
+                and session.transport_state == "VERIFIED_LOCAL_HARNESS"
+                and session.observed_at <= n + 1
+                and n - session.observed_at <= session.profile.heartbeat_sla
+            )
+
     def dispatch(
         self,
         task: dict[str, object],
