@@ -191,6 +191,7 @@ class QueuedDirectiveItem:
     idempotency_key: str = ""
     signer_identity: str = ""
     directive_payload: Optional[Dict[str, Any]] = None
+    directive_source_path: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
