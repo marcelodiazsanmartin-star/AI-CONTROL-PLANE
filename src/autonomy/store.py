@@ -75,6 +75,24 @@ CREATE TABLE audit(seq INTEGER PRIMARY KEY AUTOINCREMENT,task_id TEXT,event TEXT
   n=self.now(now); o=n if observed_at is None else self.now(observed_at)
   if o>n+1: raise BlockedError("future heartbeat")
   if self.db.execute("UPDATE workers SET last_heartbeat=? WHERE worker_id=?",(o,clean(worker_id))).rowcount!=1: raise BlockedError("unknown worker")
+ def heartbeat_with_capacity(self,worker_id,*,capacity,now=None,observed_at=None):
+  """Atomically publish heartbeat freshness and its associated capacity."""
+  n=self.now(now);o=n if observed_at is None else self.now(observed_at)
+  if o>n+1 or isinstance(capacity,bool) or not isinstance(capacity,int) or capacity<0:raise BlockedError("invalid heartbeat")
+  try:
+   self.db.execute("BEGIN IMMEDIATE")
+   changed=self.db.execute("UPDATE workers SET last_heartbeat=?,capacity=? WHERE worker_id=?",(o,capacity,clean(worker_id))).rowcount
+   if changed!=1:raise BlockedError("unknown worker")
+   self.db.execute("COMMIT")
+  except BlockedError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
+  except sqlite3.OperationalError as e:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise BlockedError("store busy") from e
+  except sqlite3.DatabaseError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
  def worker_status(self,worker_id,*,now=None):
   n=self.now(now); r=self.db.execute("SELECT * FROM workers WHERE worker_id=?",(clean(worker_id),)).fetchone()
   if not r: raise BlockedError("unknown worker")
@@ -82,6 +100,7 @@ CREATE TABLE audit(seq INTEGER PRIMARY KEY AUTOINCREMENT,task_id TEXT,event TEXT
   return {**dict(r),"status":"AVAILABLE" if r["last_heartbeat"]<=n+1 and n-r["last_heartbeat"]<=r["heartbeat_sla"] else "STALE","active_lease_count":active}
  def claim(self,task_id,worker_id,*,lease_seconds=30,now=None):
   n=self.now(now)
+  if isinstance(lease_seconds,bool) or not isinstance(lease_seconds,(int,float)) or not math.isfinite(float(lease_seconds)) or lease_seconds<=0:raise BlockedError("invalid lease duration")
   try:
    self.db.execute("BEGIN IMMEDIATE"); t=self.db.execute("SELECT * FROM tasks WHERE task_id=?",(task_id,)).fetchone(); w=self.db.execute("SELECT * FROM workers WHERE worker_id=?",(worker_id,)).fetchone()
    if not t or not w or t["state"] not in LEASEABLE or t["requires_human_approval"] or not t["governance_allowed"]: raise BlockedError("not leaseable")
@@ -170,6 +189,42 @@ WHERE t.state='RUNNING' AND (? - w.last_heartbeat > w.heartbeat_sla OR w.last_he
    s=self.worker_status(r[0],now=n)
    if s["status"]=="AVAILABLE" and s["active_lease_count"]<s["capacity"] and t["capability"] in json.loads(s["capabilities"]) and t["target_project"] in json.loads(s["targets"]): return r[0]
   self.db.execute("UPDATE tasks SET state='WAITING_CAPACITY',updated_at=? WHERE task_id=?",(n,task_id)); self.audit(task_id,"WAITING_CAPACITY",n); return None
+ def mark_waiting_capacity(self,task_id,*,now=None):
+  """Record verified absence of capacity without introducing AF-02 states."""
+  n=self.now(now)
+  try:
+   self.db.execute("BEGIN IMMEDIATE")
+   changed=self.db.execute("UPDATE tasks SET state='WAITING_CAPACITY',updated_at=? WHERE task_id=? AND state IN('QUEUED','WAITING_CAPACITY','RETRYING') AND requires_human_approval=0 AND governance_allowed=1",(n,clean(task_id))).rowcount
+   if changed!=1:raise BlockedError("task cannot wait for capacity")
+   self.audit(task_id,"WAITING_CAPACITY",n,"no verified external session")
+   self.db.execute("COMMIT")
+  except BlockedError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
+  except sqlite3.OperationalError as e:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise BlockedError("store busy") from e
+  except sqlite3.DatabaseError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
+ def start_with_ack(self,task_id,worker_id,lease_id,*,ack_details,now=None):
+  """Atomically persist ACK truth and the RUNNING transition."""
+  n=self.now(now)
+  try:
+   self.db.execute("BEGIN IMMEDIATE");w=self.db.execute("SELECT * FROM workers WHERE worker_id=?",(worker_id,)).fetchone()
+   if not w or n-w["last_heartbeat"]>w["heartbeat_sla"] or w["last_heartbeat"]>n+1:raise BlockedError("cannot acknowledge")
+   changed=self.db.execute("UPDATE tasks SET state='RUNNING',updated_at=? WHERE task_id=? AND state='LEASED' AND assigned_worker_id=? AND lease_id=? AND lease_expires_at>?",(n,task_id,worker_id,lease_id,n)).rowcount
+   if changed!=1:raise BlockedError("cannot acknowledge")
+   self.audit(task_id,"ACKED",n,ack_details);self.audit(task_id,"RUNNING",n,worker_id);self.db.execute("COMMIT")
+  except BlockedError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
+  except sqlite3.OperationalError as e:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise BlockedError("store busy") from e
+  except sqlite3.DatabaseError:
+   if self.db.in_transaction:self.db.execute("ROLLBACK")
+   raise
  def audit_events(self,task_id): return [dict(x) for x in self.db.execute("SELECT * FROM audit WHERE task_id=? ORDER BY seq",(task_id,))]
  def schedulable_tasks(self,*,limit:int):
   if isinstance(limit,bool) or not isinstance(limit,int) or limit<=0: raise BlockedError("invalid batch size")
