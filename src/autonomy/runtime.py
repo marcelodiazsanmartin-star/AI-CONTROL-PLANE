@@ -56,6 +56,7 @@ class AutonomyRuntime:
     def __init__(self, *, runtime_root: Path | str, queue_path: Path | str,
                  repository_roots: Iterable[Path | str], supported_targets: Iterable[str],
                  verifier: ProvenanceVerifier | None, profiles=(), workspaces=None,
+                 gateway_factory=None,
                  clock: Callable[[], float] = time.time):
         roots = tuple(repository_roots)
         if not roots:
@@ -63,7 +64,8 @@ class AutonomyRuntime:
         self.root = RuntimeRootPolicy(roots).validate(runtime_root)
         self.clock = clock
         self.store = AutonomyStore(self.root / "autonomy.sqlite")
-        self.gateway = LocalWorkerGateway(self.store, tuple(profiles))
+        self.gateway = (gateway_factory(self.store, self.root, roots) if gateway_factory
+                        else LocalWorkerGateway(self.store, tuple(profiles)))
         self.router = AgentRouter(self.store, self.gateway)
         self.supervisor = Supervisor(self.store)
         registry = workspaces or DisposableWorkspaceRegistry(real_repository_root=roots[0])
