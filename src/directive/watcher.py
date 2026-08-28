@@ -75,6 +75,15 @@ class DirectiveWatcher:
     def execution_queue(self) -> DurableExecutionQueue:
         return self.durable_queue
 
+    def _durable_source_path(self, file_path: Path) -> str:
+        """Bind queue provenance only to a physical, direct inbox child."""
+        if (file_path.parent != self.inbox_dir or file_path.is_symlink()
+                or self.inbox_dir.is_symlink()
+                or file_path.resolve(strict=True).parent != self.inbox_dir.resolve(strict=True)):
+            raise QueuePersistenceError("INVALID_DIRECTIVE_SOURCE_PATH")
+        return self.durable_queue.validate_directive_source_path(
+            f"directives/inbox/{file_path.name}")
+
     @property
     def acks_dir(self) -> Path:
         return self.ack_dir
@@ -323,7 +332,8 @@ class DirectiveWatcher:
                         payload=payload,
                         envelope=envelope,
                         auth_metadata=auth_meta,
-                        accepted_at=now_iso
+                        accepted_at=now_iso,
+                        directive_source_path=self._durable_source_path(file_path)
                     )
                 except Exception:
                     pass
@@ -360,7 +370,8 @@ class DirectiveWatcher:
                     payload=payload,
                     envelope=envelope,
                     auth_metadata=auth_meta,
-                    accepted_at=now_iso
+                    accepted_at=now_iso,
+                    directive_source_path=self._durable_source_path(file_path)
                 )
             except QueuePersistenceError as qe:
                 self.status.rejected_count += 1

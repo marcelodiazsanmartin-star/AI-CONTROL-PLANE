@@ -9,6 +9,7 @@ Detects queue corruption on reload and fails closed.
 import os
 import json
 import hashlib
+import re
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Set, Optional, Any
@@ -25,6 +26,20 @@ class QueueCorruptionError(QueuePersistenceError):
 
 
 class DurableExecutionQueue:
+    _SOURCE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,122}\.json")
+
+    @classmethod
+    def validate_directive_source_path(cls, value: str) -> str:
+        """Accept only a canonical repository-relative direct inbox child."""
+        if not isinstance(value, str) or "\\" in value or any(ord(ch) < 32 for ch in value):
+            raise QueuePersistenceError("INVALID_DIRECTIVE_SOURCE_PATH")
+        parts = value.split("/")
+        if len(parts) != 3 or parts[:2] != ["directives", "inbox"]:
+            raise QueuePersistenceError("INVALID_DIRECTIVE_SOURCE_PATH")
+        if not cls._SOURCE_NAME.fullmatch(parts[2]) or parts[2] in (".", ".."):
+            raise QueuePersistenceError("INVALID_DIRECTIVE_SOURCE_PATH")
+        return "/".join(parts)
+
     def __init__(self, queue_file_path: Optional[Path] = None):
         self.queue_file = queue_file_path or (settings.CONTROL_PLANE_ROOT / "directives" / "runtime" / "execution_queue.jsonl")
         self.queue_file.parent.mkdir(parents=True, exist_ok=True)
@@ -71,7 +86,8 @@ class DurableExecutionQueue:
                                     readback_verified=bool(data.get("readback_verified", True)),
                                     idempotency_key=data.get("idempotency_key", ""),
                                     signer_identity=data.get("signer_identity", ""),
-                                    directive_payload=data.get("directive_payload")
+                                    directive_payload=data.get("directive_payload"),
+                                    directive_source_path=data.get("directive_source_path", "")
                                 )
                                 self.queued_items.append(item)
                                 self.queued_ids[d_id] = item
@@ -101,7 +117,8 @@ class DurableExecutionQueue:
         payload: DirectivePayload,
         envelope: DirectiveEnvelope,
         auth_metadata: Dict[str, Any],
-        accepted_at: Optional[str] = None
+        accepted_at: Optional[str] = None,
+        directive_source_path: str = ""
     ) -> QueuedDirectiveItem:
         if self.queue_corrupted:
             raise QueueCorruptionError(self.corruption_reason or "QUEUE_CORRUPTION: Queue file is corrupted")
@@ -115,6 +132,8 @@ class DurableExecutionQueue:
         blob_sha = auth_metadata.get("payload_blob_sha", envelope.payload_blob_sha)
         signer_id = auth_metadata.get("signer_identity", envelope.signer_identity)
         commit_sha = envelope.payload_commit_sha
+        source_path = (self.validate_directive_source_path(directive_source_path)
+                       if directive_source_path else "")
 
         idempotency_raw = f"{d_id}:{commit_sha}:{payload_sha256}".encode("utf-8")
         idempotency_key = hashlib.sha256(idempotency_raw).hexdigest()
@@ -134,7 +153,8 @@ class DurableExecutionQueue:
             readback_verified=False,
             idempotency_key=idempotency_key,
             signer_identity=signer_id,
-            directive_payload=payload.to_dict()
+            directive_payload=payload.to_dict(),
+            directive_source_path=source_path
         )
 
         record_json_str = json.dumps(item.to_dict()) + "\n"
@@ -159,7 +179,8 @@ class DurableExecutionQueue:
                     if (
                         last_record.get("directive_id") == d_id and
                         last_record.get("idempotency_key") == idempotency_key and
-                        last_record.get("directive_payload_sha256") == payload_sha256
+                        last_record.get("directive_payload_sha256") == payload_sha256 and
+                        last_record.get("directive_source_path", "") == source_path
                     ):
                         persisted_ok = True
         except Exception as e:
