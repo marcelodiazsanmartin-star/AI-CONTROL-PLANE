@@ -86,7 +86,7 @@ def provider_signed_bytes(frame: dict[str, object]) -> bytes:
 def deterministic_read_only_instruction(dispatch: DispatchEnvelope) -> str:
     if dispatch.protocol_version != AF05_PROTOCOL_VERSION:
         raise BlockedError("unsupported dispatch protocol")
-    if dispatch.capability not in ALLOWED_CAPABILITIES:
+    if dispatch.capability not in ALLOWED_CAPABILITIES | {"PROJECT_CANARY_WRITE"}:
         raise BlockedError("provider capability prohibited")
     target = _identifier(dispatch.target_project, "target_project")
     capability = _identifier(dispatch.capability, "capability")
@@ -120,6 +120,52 @@ class ProviderEvidence:
     requested_model: str
     reported_model: str
     connection_scope: str = PROVIDER_CONNECTED_UNATTESTED
+
+
+class ProviderCanaryPlanner:
+    """Converts bounded AF-06 output into a scope-preserving AF-08 plan.
+
+    The provider supplies content only. Every authority-bearing field is copied
+    from the locally verified dispatch and scoped authority, never selected by
+    provider output.
+    """
+
+    def __init__(self, backend: ProviderBackend):
+        self.backend = backend
+        self.execution_count = 0
+
+    def plan(self, dispatch: DispatchEnvelope, authority: dict[str, object]):
+        from .real_project import CANARY_PATH, CAPABILITY, CanaryPlan, sha256
+        if dispatch.capability != CAPABILITY or authority.get("capability") != CAPABILITY:
+            raise BlockedError("canary planner capability prohibited")
+        bindings = (("task_id", dispatch.task_id), ("target_project", dispatch.target_project),
+                    ("worker_id", dispatch.worker_id), ("session_id", dispatch.session_id),
+                    ("lease_id", dispatch.lease_id), ("dispatch_id", dispatch.dispatch_id))
+        if any(authority.get(key) != value for key, value in bindings):
+            raise BlockedError("canary planner authority binding mismatch")
+        if authority.get("allowed_relative_path") != CANARY_PATH or authority.get("allowed_operation") not in {"CREATE", "REPLACE", "DELETE"}:
+            raise BlockedError("canary planner scope expansion")
+        evidence = self.backend.execute(dispatch)
+        if evidence.connection_scope != PROVIDER_CONNECTED_UNATTESTED:
+            raise BlockedError("provider trust overclaim")
+        try:
+            body = json.loads(evidence.payload.decode("utf-8"))
+            output = body["output_text"]
+            proposed = json.loads(output)
+        except (UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise BlockedError("provider canary plan malformed") from exc
+        if not isinstance(proposed, dict) or set(proposed) != {"content_b64", "content_sha256"}:
+            raise BlockedError("provider canary plan fields prohibited")
+        try:
+            content = base64.b64decode(proposed["content_b64"], validate=True)
+        except (TypeError, ValueError) as exc:
+            raise BlockedError("provider canary content malformed") from exc
+        if len(content) > int(authority.get("max_bytes", -1)) or sha256(content) != proposed["content_sha256"]:
+            raise BlockedError("provider canary content digest mismatch")
+        if sha256(content) != authority.get("expected_postimage_sha256"):
+            raise BlockedError("provider content exceeds approved postimage")
+        self.execution_count += 1
+        return CanaryPlan(str(authority["allowed_operation"]), CANARY_PATH, content)
 
 
 class OpenAIResponsesClient:
@@ -423,6 +469,14 @@ CREATE TABLE IF NOT EXISTS af06_provider_messages(
 
     def dispatch_projection(self):
         return self.base.dispatch_projection()
+
+    def verified_session_binding(self, *args, **kwargs): return self.base.verified_session_binding(*args, **kwargs)
+
+    def provider_binding(self, worker_id: str, session_id: str, *, now: float) -> tuple[str, float]:
+        row = self.store.db.execute("SELECT connection_state,observed_at,session_id FROM af06_provider_status WHERE worker_id=?", (worker_id,)).fetchone()
+        if not row or row["session_id"] != session_id or not self.verified_session_binding(worker_id, session_id, now=now):
+            raise BlockedError("provider binding unavailable")
+        return row["connection_state"], float(row["observed_at"])
 
     def issue_challenge(self, *args, **kwargs): return self.base.issue_challenge(*args, **kwargs)
     def authenticate_session(self, *args, **kwargs): return self.base.authenticate_session(*args, **kwargs)

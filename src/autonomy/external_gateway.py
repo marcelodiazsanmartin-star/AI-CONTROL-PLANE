@@ -20,12 +20,12 @@ class SessionChallenge:
         return {**asdict(self),"session_id":session_id,"capacity":capacity}
 
 class AuthenticatedExternalGateway:
-    def __init__(self, store:AutonomyStore, runtime_root, profiles:tuple[TrustedWorkerProfile,...], *, repository_roots, challenge_ttl:float=30.0):
+    def __init__(self, store:AutonomyStore, runtime_root, profiles:tuple[TrustedWorkerProfile,...], *, repository_roots, challenge_ttl:float=30.0, scoped_capabilities:frozenset[str]=frozenset()):
         if isinstance(challenge_ttl,bool) or not math.isfinite(float(challenge_ttl)) or not 1<=float(challenge_ttl)<=300: raise BlockedError("invalid challenge TTL")
         roots=tuple(repository_roots)
         if not roots: raise BlockedError("protected repository roots required")
         safe_root=RuntimeRootPolicy(roots).validate(runtime_root)
-        self.store=store; self.registry=TrustedWorkerRegistry(profiles); self.transport=DurableLocalSpool(safe_root); self.challenge_ttl=float(challenge_ttl)
+        self.store=store; self.registry=TrustedWorkerRegistry(profiles,scoped_capabilities=scoped_capabilities); self.transport=DurableLocalSpool(safe_root); self.challenge_ttl=float(challenge_ttl)
         self._init_schema(); self._persist_profiles()
         self.store.db.execute("UPDATE af05_sessions SET state='REAUTH_REQUIRED' WHERE state='AUTHENTICATED'")
 
@@ -165,4 +165,19 @@ CREATE TABLE IF NOT EXISTS af05_dispatches(dispatch_id TEXT PRIMARY KEY,task_id 
         return rows
 
     def dispatch_projection(self):
-        return [dict(row) for row in self.store.db.execute("SELECT task_id,worker_id,session_id,lease_id,acknowledged,result_received FROM af05_dispatches ORDER BY dispatch_id")]
+        rows=[]
+        for row in self.store.db.execute("SELECT * FROM af05_dispatches ORDER BY dispatch_id"):
+            item=dict(row)
+            item["state"]="RUNNING" if item["acknowledged"] else "DISPATCHED"
+            rows.append(item)
+        return rows
+
+    def verified_session_binding(self,worker_id,session_id,*,now):
+        try:
+            profile=self._trusted(worker_id)
+        except BlockedError:
+            return False
+        row=self.store.db.execute("SELECT * FROM af05_sessions WHERE worker_id=?",(worker_id,)).fetchone()
+        return bool(row and row["state"]=="AUTHENTICATED" and row["session_id"]==session_id
+                    and row["profile_digest"]==profile.digest and row["key_id"]==profile.profile.key_id
+                    and row["last_heartbeat"]<=now+1 and now-row["last_heartbeat"]<=profile.profile.heartbeat_sla)

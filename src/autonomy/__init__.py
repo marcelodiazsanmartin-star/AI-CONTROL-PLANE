@@ -27,3 +27,11 @@ from .provider import (AF06_PROTOCOL_VERSION, CODEX_CLI_MODEL, CODEX_CLI_PROVIDE
 from .codex_cli_provider import CodexCliChatGPTClient
 __all__ = ["AutonomyStore", "BlockedError", "IntegrityBlockedError", "TaskState", "Scheduler", "Supervisor", "ReadOnlyTestWorker", "WorkerAdapter", "WorkerResult", "AckEnvelope", "DispatchEnvelope", "EvidenceReference", "HeartbeatEnvelope", "PROTOCOL_VERSION", "REAL_PROJECT_MUTATION_ENABLED", "ResultEnvelope", "SessionHello", "WorkerProfile", "DisposableExternalSession", "ImmutableLocalEvidenceResolver", "LocalWorkerGateway", "AgentRouter", "DisposableWorkspaceRegistry", "ExecutionPlan", "FileOperation", "GovernedExecutionController", "WorkspaceDescriptor", "DirectiveTaskIngestor", "IngestResult", "deterministic_task_id", "AutonomyRuntime", "RuntimeRootPolicy", "AUTHENTICATION_SCOPE", "TrustedWorkerProfile", "TrustedWorkerRegistry", "canonical_json", "signed_bytes", "DurableLocalSpool", "AF05_PROTOCOL_VERSION", "AuthenticatedExternalGateway", "SessionChallenge", "AF06_PROTOCOL_VERSION", "DEFAULT_OPENAI_MODEL", "OPENAI_RESPONSES_ENDPOINT", "PROVIDER_ATTESTATION_SCOPE", "PROVIDER_CONNECTED_UNATTESTED", "PROVIDER_KIND", "OpenAIReadOnlyWorker", "OpenAIResponsesClient", "ProviderBoundGateway", "ProviderCallResult", "ProviderEvidence", "deterministic_read_only_instruction", "provider_signed_bytes"]
 __all__ += ["CODEX_CLI_MODEL", "CODEX_CLI_PROVIDER_KIND", "CodexCliChatGPTClient", "ProviderBackend"]
+from .real_project import (
+    CANARY_PATH,
+    CAPABILITY as PROJECT_CANARY_WRITE,
+    CanaryPlan,
+    MutationSafetyTruth,
+    RealProjectCanaryRegistry,
+    ScopedCanaryController,
+)
