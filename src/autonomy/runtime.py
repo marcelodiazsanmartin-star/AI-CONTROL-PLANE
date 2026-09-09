@@ -57,6 +57,8 @@ class AutonomyRuntime:
                  repository_roots: Iterable[Path | str], supported_targets: Iterable[str],
                  verifier: ProvenanceVerifier | None, profiles=(), workspaces=None,
                  gateway_factory=None,
+                 af08_reconciler=None,
+                 af08_processor=None,
                  clock: Callable[[], float] = time.time):
         roots = tuple(repository_roots)
         if not roots:
@@ -72,6 +74,8 @@ class AutonomyRuntime:
         self.execution = GovernedExecutionController(self.store, self.gateway, registry, clock=clock)
         self.ingestor = DirectiveTaskIngestor(self.store, queue_path, verifier=verifier,
                                               supported_targets=supported_targets, clock=clock)
+        self.af08_reconciler = af08_reconciler
+        self.af08_processor = af08_processor
         self._init_schema()
 
     def _init_schema(self) -> None:
@@ -115,14 +119,20 @@ INSERT OR IGNORE INTO autonomy_runtime_state VALUES(1,'IDLE',0,NULL,NULL,'UNKNOW
             self._state(status="RUNNING", now=n, stage="STORE_VERIFIED")
             ingested = self.ingestor.ingest()
             self._state(status="RUNNING", now=n, stage="INGESTED")
+            approval_releases = [] if self.af08_reconciler is None else self.af08_reconciler.reconcile_approval_releases()
+            self._state(status="RUNNING", now=n, stage="APPROVALS_RECONCILED")
             reconciled = self.supervisor.reconcile(now=n)
             self._state(status="RUNNING", now=n, stage="RECONCILED")
             recovered = self._recover(n)
             self._state(status="RUNNING", now=n, stage="RECOVERED")
-            routed = self.router.route_once(now=n)
+            # A recovered human-approval receipt becomes visible as QUEUED for
+            # one durable cycle. Routing it in the same cycle would collapse
+            # the auditable release boundary into WAITING_CAPACITY/LEASED.
+            routed = [] if approval_releases else self.router.route_once(now=n)
+            processed = [] if self.af08_processor is None else self.af08_processor.process_ready(now=n)
             self._state(status="IDLE", now=n, stage="PROJECTED", increment=True)
-            return {"ingested": [item.task_id for item in ingested], "reconciled": reconciled,
-                    "recovered": recovered, "routed": [item.task_id for item in routed],
+            return {"ingested": [item.task_id for item in ingested], "approval_releases": approval_releases, "reconciled": reconciled,
+                    "recovered": recovered, "routed": [item.task_id for item in routed], "af08_processed": processed,
                     "projection": self.projection(now=n)}
         except IntegrityBlockedError as exc:
             self._state(status="INTEGRITY_BLOCKED", now=n, stage="FAILED", error=type(exc).__name__, increment=True)

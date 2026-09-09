@@ -69,16 +69,19 @@ class VerifiedProfile:
 class TrustedWorkerRegistry:
     """Immutable authority input; workers have no enrollment or mutation method."""
 
-    def __init__(self, profiles: tuple[TrustedWorkerProfile, ...]):
+    def __init__(self, profiles: tuple[TrustedWorkerProfile, ...], *, scoped_capabilities: frozenset[str] = frozenset()):
+        if not isinstance(scoped_capabilities, frozenset) or not scoped_capabilities.issubset({"PROJECT_CANARY_WRITE"}):
+            raise BlockedError("invalid scoped capability policy")
+        self._allowed_capabilities = ALLOWED_CAPABILITIES | scoped_capabilities
         self._profiles: dict[str, VerifiedProfile] = {}
         for profile in profiles:
-            verified = self._verify_profile(profile)
+            verified = self._verify_profile(profile, self._allowed_capabilities)
             if profile.worker_id in self._profiles:
                 raise IntegrityBlockedError("duplicate trusted worker")
             self._profiles[profile.worker_id] = verified
 
     @staticmethod
-    def _verify_profile(profile: TrustedWorkerProfile) -> VerifiedProfile:
+    def _verify_profile(profile: TrustedWorkerProfile, allowed_capabilities=ALLOWED_CAPABILITIES) -> VerifiedProfile:
         identifier(profile.worker_id, "worker_id"); identifier(profile.worker_kind, "worker_kind")
         identifier(profile.key_id, "key_id")
         if profile.signature_algorithm != SIGNATURE_ALGORITHM:
@@ -87,7 +90,7 @@ class TrustedWorkerRegistry:
             raise BlockedError("invalid profile version")
         capabilities = tuple(sorted(set(profile.capabilities)))
         targets = tuple(sorted(set(profile.allowed_targets)))
-        if not capabilities or not targets or any(item not in ALLOWED_CAPABILITIES for item in capabilities):
+        if not capabilities or not targets or any(item not in allowed_capabilities for item in capabilities):
             raise BlockedError("invalid trusted capability or target")
         for item in (*capabilities, *targets): identifier(item, "trusted label")
         if (isinstance(profile.max_capacity, bool) or not isinstance(profile.max_capacity, int)
