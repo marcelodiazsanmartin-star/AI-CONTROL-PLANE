@@ -38,6 +38,21 @@ def test_authenticated_governed_canary_e2e_and_exact_rollback(tmp_path):
     assert env["controller"].receipt(env["receipt"]["receipt_id"])["state"]=="READY"
 
 
+import os
+import shutil
+
+
+def _resolve_ssh_keygen() -> str:
+    found = shutil.which("ssh-keygen")
+    if found:
+        return found
+    if os.name == "nt":
+        win_path = Path(os.environ.get("WINDIR", r"C:\Windows")) / "System32" / "OpenSSH" / "ssh-keygen.exe"
+        if win_path.exists():
+            return str(win_path)
+    raise RuntimeError("ssh-keygen executable not found on system; cannot generate or inspect test keys")
+
+
 def _git(root, *args):
     result = subprocess.run(["git", "-C", str(root), *args], check=True,
                             capture_output=True, text=True, shell=False)
@@ -45,6 +60,7 @@ def _git(root, *args):
 
 
 def _signed_source(tmp_path, monkeypatch):
+    ssh_keygen = _resolve_ssh_keygen()
     remote = tmp_path / "directive-remote.git"
     source = tmp_path / "directive-source"
     remote.mkdir(); source.mkdir()
@@ -53,7 +69,7 @@ def _signed_source(tmp_path, monkeypatch):
     _git(source, "config", "user.name", "AF08 Fixture")
     _git(source, "config", "user.email", "af08@example.invalid")
     key = tmp_path / "signer"
-    subprocess.run([r"C:\Windows\System32\OpenSSH\ssh-keygen.exe", "-q", "-t", "ed25519", "-N", "", "-f", str(key)], check=True)
+    subprocess.run([ssh_keygen, "-q", "-t", "ed25519", "-N", "", "-f", str(key)], check=True)
     public = key.with_suffix(".pub").read_text(encoding="utf-8").strip()
     allowed = tmp_path / "allowed_signers"
     allowed.write_text("af08-fixture " + public + "\n", encoding="utf-8")
@@ -78,7 +94,7 @@ def _signed_source(tmp_path, monkeypatch):
     commit = _git(source, "rev-parse", "HEAD")
     blob = _git(source, "rev-parse", f"{commit}:directives/inbox/af08-signed.json")
     _, payload_hash, _ = compute_payload_bytes_and_hash(directive.read_bytes())
-    fingerprint = subprocess.run([r"C:\Windows\System32\OpenSSH\ssh-keygen.exe", "-lf", str(key.with_suffix('.pub'))],
+    fingerprint = subprocess.run([ssh_keygen, "-lf", str(key.with_suffix('.pub'))],
         check=True, capture_output=True, text=True).stdout.split()[1]
     monkeypatch.setattr(settings, "TRUSTED_SIGNER_ALLOWLIST", {fingerprint})
     monkeypatch.setattr(settings, "ACTIONS_REQUIRING_HUMAN_APPROVAL", settings.ACTIONS_REQUIRING_HUMAN_APPROVAL | {"GOVERNED_CANARY_WRITE"})
