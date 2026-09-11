@@ -1,0 +1,5 @@
+# Separate Trust Anchor runtime and offline authentication verification.
+cryptography>=50.0.1,<51
+google-auth[requests]>=2.58.0,<3
+requests>=2.34.2,<3
+gunicorn>=23,<24; sys_platform != 'win32'
